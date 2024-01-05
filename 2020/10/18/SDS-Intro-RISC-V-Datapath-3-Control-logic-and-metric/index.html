@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="之前的 part2 我们忽略了控制逻辑是怎么实现的，把它当成一件理所当然的事情。我们可以看看 control logic 在处理器中对应的位置：  上面的 control 对应的就是下图中产生必要电信号的逻辑：  其中， Control Logic 有对应的逻辑表：  它会根据指令的类型来判断，而指令的类型有指令中固定的字段来决定。  那么，实际上对应的如上所示，交给 Inst BrEq BrLT">
+<meta property="og:type" content="article">
+<meta property="og:title" content="SDS Intro &amp; RISC-V Datapath(3): Control logic and metric">
+<meta property="og:url" content="http://blog.mwish.me/2020/10/18/SDS-Intro-RISC-V-Datapath-3-Control-logic-and-metric/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="之前的 part2 我们忽略了控制逻辑是怎么实现的，把它当成一件理所当然的事情。我们可以看看 control logic 在处理器中对应的位置：  上面的 control 对应的就是下图中产生必要电信号的逻辑：  其中， Control Logic 有对应的逻辑表：  它会根据指令的类型来判断，而指令的类型有指令中固定的字段来决定。  那么，实际上对应的如上所示，交给 Inst BrEq BrLT">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/ADDF3668-C609-432C-96F9-63C9B78E8CCF.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/DF8C886C-04EF-42C2-A69A-D20F534363A7.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/44925410-7F57-443E-A74B-C71AC1884ECD.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/0D2C5051-0955-48A2-AC6F-861B8E04E442.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/92C92D5E-3049-4CFC-9326-7A69F78D4A4A.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/B0489346-356B-4449-AEFE-E30566ECF371.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/8A5BDE2B-FF96-4972-A607-E6E9EFBBF0D0.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/9004ADA4-1562-4A46-A343-F5E5DCEBE907.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/272C5EF5-4B23-49A9-8088-71751B5A9BD0.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/EE918A8C-2D4B-4A42-A969-CAADBF62C2ED.png">
+<meta property="article:published_time" content="2020-10-17T16:03:23.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.552Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/ADDF3668-C609-432C-96F9-63C9B78E8CCF.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>SDS Intro &amp; RISC-V Datapath(3): Control logic and metric</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2020/10/18/How-to-exit-task/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2020/10/15/SDS-Intro-RISC-V-Datapath-2-Datapath/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/10/18/SDS-Intro-RISC-V-Datapath-3-Control-logic-and-metric/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/10/18/SDS-Intro-RISC-V-Datapath-3-Control-logic-and-metric/&text=SDS Intro &amp; RISC-V Datapath(3): Control logic and metric"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/10/18/SDS-Intro-RISC-V-Datapath-3-Control-logic-and-metric/&title=SDS Intro &amp; RISC-V Datapath(3): Control logic and metric"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/10/18/SDS-Intro-RISC-V-Datapath-3-Control-logic-and-metric/&is_video=false&description=SDS Intro &amp; RISC-V Datapath(3): Control logic and metric"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=SDS Intro &amp; RISC-V Datapath(3): Control logic and metric&body=Check out this article: http://blog.mwish.me/2020/10/18/SDS-Intro-RISC-V-Datapath-3-Control-logic-and-metric/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/10/18/SDS-Intro-RISC-V-Datapath-3-Control-logic-and-metric/&title=SDS Intro &amp; RISC-V Datapath(3): Control logic and metric"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/10/18/SDS-Intro-RISC-V-Datapath-3-Control-logic-and-metric/&title=SDS Intro &amp; RISC-V Datapath(3): Control logic and metric"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/10/18/SDS-Intro-RISC-V-Datapath-3-Control-logic-and-metric/&title=SDS Intro &amp; RISC-V Datapath(3): Control logic and metric"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/10/18/SDS-Intro-RISC-V-Datapath-3-Control-logic-and-metric/&title=SDS Intro &amp; RISC-V Datapath(3): Control logic and metric"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/10/18/SDS-Intro-RISC-V-Datapath-3-Control-logic-and-metric/&name=SDS Intro &amp; RISC-V Datapath(3): Control logic and metric&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/10/18/SDS-Intro-RISC-V-Datapath-3-Control-logic-and-metric/&t=SDS Intro &amp; RISC-V Datapath(3): Control logic and metric"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%97%B6%E9%97%B4%E5%BA%A6%E9%87%8F"><span class="toc-number">1.</span> <span class="toc-text">时间度量</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Pipeline"><span class="toc-number">1.1.</span> <span class="toc-text">Pipeline</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Pipeline-is-not-free"><span class="toc-number">1.2.</span> <span class="toc-text">Pipeline is not free</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Superscalar-Processor"><span class="toc-number">2.</span> <span class="toc-text">Superscalar Processor</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        SDS Intro &amp; RISC-V Datapath(3): Control logic and metric
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2020-10-17T16:03:23.000Z" itemprop="datePublished">2020-10-18</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>之前的 part2 我们忽略了控制逻辑是怎么实现的，把它当成一件理所当然的事情。我们可以看看 control logic 在处理器中对应的位置：</p>
+<p><img src="https://image.mwish.me/blog-image/ADDF3668-C609-432C-96F9-63C9B78E8CCF.png" alt="ADDF3668-C609-432C-96F9-63C9B78E8CCF"></p>
+<p>上面的 control 对应的就是下图中产生必要电信号的逻辑：</p>
+<p><img src="https://image.mwish.me/blog-image/DF8C886C-04EF-42C2-A69A-D20F534363A7.png" alt="ADDF3668-C609-432C-96F9-63C9B78E8CCF"></p>
+<p>其中， Control Logic 有对应的逻辑表：</p>
+<p><img src="https://image.mwish.me/blog-image/44925410-7F57-443E-A74B-C71AC1884ECD.png" alt="44925410-7F57-443E-A74B-C71AC1884ECD"></p>
+<p>它会根据指令的类型来判断，而指令的类型有指令中固定的字段来决定。</p>
+<p><img src="https://image.mwish.me/blog-image/0D2C5051-0955-48A2-AC6F-861B8E04E442.png" alt="0D2C5051-0955-48A2-AC6F-861B8E04E442"></p>
+<p>那么，实际上对应的如上所示，交给 <code>Inst</code> <code>BrEq</code> <code>BrLT</code> 之后，不同的电路会处理以上内容，产生不同的信号，供给 ALU 等使用。</p>
+<h2 id="时间度量"><a href="#时间度量" class="headerlink" title="时间度量"></a>时间度量</h2><p><img src="https://image.mwish.me/blog-image/92C92D5E-3049-4CFC-9326-7A69F78D4A4A.png" alt="92C92D5E-3049-4CFC-9326-7A69F78D4A4A"></p>
+<p>在一个 clock 中，对应的指令执行逻辑大概如上所示，那么，实际上</p>
+<p><img src="https://image.mwish.me/blog-image/B0489346-356B-4449-AEFE-E30566ECF371.png" alt="B0489346-356B-4449-AEFE-E30566ECF371"></p>
+<p>最大的时钟周期，即走 <code>lw</code> 的，为：</p>
+<p><code>f_max = 1/800ps = 1.25GHz</code></p>
+<p>实际上，指令执行的速度比这还快，会到每秒完成 5billion 的 add 。这归功于流水线。</p>
+<p>那么对于 CPU 来说，什么算衡量标准呢？我的 3800X 为啥单核那么牛逼呢（误）？标准主要有：</p>
+<ul>
+<li>Latency: 程序需要执行的时间</li>
+<li>Throughput: 程序一小时能够处理的请求数量</li>
+</ul>
+<p>即：</p>
+<p><img src="https://image.mwish.me/blog-image/8A5BDE2B-FF96-4972-A607-E6E9EFBBF0D0.png" alt="8A5BDE2B-FF96-4972-A607-E6E9EFBBF0D0"></p>
+<p>那么，具体到 CPU 层次而言，性能、Clock cycles per Instruction（即 CPI） 这些会有：</p>
+<ul>
+<li>ISA</li>
+<li>处理器的实现（这里介绍的 RISC-V 的 CPI 为1）</li>
+<li>Superscalar processors, CPI &lt; 1</li>
+</ul>
+<p>这些决定本身影响了 CPi。而 Time per Cycle 本身会被下列内容影响：</p>
+<ol>
+<li>处理器的 microarchitecture</li>
+<li>技术，14nm 或者 28nm</li>
+<li>耗电</li>
+</ol>
+<h3 id="Pipeline"><a href="#Pipeline" class="headerlink" title="Pipeline"></a>Pipeline</h3><p><img src="https://image.mwish.me/blog-image/9004ADA4-1562-4A46-A343-F5E5DCEBE907.png" alt="9004ADA4-1562-4A46-A343-F5E5DCEBE907"></p>
+<p>把所有指令的耗时当成一致的，然后用流水线的方式执行。因为每个原件只输出上一个state的状态，这些 state 是可以隔离的。</p>
+<p>流水线<strong>并不降低 Latency, 而是增大吞吐量</strong>。</p>
+<p>但是，流水线并不是有几阶段就会变快几倍，实际上，填充流水线的时间和 branch，降低了流水线的可能提升。</p>
+<h3 id="Pipeline-is-not-free"><a href="#Pipeline-is-not-free" class="headerlink" title="Pipeline is not free"></a>Pipeline is not free</h3><ul>
+<li>pipeline stage 如果是不平衡的，可能会比较慢</li>
+<li>寄存器的 setup time 和 clk-&gt;q 的时间可能会拖慢</li>
+</ul>
+<p>pipeline 的 task 如果有 dependency, 比如之前某个指令依赖某个寄存器，寄存器上的值又被后续指令修改，那么会有 dependency, 这个会造成流水线的 stall。</p>
+<p>针对时间不平衡，例如 ALU 100ps, memory load 200ps，这个需要抹平这种时间，例如之前的 <code>t_cycle</code>, 都整成 200ps 就行了：</p>
+<p><img src="https://image.mwish.me/blog-image/272C5EF5-4B23-49A9-8088-71751B5A9BD0.png" alt="272C5EF5-4B23-49A9-8088-71751B5A9BD0"></p>
+<p>我们会在下一节讨论 Pipeline 的具体实现细节，现在先跳过不表。</p>
+<h2 id="Superscalar-Processor"><a href="#Superscalar-Processor" class="headerlink" title="Superscalar Processor"></a>Superscalar Processor</h2><p>CPU 的 clock rate 由技术和电源限制，流水线可以增加阶段，但是有如下 trade-off:</p>
+<ul>
+<li>每个阶段做的事情少，clock cycle 会减小</li>
+<li>但是潜在的 hazard 会增加</li>
+</ul>
+<p>所以可以考虑用 superscalar 处理器：</p>
+<ul>
+<li>把 pipeline stage 变成多个流水线</li>
+<li>每个时钟周期执行多个指令</li>
+<li>CPI &lt; 1, so use Instructions Per Cycle (IPC)</li>
+<li>因为多个流水线，所以可能的 dependency 减小了</li>
+</ul>
+<p>此外，还可以乱序(<strong>Out-of-Order</strong>) 的执行：</p>
+<blockquote>
+<p>Reorder instructions dynamically in hardware to reduce impact of hazards:  EG, memory/cache misses</p>
+</blockquote>
+<p>x86 只有 StoreLoad 乱序，不过可以执行的乱序想必更多</p>
+<p><img src="https://image.mwish.me/blog-image/EE918A8C-2D4B-4A42-A969-CAADBF62C2ED.png" alt="EE918A8C-2D4B-4A42-A969-CAADBF62C2ED"></p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%97%B6%E9%97%B4%E5%BA%A6%E9%87%8F"><span class="toc-number">1.</span> <span class="toc-text">时间度量</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Pipeline"><span class="toc-number">1.1.</span> <span class="toc-text">Pipeline</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Pipeline-is-not-free"><span class="toc-number">1.2.</span> <span class="toc-text">Pipeline is not free</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Superscalar-Processor"><span class="toc-number">2.</span> <span class="toc-text">Superscalar Processor</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/10/18/SDS-Intro-RISC-V-Datapath-3-Control-logic-and-metric/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/10/18/SDS-Intro-RISC-V-Datapath-3-Control-logic-and-metric/&text=SDS Intro &amp; RISC-V Datapath(3): Control logic and metric"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/10/18/SDS-Intro-RISC-V-Datapath-3-Control-logic-and-metric/&title=SDS Intro &amp; RISC-V Datapath(3): Control logic and metric"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/10/18/SDS-Intro-RISC-V-Datapath-3-Control-logic-and-metric/&is_video=false&description=SDS Intro &amp; RISC-V Datapath(3): Control logic and metric"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=SDS Intro &amp; RISC-V Datapath(3): Control logic and metric&body=Check out this article: http://blog.mwish.me/2020/10/18/SDS-Intro-RISC-V-Datapath-3-Control-logic-and-metric/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/10/18/SDS-Intro-RISC-V-Datapath-3-Control-logic-and-metric/&title=SDS Intro &amp; RISC-V Datapath(3): Control logic and metric"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/10/18/SDS-Intro-RISC-V-Datapath-3-Control-logic-and-metric/&title=SDS Intro &amp; RISC-V Datapath(3): Control logic and metric"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/10/18/SDS-Intro-RISC-V-Datapath-3-Control-logic-and-metric/&title=SDS Intro &amp; RISC-V Datapath(3): Control logic and metric"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/10/18/SDS-Intro-RISC-V-Datapath-3-Control-logic-and-metric/&title=SDS Intro &amp; RISC-V Datapath(3): Control logic and metric"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/10/18/SDS-Intro-RISC-V-Datapath-3-Control-logic-and-metric/&name=SDS Intro &amp; RISC-V Datapath(3): Control logic and metric&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/10/18/SDS-Intro-RISC-V-Datapath-3-Control-logic-and-metric/&t=SDS Intro &amp; RISC-V Datapath(3): Control logic and metric"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

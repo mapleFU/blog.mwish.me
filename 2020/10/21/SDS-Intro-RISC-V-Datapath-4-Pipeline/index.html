@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="CPU 的水太深了…我只能保证介绍比较基础的 case, 难免讲出问题，希望假以时日我能回头轻松啃下这几块吧&#x3D;，&#x3D; 上一节我们介绍了流水线的基本概念。相对于 Single-Cycle 的处理，并假设我们有最简单的5个 stage:  IF: 取指 ID: 译码 EX: 执行 MA: 访存 WB: 写回  在 15-418 里面，分为下面的：  Fetch – get the next instru">
+<meta property="og:type" content="article">
+<meta property="og:title" content="SDS Intro &amp; RISC-V Datapath(4): Pipeline">
+<meta property="og:url" content="http://blog.mwish.me/2020/10/21/SDS-Intro-RISC-V-Datapath-4-Pipeline/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="CPU 的水太深了…我只能保证介绍比较基础的 case, 难免讲出问题，希望假以时日我能回头轻松啃下这几块吧&#x3D;，&#x3D; 上一节我们介绍了流水线的基本概念。相对于 Single-Cycle 的处理，并假设我们有最简单的5个 stage:  IF: 取指 ID: 译码 EX: 执行 MA: 访存 WB: 写回  在 15-418 里面，分为下面的：  Fetch – get the next instru">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/DA2AADD6-0808-4DAA-BD9C-8ECF81EB0922.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/image-20201021225437486.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/C50EED72-96F2-4434-9A88-62ADA24692C7.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/C60C0E6F-9F9B-4966-A051-DA907C80BB09.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/BF0AA0B5-DEEF-4564-91FE-56425D9FCC4D.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/DC3BC619-FDE7-4B97-9725-B87CDFB82D41.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/E705CCA3-C56F-4F9D-8BFC-5FB231695B80.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/BF657B4A-8595-4056-B685-3249506D6AFA.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/848C745D-BCA9-4434-866C-9C2BDDBFFE65.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/1E2D7DAB-1F6B-4737-842B-D0E8308B9511.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/8398FD99-FE01-40F6-ACD4-08B8901B8C83.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/AFADB924-9D9B-430F-9964-E73CF425A799.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/86EE0F79-A6D6-49F2-B66C-87C1115A51BD.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/5A2207CE-B1FA-4470-92E9-C74B1D922CCF.png">
+<meta property="article:published_time" content="2020-10-21T14:43:39.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.560Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/DA2AADD6-0808-4DAA-BD9C-8ECF81EB0922.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>SDS Intro &amp; RISC-V Datapath(4): Pipeline</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2020/10/29/Cache-and-Related-Part1/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2020/10/18/How-to-exit-task/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/10/21/SDS-Intro-RISC-V-Datapath-4-Pipeline/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/10/21/SDS-Intro-RISC-V-Datapath-4-Pipeline/&text=SDS Intro &amp; RISC-V Datapath(4): Pipeline"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/10/21/SDS-Intro-RISC-V-Datapath-4-Pipeline/&title=SDS Intro &amp; RISC-V Datapath(4): Pipeline"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/10/21/SDS-Intro-RISC-V-Datapath-4-Pipeline/&is_video=false&description=SDS Intro &amp; RISC-V Datapath(4): Pipeline"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=SDS Intro &amp; RISC-V Datapath(4): Pipeline&body=Check out this article: http://blog.mwish.me/2020/10/21/SDS-Intro-RISC-V-Datapath-4-Pipeline/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/10/21/SDS-Intro-RISC-V-Datapath-4-Pipeline/&title=SDS Intro &amp; RISC-V Datapath(4): Pipeline"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/10/21/SDS-Intro-RISC-V-Datapath-4-Pipeline/&title=SDS Intro &amp; RISC-V Datapath(4): Pipeline"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/10/21/SDS-Intro-RISC-V-Datapath-4-Pipeline/&title=SDS Intro &amp; RISC-V Datapath(4): Pipeline"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/10/21/SDS-Intro-RISC-V-Datapath-4-Pipeline/&title=SDS Intro &amp; RISC-V Datapath(4): Pipeline"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/10/21/SDS-Intro-RISC-V-Datapath-4-Pipeline/&name=SDS Intro &amp; RISC-V Datapath(4): Pipeline&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/10/21/SDS-Intro-RISC-V-Datapath-4-Pipeline/&t=SDS Intro &amp; RISC-V Datapath(4): Pipeline"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Pipeline-Hazards"><span class="toc-number">1.</span> <span class="toc-text">Pipeline Hazards</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Structutal-hazard"><span class="toc-number">1.1.</span> <span class="toc-text">Structutal hazard</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Data-Hazard"><span class="toc-number">1.2.</span> <span class="toc-text">Data Hazard</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E8%A7%A3%E5%86%B3%E6%96%B9%E5%BC%8F1-Stalling"><span class="toc-number">1.2.1.</span> <span class="toc-text">解决方式1: Stalling</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E8%A7%A3%E5%86%B3%E6%96%B9%E5%BC%8F2-Forwarding-bypassing"><span class="toc-number">1.2.2.</span> <span class="toc-text">解决方式2: Forwarding(bypassing)</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Control-Hazard"><span class="toc-number">2.</span> <span class="toc-text">Control Hazard</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Multiple-issue-%E2%80%9CSuperscalar%E2%80%9D"><span class="toc-number">2.1.</span> <span class="toc-text">Multiple issue “Superscalar”</span></a></li></ol></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        SDS Intro &amp; RISC-V Datapath(4): Pipeline
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2020-10-21T14:43:39.000Z" itemprop="datePublished">2020-10-21</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>CPU 的水太深了…我只能保证介绍比较基础的 case, 难免讲出问题，希望假以时日我能回头轻松啃下这几块吧=，=</p>
+<p>上一节我们介绍了流水线的基本概念。相对于 Single-Cycle 的处理，并假设我们有最简单的5个 stage:</p>
+<ol>
+<li>IF: 取指</li>
+<li>ID: 译码</li>
+<li>EX: 执行</li>
+<li>MA: 访存</li>
+<li>WB: 写回</li>
+</ol>
+<p>在 15-418 里面，分为下面的：</p>
+<ol>
+<li>Fetch – get the next instruction from memory</li>
+<li>Decode – figure out what to do &amp; read inputs</li>
+<li>Execute – perform the necessary operations</li>
+<li>Commit – write the results back to registers / memory</li>
+</ol>
+<p>当然需要说明的是，这是教学的一个非常简化的版本，真实 pipeline stage 会比这个多不少。</p>
+<p><img src="https://image.mwish.me/blog-image/DA2AADD6-0808-4DAA-BD9C-8ECF81EB0922.png" alt="DA2AADD6-0808-4DAA-BD9C-8ECF81EB0922"></p>
+<p><img src="https://image.mwish.me/blog-image/image-20201021225437486.png" alt="image-20201021225437486"></p>
+<p>Pipeline 的基本思路是，“因为每个指令的每个阶段，用到的结构可能都是不一样的，所以我们和流水线加工一样，每个阶段都在处理不同的指令”。但是这个实现起来相对 Single-Cycle 就有各种各样的新问题了。</p>
+<p><img src="https://image.mwish.me/blog-image/C50EED72-96F2-4434-9A88-62ADA24692C7.png" alt="C50EED72-96F2-4434-9A88-62ADA24692C7"></p>
+<p><strong>Idea1: 准备必要的 Pipeline registers，把每个 stage 需要的 control logic 和上一阶段的数据拆分出来，让下个阶段能够正确的运行</strong></p>
+<p><img src="https://image.mwish.me/blog-image/C60C0E6F-9F9B-4966-A051-DA907C80BB09.png" alt="C60C0E6F-9F9B-4966-A051-DA907C80BB09"></p>
+<p>这里有：</p>
+<ol>
+<li>存储下一阶段需要的 inst 的 寄存器</li>
+<li>存储下一阶段需要的数据来源，如 rs 等寄存器</li>
+<li>PC Register</li>
+<li>…</li>
+</ol>
+<p>而control logic 也是类似“多阶段的”，来完成这个控制。</p>
+<h2 id="Pipeline-Hazards"><a href="#Pipeline-Hazards" class="headerlink" title="Pipeline Hazards"></a>Pipeline Hazards</h2><blockquote>
+<p>A <em>hazard</em> is a situation that prevents starting the next instruction in the next clock cycle</p>
+</blockquote>
+<p>咋一看流水线这么运行就完了，但是细想还是会有很多问题，这里划分了3种：</p>
+<ol>
+<li>Structural hazard ：Datapath 组件的冲突，可能会有同时对memory 的读/写</li>
+<li>Data hazard：寄存器等冲突，比如在不同 stage 的数据同时读写一个 reg</li>
+<li>Control hazard</li>
+</ol>
+<p>这让我们不能简单的单个指令执行。</p>
+<h3 id="Structutal-hazard"><a href="#Structutal-hazard" class="headerlink" title="Structutal hazard"></a>Structutal hazard</h3><ul>
+<li><strong>Solution 1:</strong> 需要冲突的指令需要 stall</li>
+<li><strong>Solution 2:</strong> 增加硬件（下面我们会看到这是怎么实现的）</li>
+<li>永远能靠增加硬件来解决这个问题</li>
+</ul>
+<p>具体而言，在 decode stage, 可以读到两个 operand reg; 在writeback 阶段，可以写回一个 reg, 这个时候会产生冲突。这个时候可以分离对寄存器的读写 port，来维持状态。</p>
+<p>这里还给出了一个访问 memory 的例子：IF 阶段取指令，MA 阶段访问存储，那么这个就有一个结构冲突了，这个时候解决方式是：</p>
+<p><img src="https://image.mwish.me/blog-image/BF0AA0B5-DEEF-4564-91FE-56425D9FCC4D.png" alt="BF0AA0B5-DEEF-4564-91FE-56425D9FCC4D"></p>
+<p>所以总结一下，RISC-V pipeline 出现 structral hazard 主要还是在于 memory</p>
+<p>最佳的方式是拆分指令和数据的访问，拆分成 IMEM 和 DMEM。（我只知道有 icache 和 dcache 就是）</p>
+<h3 id="Data-Hazard"><a href="#Data-Hazard" class="headerlink" title="Data Hazard"></a>Data Hazard</h3><p>这里是指寄存器上前后指令的冲突，具体如下图：</p>
+<p><img src="https://image.mwish.me/blog-image/DC3BC619-FDE7-4B97-9725-B87CDFB82D41.png" alt="DC3BC619-FDE7-4B97-9725-B87CDFB82D41"></p>
+<p>你这会儿会问，咱不是已经分离 Reg 的读写 port 了吗？为啥还会这样呢？分离端口不代表同一 stage 时间数据写/读能够有符合预期的结果：</p>
+<blockquote>
+<p>Might not always be possible to write then read in same cycle, especially in high-frequency designs. </p>
+</blockquote>
+<p>我们希望结果是符合预期的，即和非 pipeline 执行有相同的结果，那么我们就需要维护这个语义了。我们需要保证：</p>
+<ol>
+<li>前面写入 reg 的值能被之后的指令读 reg 读到</li>
+<li>对同一个 reg 不依赖同一时间的读/写</li>
+</ol>
+<h4 id="解决方式1-Stalling"><a href="#解决方式1-Stalling" class="headerlink" title="解决方式1: Stalling"></a>解决方式1: Stalling</h4><p>（好像我们前面就讲了 stalling 但是没配图？）</p>
+<p><img src="https://image.mwish.me/blog-image/E705CCA3-C56F-4F9D-8BFC-5FB231695B80.png" alt="E705CCA3-C56F-4F9D-8BFC-5FB231695B80"></p>
+<p>但是 stall 会大大影响效率（这个可以找 perfbook, 里面有数据），不过编译器也可以分析并且插入 <code>add x0, x0, 0</code> 之类的 nop</p>
+<h4 id="解决方式2-Forwarding-bypassing"><a href="#解决方式2-Forwarding-bypassing" class="headerlink" title="解决方式2: Forwarding(bypassing)"></a>解决方式2: Forwarding(bypassing)</h4><p><img src="https://image.mwish.me/blog-image/BF657B4A-8595-4056-B685-3249506D6AFA.png" alt="BF657B4A-8595-4056-B685-3249506D6AFA"></p>
+<p>这个是真的牛逼…但是这么一来 path 和 control 感觉会巨复杂..</p>
+<blockquote>
+<p>Compare destination of older instructions in pipeline with sources of new instruction in decode stage.</p>
+</blockquote>
+<p>所以需要一个巨复杂的 forwarding control logic</p>
+<p><img src="https://image.mwish.me/blog-image/848C745D-BCA9-4434-866C-9C2BDDBFFE65.png" alt="848C745D-BCA9-4434-866C-9C2BDDBFFE65"></p>
+<p>同时，即使这样，我们还是需要必要的 stall:</p>
+<p><img src="https://image.mwish.me/blog-image/1E2D7DAB-1F6B-4737-842B-D0E8308B9511.png" alt="1E2D7DAB-1F6B-4737-842B-D0E8308B9511"></p>
+<p>这里第二条指令依赖第一条指令写入寄存器的值，所以这个需要 stall. 当然，编译器/CPU能够完成指令重排，来优化这个过程：</p>
+<p><img src="https://image.mwish.me/blog-image/8398FD99-FE01-40F6-ACD4-08B8901B8C83.png" alt="8398FD99-FE01-40F6-ACD4-08B8901B8C83"></p>
+<h2 id="Control-Hazard"><a href="#Control-Hazard" class="headerlink" title="Control Hazard"></a>Control Hazard</h2><p>这个反而是我最熟悉的…</p>
+<p><img src="https://image.mwish.me/blog-image/AFADB924-9D9B-430F-9964-E73CF425A799.png" alt="AFADB924-9D9B-430F-9964-E73CF425A799"></p>
+<p>其实可以看看 likely，影响程序的优化儿：<a target="_blank" rel="noopener" href="https://en.cppreference.com/w/cpp/language/attributes/likely">https://en.cppreference.com/w/cpp/language/attributes/likely</a></p>
+<p>likely 会静态的影响程序。</p>
+<blockquote>
+<ul>
+<li>Every taken branch in simple pipeline costs 2 dead cycles</li>
+<li>To improve performance, use “branch prediction” to guess which way branch will go earlier in pipeline</li>
+<li>Only flush pipeline if branch prediction was incorrect</li>
+</ul>
+</blockquote>
+<h3 id="Multiple-issue-“Superscalar”"><a href="#Multiple-issue-“Superscalar”" class="headerlink" title="Multiple issue “Superscalar”"></a>Multiple issue “Superscalar”</h3><p><img src="https://image.mwish.me/blog-image/86EE0F79-A6D6-49F2-B66C-87C1115A51BD.png" alt="86EE0F79-A6D6-49F2-B66C-87C1115A51BD"></p>
+<p><img src="https://image.mwish.me/blog-image/5A2207CE-B1FA-4470-92E9-C74B1D922CCF.png" alt="5A2207CE-B1FA-4470-92E9-C74B1D922CCF"></p>
+<p>这里需要 Execute 之前完成动态计算，并且去 superscalar 的执行</p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Pipeline-Hazards"><span class="toc-number">1.</span> <span class="toc-text">Pipeline Hazards</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Structutal-hazard"><span class="toc-number">1.1.</span> <span class="toc-text">Structutal hazard</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Data-Hazard"><span class="toc-number">1.2.</span> <span class="toc-text">Data Hazard</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E8%A7%A3%E5%86%B3%E6%96%B9%E5%BC%8F1-Stalling"><span class="toc-number">1.2.1.</span> <span class="toc-text">解决方式1: Stalling</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E8%A7%A3%E5%86%B3%E6%96%B9%E5%BC%8F2-Forwarding-bypassing"><span class="toc-number">1.2.2.</span> <span class="toc-text">解决方式2: Forwarding(bypassing)</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Control-Hazard"><span class="toc-number">2.</span> <span class="toc-text">Control Hazard</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Multiple-issue-%E2%80%9CSuperscalar%E2%80%9D"><span class="toc-number">2.1.</span> <span class="toc-text">Multiple issue “Superscalar”</span></a></li></ol></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/10/21/SDS-Intro-RISC-V-Datapath-4-Pipeline/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/10/21/SDS-Intro-RISC-V-Datapath-4-Pipeline/&text=SDS Intro &amp; RISC-V Datapath(4): Pipeline"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/10/21/SDS-Intro-RISC-V-Datapath-4-Pipeline/&title=SDS Intro &amp; RISC-V Datapath(4): Pipeline"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/10/21/SDS-Intro-RISC-V-Datapath-4-Pipeline/&is_video=false&description=SDS Intro &amp; RISC-V Datapath(4): Pipeline"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=SDS Intro &amp; RISC-V Datapath(4): Pipeline&body=Check out this article: http://blog.mwish.me/2020/10/21/SDS-Intro-RISC-V-Datapath-4-Pipeline/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/10/21/SDS-Intro-RISC-V-Datapath-4-Pipeline/&title=SDS Intro &amp; RISC-V Datapath(4): Pipeline"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/10/21/SDS-Intro-RISC-V-Datapath-4-Pipeline/&title=SDS Intro &amp; RISC-V Datapath(4): Pipeline"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/10/21/SDS-Intro-RISC-V-Datapath-4-Pipeline/&title=SDS Intro &amp; RISC-V Datapath(4): Pipeline"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/10/21/SDS-Intro-RISC-V-Datapath-4-Pipeline/&title=SDS Intro &amp; RISC-V Datapath(4): Pipeline"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/10/21/SDS-Intro-RISC-V-Datapath-4-Pipeline/&name=SDS Intro &amp; RISC-V Datapath(4): Pipeline&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/10/21/SDS-Intro-RISC-V-Datapath-4-Pipeline/&t=SDS Intro &amp; RISC-V Datapath(4): Pipeline"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

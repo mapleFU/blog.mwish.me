@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="Dataset 是 Arrow 中泛化处理 &amp;#123;某种 fs 上, 某种 format&amp;#125; 的多个文件的抽象。在读取文件的时候，通常会有多个数据集合，吐出同一种 Schema。 有数据集合，那么自然就有单个文件，Dataset 抽象出了 Fragment 的概念。每个 Fragment 对应的范围可以是文件，也可以是 “文件的一部分” ( e.g.: Csv 文件的一定行数，Parq">
+<meta property="og:type" content="article">
+<meta property="og:title" content="arrow dataset">
+<meta property="og:url" content="http://blog.mwish.me/2023/07/23/Arrow-Dataset/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="Dataset 是 Arrow 中泛化处理 &amp;#123;某种 fs 上, 某种 format&amp;#125; 的多个文件的抽象。在读取文件的时候，通常会有多个数据集合，吐出同一种 Schema。 有数据集合，那么自然就有单个文件，Dataset 抽象出了 Fragment 的概念。每个 Fragment 对应的范围可以是文件，也可以是 “文件的一部分” ( e.g.: Csv 文件的一定行数，Parq">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/whiteboard_exported_image.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/whiteboard_exported_image-2.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/whiteboard_exported_image-3.png">
+<meta property="article:published_time" content="2023-07-23T12:23:31.000Z">
+<meta property="article:modified_time" content="2023-07-23T15:56:47.927Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/whiteboard_exported_image.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>arrow dataset</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2023/08/03/Arrow-Acero-Framework/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2023/07/15/Distributed-Transaction-in-DynamoDB/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2023/07/23/Arrow-Dataset/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2023/07/23/Arrow-Dataset/&text=arrow dataset"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2023/07/23/Arrow-Dataset/&title=arrow dataset"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2023/07/23/Arrow-Dataset/&is_video=false&description=arrow dataset"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=arrow dataset&body=Check out this article: http://blog.mwish.me/2023/07/23/Arrow-Dataset/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2023/07/23/Arrow-Dataset/&title=arrow dataset"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2023/07/23/Arrow-Dataset/&title=arrow dataset"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2023/07/23/Arrow-Dataset/&title=arrow dataset"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2023/07/23/Arrow-Dataset/&title=arrow dataset"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2023/07/23/Arrow-Dataset/&name=arrow dataset&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2023/07/23/Arrow-Dataset/&t=arrow dataset"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Fragment"><span class="toc-number">1.</span> <span class="toc-text">Fragment</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#FileFragment"><span class="toc-number">1.1.</span> <span class="toc-text">FileFragment</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#FileWriter"><span class="toc-number">1.2.</span> <span class="toc-text">FileWriter</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%8A%E5%B1%82%E6%93%8D%E4%BD%9C"><span class="toc-number">1.3.</span> <span class="toc-text">上层操作</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Dataset"><span class="toc-number">2.</span> <span class="toc-text">Dataset</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        arrow dataset
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2023-07-23T12:23:31.000Z" itemprop="datePublished">2023-07-23</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>Dataset 是 Arrow 中泛化处理 <code>&#123;某种 fs 上, 某种 format&#125;</code> 的多个文件的抽象。在读取文件的时候，通常会有多个数据集合，吐出同一种 Schema。</p>
+<p>有数据集合，那么自然就有单个文件，Dataset 抽象出了 Fragment 的概念。每个 Fragment 对应的范围可以是文件，也可以是 “文件的一部分” ( e.g.: Csv 文件的一定行数，Parquet 文件中的1个 RowGroup）。对于 Fragment 来说，Fragment 的 Schema 可能和数据的 Schema 会有一点区别，Dataset 会在这一层做 Schema Evolution (但是 Arrow 目前，至少 13.0 还不支持 Parquet upcast，只支持少读几列或者多读几列不存在的这种<strong>类似 Project 和包括 Projection</strong> 的搞法），将多部分 Fragment 的 Schema 转化为 Dataset 的 Schema 的逻辑由 <code>FragmentEvolutionStrategy</code> 处理。</p>
+<p>Dataset 有 Discovery 的能力（<code>DatasetFactory</code>）。这部分我觉得有点怪，比如说，它能给定一个目录，然后把这个目录当成 Hive 分区那种方式处理( <code>key=value</code>)。不知道这个算不算一个实用功能，因为在我看来，这块总觉得是应该丢给 Meta 系统来处理的。</p>
+<p>Dataset 可以用来看 Schema 然后 Scan，产生一个对应的 Scanner 对象（有 Scanner，里面持有 FragmentScanner）。产生对应的 RecordBatch。不过我看好像还没有针对 Iceberg 之类的处理的逻辑。在 Scan 的时候，这里会有一定的预读策略，不过这几块的逻辑基本是给 Acero 准备的，有的地方策略看起来还是挺奇怪的，比如基本是一个 push-based 的模型，不断 push 具体的内容。</p>
+<p>此外，对于 Scan 来说可以指定对应策略，比如 Prefetch 的属性、是否要求 Scan 出来的数据满足 Ordering，e.g.:</p>
+<p><img src="https://image.mwish.me/blog-image/whiteboard_exported_image.png" alt="whiteboard_exported_image"></p>
+<p>目前在一种 DataSet 里面，有的 Dataset 只能处理一种 Format （Parquet、CSV…）的数据，它们可以靠 <code>UnionDataset</code> 连接起来处理。而 FileSystem 上的内容则靠 <code>FileSystemDataset</code>。之后我们会了解这些东西是怎么组合起来的。</p>
+<p>上面的 Dataset 部分和 Acero 是交融的，Dataset 可以利用 Acero 的部分来 Scan，而 Acero 又借助了 Fragments:</p>
+<p><img src="https://image.mwish.me/blog-image/whiteboard_exported_image-2.png" alt="whiteboard_exported_image-2"></p>
+<p>Arrow 还允许写 Dataset，它提供了：</p>
+<ol>
+<li>DatasetWriter</li>
+<li>SinkNode</li>
+</ol>
+<p>这里组织和之前差不多，不过老实说我感觉 Arrow 对写这块没那么熟悉，所以写链路上感觉打磨的不是很多。</p>
+<h2 id="Fragment"><a href="#Fragment" class="headerlink" title="Fragment"></a>Fragment</h2><p>Fragment 是 Dataset 的「一部分」抽象为一个子单元，可能会有一些 Partition 约束</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">ARROW_DS_EXPORT</span> <span class="title">Fragment</span> :</span> public <span class="built_in">std</span>::enable_shared_from_this&lt;Fragment&gt; &#123;</span><br><span class="line"> public:</span><br><span class="line">  <span class="comment">/// \brief An expression that represents no known partition information</span></span><br><span class="line">  <span class="type">static</span> <span class="type">const</span> compute::Expression kNoPartitionInformation;</span><br><span class="line"></span><br><span class="line">  <span class="comment">/// \brief Return the physical schema of the Fragment.</span></span><br><span class="line">  <span class="comment">///</span></span><br><span class="line">  <span class="comment">/// The physical schema is also called the writer schema.</span></span><br><span class="line">  <span class="comment">/// This method is blocking and may suffer from high latency filesystem.</span></span><br><span class="line">  <span class="comment">/// The schema is cached after being read once, or may be specified at construction.</span></span><br><span class="line">  Result&lt;<span class="built_in">std</span>::<span class="built_in">shared_ptr</span>&lt;Schema&gt;&gt; ReadPhysicalSchema();</span><br><span class="line"></span><br><span class="line">  <span class="comment">/// An asynchronous version of Scan</span></span><br><span class="line">  virtual Result&lt;RecordBatchGenerator&gt; <span class="title function_">ScanBatchesAsync</span><span class="params">(</span></span><br><span class="line"><span class="params">      <span class="type">const</span> <span class="built_in">std</span>::<span class="built_in">shared_ptr</span>&lt;ScanOptions&gt;&amp; options)</span> = <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">  <span class="comment">/// \brief Inspect a fragment to learn basic information</span></span><br><span class="line">  <span class="comment">///</span></span><br><span class="line">  <span class="comment">/// This will be called before a scan and a fragment should attach whatever</span></span><br><span class="line">  <span class="comment">/// information will be needed to figure out an evolution strategy.  This information</span></span><br><span class="line">  <span class="comment">/// will then be passed to the call to BeginScan</span></span><br><span class="line">  virtual Future&lt;<span class="built_in">std</span>::<span class="built_in">shared_ptr</span>&lt;InspectedFragment&gt;&gt; InspectFragment(</span><br><span class="line">      <span class="type">const</span> FragmentScanOptions* format_options, compute::ExecContext* exec_context);</span><br><span class="line"></span><br><span class="line">  <span class="comment">/// \brief Start a scan operation</span></span><br><span class="line">  virtual Future&lt;<span class="built_in">std</span>::<span class="built_in">shared_ptr</span>&lt;FragmentScanner&gt;&gt; BeginScan(</span><br><span class="line">      <span class="type">const</span> FragmentScanRequest&amp; request, <span class="type">const</span> InspectedFragment&amp; inspected_fragment,</span><br><span class="line">      <span class="type">const</span> FragmentScanOptions* format_options, compute::ExecContext* exec_context);</span><br><span class="line"></span><br><span class="line">  <span class="comment">/// \brief Count the number of rows in this fragment matching the filter using metadata</span></span><br><span class="line">  <span class="comment">/// only. That is, this method may perform I/O, but will not load data.</span></span><br><span class="line">  <span class="comment">///</span></span><br><span class="line">  <span class="comment">/// If this is not possible, resolve with an empty optional. The fragment can perform</span></span><br><span class="line">  <span class="comment">/// I/O (e.g. to read metadata) before it deciding whether it can satisfy the request.</span></span><br><span class="line">  virtual Future&lt;<span class="built_in">std</span>::optional&lt;<span class="type">int64_t</span>&gt;&gt; CountRows(</span><br><span class="line">      compute::Expression predicate, <span class="type">const</span> <span class="built_in">std</span>::<span class="built_in">shared_ptr</span>&lt;ScanOptions&gt;&amp; options);</span><br><span class="line"></span><br><span class="line">  virtual <span class="built_in">std</span>::<span class="built_in">string</span> <span class="title function_">type_name</span><span class="params">()</span> <span class="type">const</span> = <span class="number">0</span>;</span><br><span class="line">  virtual <span class="built_in">std</span>::<span class="built_in">string</span> <span class="title function_">ToString</span><span class="params">()</span> <span class="type">const</span> &#123; <span class="keyword">return</span> type_name(); &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">/// \brief An expression which evaluates to true for all data viewed by this</span></span><br><span class="line">  <span class="comment">/// Fragment.</span></span><br><span class="line">  <span class="type">const</span> compute::Expression&amp; <span class="title function_">partition_expression</span><span class="params">()</span> <span class="type">const</span>;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>这部分逻辑比较简单。</p>
+<ol>
+<li><code>FragmentScanOptions</code> 是一套多态接口，允许你自己定义</li>
+<li><code>InspectFragments</code> 会允许你去 Inspect 对应的内容</li>
+<li><code>CountRow</code> 会尝试（注意，这个不一定真的返回）告诉你有多少行，它会做成 Best Effort + 准确的。比如它读 Parquet，如果发现自己某个 Expression 没法判断是否满足，就会快速熔断，返回 <code>std::nullopt</code>.</li>
+</ol>
+<h3 id="FileFragment"><a href="#FileFragment" class="headerlink" title="FileFragment"></a>FileFragment</h3><p>主要的 Fragment 是 FileFragment，是在某种 fs 上，给定某个 Schema 读取，有着 Format 的固定单元。FileFragment 对应某种文件格式，但是不一定对应一个文件。比如 Parquet 的 FileFragment 就可能对应 File 下的一到数个 RowGroup。</p>
+<p>这里面包装了如下的类型：</p>
+<ul>
+<li>FileSource :  <code>((fileName, fs) or (input buffer), compression..)</code>, 允许用户在上面打开一个 <code>RandomAccessFile</code> 或者 <code>InputStream</code> (老实说我觉得 InputStream 比较自然…不过 OSS 这种做 RandomAccess 的话要包一堆 pread 之类的语义，也不是不行）</li>
+<li>FileFormat : 相当于 <code>FileFragment</code> 的工厂，包装了一些 Fragment 的接口，然后根据 <code>FileSource</code> 之类的创建 FileFragment，和<strong>所有</strong> Fragment 上的接口. 这里感觉不会创建 RowGroup 上的 Fragment。FileFormat 对每个文件类型需要实现一遍子类。此外，每一种 Format 工厂上还有一个 <code>FragmentScanOptions</code>，<strong>作为默认的 Scan 配置</strong>。这种 Format 作为工厂的配置代码没啥奇特的，不过作为框架代码还是可以拿来抄的</li>
+</ul>
+<ol>
+<li><p>在 FileFormat 下有多种 Format，比如 Csv, Ipc, Json, Parquet。作为 Dataset 的抽象。</p>
+</li>
+<li><p><code>FileFragment</code> == <code>FileSource + FileFormat</code>. 包装了一个 <code>FileFormat</code> 和 <code>FileSource</code>，完成对应的需求。</p>
+</li>
+</ol>
+<p>我们以 ParquetFileFragment 和 ParquetFileFormat 为例</p>
+<ol>
+<li><code>ParquetFileFragment</code>: 包括 <code>SchemaManifest</code>、文件的 <code>metadata_</code>，此外还有一些 Partition Guarantee Expression、RowGroup 裁剪表达式的内容</li>
+<li><code>ParquetFileFormat</code>: 包装了上层的一个奇怪的 ReaderOptions，和 default config</li>
+</ol>
+<p>在 Format 层实现的：</p>
+<ul>
+<li>IsSupport: 看一下 Footer，查看一下文件使用的版本呀编码呀自己是否支持</li>
+<li><code>GetReader</code> / <code>GetReaderAsync</code>: 打开 Reader</li>
+<li>读取 Schema</li>
+<li>读取的时候做 Schema Projection (这里包含把外部读取的 Schema 映射到内部，可以看 <code>InferColumnProjection</code>, 我觉得这块写的怪怪的，甚至还有检查 duplicate fields name 的）</li>
+</ul>
+<p>在 <code>ParquetFileFragment</code> 层，默认会「打开 Footer，然后包含所有的 RowGroup」，然后外层用户可以：</p>
+<ol>
+<li>下推 Filter，这里会把每个 RowGroup 的信息抽出来，抽成一个 Expression，然后看这个 Expression &amp;&amp; 用户传入的 Filter 如果一定是 False 的话，那么可以尝试裁剪掉</li>
+<li>允许 Subset，取这里的一小部分</li>
+<li>在打开 Scanner 的时候 (<code>ParquetFileFormat::GetReaderAsync</code>)，才会打开 InputStream ( <code>FileSource::open</code>)</li>
+</ol>
+<p>我们可以简单看一下 Filter 的代码：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br></pre></td><td class="code"><pre><span class="line">Result&lt;<span class="built_in">std</span>::<span class="built_in">vector</span>&lt;<span class="type">int</span>&gt;&gt; ParquetFileFragment::FilterRowGroups(</span><br><span class="line">    compute::Expression predicate) &#123;</span><br><span class="line">  <span class="built_in">std</span>::<span class="built_in">vector</span>&lt;<span class="type">int</span>&gt; row_groups;</span><br><span class="line">  ARROW_ASSIGN_OR_RAISE(<span class="keyword">auto</span> expressions, TestRowGroups(<span class="built_in">std</span>::move(predicate)));</span><br><span class="line"></span><br><span class="line">  <span class="keyword">auto</span> lock = physical_schema_mutex_.Lock();</span><br><span class="line">  DCHECK(expressions.empty() || (expressions.size() == row_groups_-&gt;size()));</span><br><span class="line">  <span class="keyword">for</span> (<span class="type">size_t</span> i = <span class="number">0</span>; i &lt; expressions.size(); i++) &#123;</span><br><span class="line">    <span class="keyword">if</span> (expressions[i].IsSatisfiable()) &#123;</span><br><span class="line">      row_groups.push_back(row_groups_-&gt;at(i));</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="keyword">return</span> row_groups;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">Result&lt;<span class="built_in">std</span>::<span class="built_in">vector</span>&lt;compute::Expression&gt;&gt; ParquetFileFragment::TestRowGroups(</span><br><span class="line">    compute::Expression predicate) &#123;</span><br><span class="line">  <span class="keyword">auto</span> lock = physical_schema_mutex_.Lock();</span><br><span class="line"></span><br><span class="line">  DCHECK_NE(metadata_, nullptr);</span><br><span class="line">  ARROW_ASSIGN_OR_RAISE(</span><br><span class="line">      predicate, SimplifyWithGuarantee(<span class="built_in">std</span>::move(predicate), partition_expression_));</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span> (!predicate.IsSatisfiable()) &#123;</span><br><span class="line">    <span class="keyword">return</span> <span class="built_in">std</span>::<span class="built_in">vector</span>&lt;compute::Expression&gt;&#123;&#125;;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">for</span> (<span class="type">const</span> FieldRef&amp; ref : FieldsInExpression(predicate)) &#123;</span><br><span class="line">    ARROW_ASSIGN_OR_RAISE(<span class="keyword">auto</span> match, ref.FindOneOrNone(*physical_schema_));</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (match.empty()) <span class="keyword">continue</span>;</span><br><span class="line">    <span class="keyword">if</span> (statistics_expressions_complete_[match[<span class="number">0</span>]]) <span class="keyword">continue</span>;</span><br><span class="line">    statistics_expressions_complete_[match[<span class="number">0</span>]] = <span class="literal">true</span>;</span><br><span class="line"></span><br><span class="line">    <span class="type">const</span> SchemaField&amp; schema_field = manifest_-&gt;schema_fields[match[<span class="number">0</span>]];</span><br><span class="line">    <span class="type">int</span> i = <span class="number">0</span>;</span><br><span class="line">    <span class="keyword">for</span> (<span class="type">int</span> row_group : *row_groups_) &#123;</span><br><span class="line">      <span class="keyword">auto</span> row_group_metadata = metadata_-&gt;RowGroup(row_group);</span><br><span class="line"></span><br><span class="line">      <span class="keyword">if</span> (<span class="keyword">auto</span> minmax =</span><br><span class="line">              ColumnChunkStatisticsAsExpression(schema_field, *row_group_metadata)) &#123;</span><br><span class="line">        FoldingAnd(&amp;statistics_expressions_[i], <span class="built_in">std</span>::move(*minmax));</span><br><span class="line">        ARROW_ASSIGN_OR_RAISE(statistics_expressions_[i],</span><br><span class="line">                              statistics_expressions_[i].Bind(*physical_schema_));</span><br><span class="line">      &#125;</span><br><span class="line"></span><br><span class="line">      ++i;</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="built_in">std</span>::<span class="built_in">vector</span>&lt;compute::Expression&gt; <span class="title function_">row_groups</span><span class="params">(row_groups_-&gt;size())</span>;</span><br><span class="line">  <span class="keyword">for</span> (<span class="type">size_t</span> i = <span class="number">0</span>; i &lt; row_groups_-&gt;size(); ++i) &#123;</span><br><span class="line">    ARROW_ASSIGN_OR_RAISE(<span class="keyword">auto</span> row_group_predicate,</span><br><span class="line">                          SimplifyWithGuarantee(predicate, statistics_expressions_[i]));</span><br><span class="line">    row_groups[i] = <span class="built_in">std</span>::move(row_group_predicate);</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="keyword">return</span> row_groups;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>(我感觉这块虽然没问题，但是 Column As Expr 看着有点别扭，而且这种模式在搞 BloomFilter 的时候，就不是很方便了。之后看看 Velox 和 Impala 之类的是怎么搞 Column Filter 的，比方说你其实有点不那么好把 BF 抽出来作为一个表达式然后放这里（其实也不是不行））</p>
+<p>这里取 Subset 的时候，相当于 <code>FileMetadata</code> 和 <code>SchemaManifest</code> 这几个东西会传过去，不会重复 Reopen footer.</p>
+<h3 id="FileWriter"><a href="#FileWriter" class="headerlink" title="FileWriter"></a>FileWriter</h3><p><code>FileWriter</code> 包装了不同 Format 文件的写接口，可以给 SinkNode 来写入数据，不过我觉得写的很简单也很挫，随便看看就行了。</p>
+<h3 id="上层操作"><a href="#上层操作" class="headerlink" title="上层操作"></a>上层操作</h3><p><code>FragmentEvolutionStrategy</code> 在上层处理了一些 Evolution</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// \brief Rules for converting the dataset schema to and from fragment schemas</span></span><br><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">ARROW_DS_EXPORT</span> <span class="title">FragmentEvolutionStrategy</span> &#123;</span></span><br><span class="line"> public:</span><br><span class="line">  <span class="comment">/// This instance will only be destroyed when all scan operations for the</span></span><br><span class="line">  <span class="comment">/// fragment have completed.</span></span><br><span class="line">  virtual ~FragmentEvolutionStrategy() = <span class="keyword">default</span>;</span><br><span class="line">  <span class="comment">/// \brief A guarantee that applies to all batches of this fragment</span></span><br><span class="line">  <span class="comment">///</span></span><br><span class="line">  <span class="comment">/// For example, if a fragment is missing one of the fields in the dataset</span></span><br><span class="line">  <span class="comment">/// schema then a typical evolution strategy is to set that field to null.</span></span><br><span class="line">  <span class="comment">///</span></span><br><span class="line">  <span class="comment">/// So if the column at index 3 is missing then the guarantee is</span></span><br><span class="line">  <span class="comment">/// FieldRef(3) == null</span></span><br><span class="line">  <span class="comment">///</span></span><br><span class="line">  <span class="comment">/// Individual field guarantees should be AND&#x27;d together and returned</span></span><br><span class="line">  <span class="comment">/// as a single expression.</span></span><br><span class="line">  virtual Result&lt;compute::Expression&gt; <span class="title function_">GetGuarantee</span><span class="params">(</span></span><br><span class="line"><span class="params">      <span class="type">const</span> <span class="built_in">std</span>::<span class="built_in">vector</span>&lt;FieldPath&gt;&amp; dataset_schema_selection)</span> <span class="type">const</span> = <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">  <span class="comment">/// \brief Return a fragment schema selection given a dataset schema selection</span></span><br><span class="line">  <span class="comment">///</span></span><br><span class="line">  <span class="comment">/// For example, if the user wants fields 2 &amp; 4 of the dataset schema and</span></span><br><span class="line">  <span class="comment">/// in this fragment the field 2 is missing and the field 4 is at index 1 then</span></span><br><span class="line">  <span class="comment">/// this should return &#123;1&#125;</span></span><br><span class="line">  virtual Result&lt;<span class="built_in">std</span>::<span class="built_in">unique_ptr</span>&lt;FragmentSelection&gt;&gt; DevolveSelection(</span><br><span class="line">      <span class="type">const</span> <span class="built_in">std</span>::<span class="built_in">vector</span>&lt;FieldPath&gt;&amp; dataset_schema_selection) <span class="type">const</span> = <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">  <span class="comment">/// \brief Return a filter expression bound to the fragment schema given</span></span><br><span class="line">  <span class="comment">///        a filter expression bound to the dataset schema</span></span><br><span class="line">  <span class="comment">///</span></span><br><span class="line">  <span class="comment">/// The dataset scan filter will first be simplified by the guarantee returned</span></span><br><span class="line">  <span class="comment">/// by GetGuarantee.  This means an evolution that only handles dropping or casting</span></span><br><span class="line">  <span class="comment">/// fields doesn&#x27;t need to do anything here except return the given filter.</span></span><br><span class="line">  <span class="comment">///</span></span><br><span class="line">  <span class="comment">/// On the other hand, an evolution that is doing some kind of aliasing will likely</span></span><br><span class="line">  <span class="comment">/// need to convert field references in the filter to the aliased field references</span></span><br><span class="line">  <span class="comment">/// where appropriate.</span></span><br><span class="line">  virtual Result&lt;compute::Expression&gt; <span class="title function_">DevolveFilter</span><span class="params">(</span></span><br><span class="line"><span class="params">      <span class="type">const</span> compute::Expression&amp; filter)</span> <span class="type">const</span> = <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">  <span class="comment">/// \brief Convert a batch from the fragment schema to the dataset schema</span></span><br><span class="line">  <span class="comment">///</span></span><br><span class="line">  <span class="comment">/// Typically this involves casting columns from the data type stored on disk</span></span><br><span class="line">  <span class="comment">/// to the data type of the dataset schema.  For example, this fragment might</span></span><br><span class="line">  <span class="comment">/// have columns stored as int32 and the dataset schema might have int64 for</span></span><br><span class="line">  <span class="comment">/// the column.  In this case we should cast the column from int32 to int64.</span></span><br><span class="line">  <span class="comment">///</span></span><br><span class="line">  <span class="comment">/// Note: A fragment may perform this cast as the data is read from disk.  In</span></span><br><span class="line">  <span class="comment">/// that case a cast might not be needed.</span></span><br><span class="line">  virtual Result&lt;compute::ExecBatch&gt; <span class="title function_">EvolveBatch</span><span class="params">(</span></span><br><span class="line"><span class="params">      <span class="type">const</span> <span class="built_in">std</span>::<span class="built_in">shared_ptr</span>&lt;RecordBatch&gt;&amp; batch,</span></span><br><span class="line"><span class="params">      <span class="type">const</span> <span class="built_in">std</span>::<span class="built_in">vector</span>&lt;FieldPath&gt;&amp; dataset_selection,</span></span><br><span class="line"><span class="params">      <span class="type">const</span> FragmentSelection&amp; selection)</span> <span class="type">const</span> = <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">  <span class="comment">/// \brief Return a string description of this strategy</span></span><br><span class="line">  virtual <span class="built_in">std</span>::<span class="built_in">string</span> <span class="title function_">ToString</span><span class="params">()</span> <span class="type">const</span> = <span class="number">0</span>;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>每个 Fragment 在文件级别会有一些 Guarantee，表达：</p>
+<p>比如这个 Fragment 如果 Field 少了一个，那么整体还是可读的，但是这个 Batch 可能会有一些 Gurantee。比如读取 <code>&lt;a: int, b:int, c:int&gt;</code> 三列，文件只有 <code>&lt;a: int, b:int&gt;</code>，那么 c 可以补齐，这个时候会有一些 <code>EvolveBatch</code>(把 Batch 补齐)，或者 <code>Gurantee</code>(保证 <code>c == null</code> ) 的操作，给上面提供一些处理的帮助。这个 <code>DevolveFilter</code> 能够把对应的 Filter 补成对应的，或者补充一些别的重新映射之类的操作（比如  <code>&lt;a: int, c:int, b:int&gt;</code> ). 这部分方便做 Resolve.</p>
+<h2 id="Dataset"><a href="#Dataset" class="headerlink" title="Dataset"></a>Dataset</h2><p>Dataset 是 Fragment 的集合，表现为一组可以被 arrow 捞出来处理的整体，这些 Fragment 可能按照一些分区规则之类的方式被排序。Dataset 可以处理的逻辑有：</p>
+<ol>
+<li>ProjectSchema: 允许 Dataset 上套一层 Project，Project 甚至可以是一些表达式</li>
+<li>产生 Scan 对象</li>
+</ol>
+<p>这么说来这套东西还是挺简单的是不…并不是，我们可以看看这套类型是怎么组合的:</p>
+<p><img src="https://image.mwish.me/blog-image/whiteboard_exported_image-3.png" alt="whiteboard_exported_image-3"></p>
+<p><code>DatasetFactory</code> 可以帮助构造不同类型的 <code>Dataset</code>，实际上这里主要目的是 List 出对应的目录然后构建到一起。</p>
+<p>实际上，这里面大概逻辑是：</p>
+<ol>
+<li>用户可以用 <code>FileSystemDatasetFactory</code> 之类的，指定对应的 S3 或者 Local 等目录，List Plan 到对应的文件</li>
+<li>构建出一组 FileSystemDataset，然后用 Union 连接到一起</li>
+<li>拿到对应的 Fragment，然后允许对 Fragment 打开 + 预读。可以创建 <code>FragmentDataset</code> 然后丢给 Acero</li>
+<li>用 Acero 之类的 Scanner 去做对应的 Scan</li>
+</ol>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Fragment"><span class="toc-number">1.</span> <span class="toc-text">Fragment</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#FileFragment"><span class="toc-number">1.1.</span> <span class="toc-text">FileFragment</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#FileWriter"><span class="toc-number">1.2.</span> <span class="toc-text">FileWriter</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%8A%E5%B1%82%E6%93%8D%E4%BD%9C"><span class="toc-number">1.3.</span> <span class="toc-text">上层操作</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Dataset"><span class="toc-number">2.</span> <span class="toc-text">Dataset</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2023/07/23/Arrow-Dataset/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2023/07/23/Arrow-Dataset/&text=arrow dataset"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2023/07/23/Arrow-Dataset/&title=arrow dataset"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2023/07/23/Arrow-Dataset/&is_video=false&description=arrow dataset"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=arrow dataset&body=Check out this article: http://blog.mwish.me/2023/07/23/Arrow-Dataset/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2023/07/23/Arrow-Dataset/&title=arrow dataset"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2023/07/23/Arrow-Dataset/&title=arrow dataset"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2023/07/23/Arrow-Dataset/&title=arrow dataset"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2023/07/23/Arrow-Dataset/&title=arrow dataset"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2023/07/23/Arrow-Dataset/&name=arrow dataset&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2023/07/23/Arrow-Dataset/&t=arrow dataset"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

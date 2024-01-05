@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="DoublyBufferedData 逻辑上是一个这样的数据结构：  持有两份数据，读同时读一份，写的话写另一份. 它自己分为 并发读几乎是没有什么开销的，写&#x2F;更新会有开销。  看代码注释吧： 123456789101112131415&#x2F;&#x2F; This data structure makes Read() almost lock-free by making Modify()&#x2F;&#x2F; *much* s">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Notes: brpc DoublyBufferedData">
+<meta property="og:url" content="http://blog.mwish.me/2020/12/05/Notes-brpc-DoublyBuffer/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="DoublyBufferedData 逻辑上是一个这样的数据结构：  持有两份数据，读同时读一份，写的话写另一份. 它自己分为 并发读几乎是没有什么开销的，写&#x2F;更新会有开销。  看代码注释吧： 123456789101112131415&#x2F;&#x2F; This data structure makes Read() almost lock-free by making Modify()&#x2F;&#x2F; *much* s">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/E38A4C61-DEEF-4C87-ADDF-9961485FC7BB.png">
+<meta property="article:published_time" content="2020-12-05T03:25:03.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.555Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/E38A4C61-DEEF-4C87-ADDF-9961485FC7BB.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>Notes: brpc DoublyBufferedData</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2020/12/05/%E6%9D%A5%E5%BE%97%E5%A4%AA%E6%97%A9%E7%9A%84-2020-%E5%B9%B4%E5%B9%B4%E9%89%B4/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2020/12/04/Thrift-IDL/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/12/05/Notes-brpc-DoublyBuffer/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/12/05/Notes-brpc-DoublyBuffer/&text=Notes: brpc DoublyBufferedData"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/12/05/Notes-brpc-DoublyBuffer/&title=Notes: brpc DoublyBufferedData"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/12/05/Notes-brpc-DoublyBuffer/&is_video=false&description=Notes: brpc DoublyBufferedData"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Notes: brpc DoublyBufferedData&body=Check out this article: http://blog.mwish.me/2020/12/05/Notes-brpc-DoublyBuffer/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/12/05/Notes-brpc-DoublyBuffer/&title=Notes: brpc DoublyBufferedData"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/12/05/Notes-brpc-DoublyBuffer/&title=Notes: brpc DoublyBufferedData"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/12/05/Notes-brpc-DoublyBuffer/&title=Notes: brpc DoublyBufferedData"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/12/05/Notes-brpc-DoublyBuffer/&title=Notes: brpc DoublyBufferedData"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/12/05/Notes-brpc-DoublyBuffer/&name=Notes: brpc DoublyBufferedData&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/12/05/Notes-brpc-DoublyBuffer/&t=Notes: brpc DoublyBufferedData"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%9E%E7%8E%B0"><span class="toc-number">1.</span> <span class="toc-text">实现</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%84%9F%E6%83%B3"><span class="toc-number"></span> <span class="toc-text">感想</span></a>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Notes: brpc DoublyBufferedData
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2020-12-05T03:25:03.000Z" itemprop="datePublished">2020-12-05</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p><code>DoublyBufferedData</code> 逻辑上是一个这样的数据结构：</p>
+<ol>
+<li>持有两份数据，读同时读一份，写的话写另一份. 它自己分为</li>
+<li>并发读几乎是没有什么开销的，写/更新会有开销。</li>
+</ol>
+<p>看代码注释吧：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line">// This data structure makes Read() almost lock-free by making Modify()</span><br><span class="line">// *much* slower. It&#x27;s very suitable for implementing LoadBalancers which</span><br><span class="line">// have a lot of concurrent read-only ops from many threads and occasional</span><br><span class="line">// modifications of data. As a side effect, this data structure can store</span><br><span class="line">// a thread-local data for user.</span><br><span class="line">//</span><br><span class="line">// Read(): begin with a thread-local mutex locked then read the foreground</span><br><span class="line">// instance which will not be changed before the mutex is unlocked. Since the</span><br><span class="line">// mutex is only locked by Modify() with an empty critical section, the</span><br><span class="line">// function is almost lock-free.</span><br><span class="line">//</span><br><span class="line">// Modify(): Modify background instance which is not used by any Read(), flip</span><br><span class="line">// foreground and background, lock thread-local mutexes one by one to make</span><br><span class="line">// sure all existing Read() finish and later Read() see new foreground,</span><br><span class="line">// then modify background(foreground before flip) again.</span><br></pre></td></tr></table></figure>
+<p>同时，需要注意的是，这个 <code>class</code> 实现的时候利用了 TLS，所以使用的时候实际上可以自定义 TLS。</p>
+<p>先看这个 <code>class</code> 对外提供的接口：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T, <span class="keyword">typename</span> TLS = Void&gt;</span><br><span class="line"><span class="keyword">class</span> DoublyBufferedData &#123;</span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">    <span class="keyword">class</span> ScopedPtr &#123;</span><br><span class="line">    <span class="keyword">friend</span> <span class="keyword">class</span> DoublyBufferedData;</span><br><span class="line">    <span class="keyword">public</span>:</span><br><span class="line">        <span class="built_in">ScopedPtr</span>() : _data(<span class="literal">NULL</span>), _w(<span class="literal">NULL</span>) &#123;&#125;</span><br><span class="line">        ~<span class="built_in">ScopedPtr</span>() &#123;</span><br><span class="line">            <span class="keyword">if</span> (_w) &#123;</span><br><span class="line">                _w-&gt;<span class="built_in">EndRead</span>();</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="function"><span class="type">const</span> T* <span class="title">get</span><span class="params">()</span> <span class="type">const</span> </span>&#123; <span class="keyword">return</span> _data; &#125;</span><br><span class="line">        <span class="type">const</span> T&amp; <span class="keyword">operator</span>*() <span class="type">const</span> &#123; <span class="keyword">return</span> *_data; &#125;</span><br><span class="line">        <span class="type">const</span> T* <span class="keyword">operator</span>-&gt;() <span class="type">const</span> &#123; <span class="keyword">return</span> _data; &#125;</span><br><span class="line">        <span class="function">TLS&amp; <span class="title">tls</span><span class="params">()</span> </span>&#123; <span class="keyword">return</span> _w-&gt;<span class="built_in">user_tls</span>(); &#125;</span><br><span class="line">        </span><br><span class="line">    <span class="keyword">private</span>:</span><br><span class="line">        <span class="built_in">DISALLOW_COPY_AND_ASSIGN</span>(ScopedPtr);</span><br><span class="line">        <span class="type">const</span> T* _data;</span><br><span class="line">        Wrapper* _w;</span><br><span class="line">    &#125;;</span><br><span class="line">    </span><br><span class="line">    <span class="built_in">DoublyBufferedData</span>();</span><br><span class="line">    ~<span class="built_in">DoublyBufferedData</span>();</span><br><span class="line"></span><br><span class="line">    <span class="comment">// Put foreground instance into ptr. The instance will not be changed until</span></span><br><span class="line">    <span class="comment">// ptr is destructed.</span></span><br><span class="line">    <span class="comment">// This function is not blocked by Read() and Modify() in other threads.</span></span><br><span class="line">    <span class="comment">// Returns 0 on success, -1 otherwise.</span></span><br><span class="line">    <span class="function"><span class="type">int</span> <span class="title">Read</span><span class="params">(ScopedPtr* ptr)</span></span>;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// Modify background and foreground instances. fn(T&amp;, ...) will be called</span></span><br><span class="line">    <span class="comment">// twice. Modify() from different threads are exclusive from each other.</span></span><br><span class="line">    <span class="comment">// <span class="doctag">NOTE:</span> Call same series of fn to different equivalent instances should</span></span><br><span class="line">    <span class="comment">// result in equivalent instances, otherwise foreground and background</span></span><br><span class="line">    <span class="comment">// instance will be inconsistent.</span></span><br><span class="line">    <span class="keyword">template</span> &lt;<span class="keyword">typename</span> Fn&gt; <span class="function"><span class="type">size_t</span> <span class="title">Modify</span><span class="params">(Fn&amp; fn)</span></span>;</span><br><span class="line">    <span class="keyword">template</span> &lt;<span class="keyword">typename</span> Fn, <span class="keyword">typename</span> Arg1&gt; <span class="function"><span class="type">size_t</span> <span class="title">Modify</span><span class="params">(Fn&amp; fn, <span class="type">const</span> Arg1&amp;)</span></span>;</span><br><span class="line">    <span class="keyword">template</span> &lt;<span class="keyword">typename</span> Fn, <span class="keyword">typename</span> Arg1, <span class="keyword">typename</span> Arg2&gt;</span><br><span class="line">    <span class="function"><span class="type">size_t</span> <span class="title">Modify</span><span class="params">(Fn&amp; fn, <span class="type">const</span> Arg1&amp;, <span class="type">const</span> Arg2&amp;)</span></span>;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// fn(T&amp; background, const T&amp; foreground, ...) will be called to background</span></span><br><span class="line">    <span class="comment">// and foreground instances respectively.</span></span><br><span class="line">    <span class="keyword">template</span> &lt;<span class="keyword">typename</span> Fn&gt; <span class="function"><span class="type">size_t</span> <span class="title">ModifyWithForeground</span><span class="params">(Fn&amp; fn)</span></span>;</span><br><span class="line">    <span class="keyword">template</span> &lt;<span class="keyword">typename</span> Fn, <span class="keyword">typename</span> Arg1&gt;</span><br><span class="line">    <span class="function"><span class="type">size_t</span> <span class="title">ModifyWithForeground</span><span class="params">(Fn&amp; fn, <span class="type">const</span> Arg1&amp;)</span></span>;</span><br><span class="line">    <span class="keyword">template</span> &lt;<span class="keyword">typename</span> Fn, <span class="keyword">typename</span> Arg1, <span class="keyword">typename</span> Arg2&gt;</span><br><span class="line">    <span class="function"><span class="type">size_t</span> <span class="title">ModifyWithForeground</span><span class="params">(Fn&amp; fn, <span class="type">const</span> Arg1&amp;, <span class="type">const</span> Arg2&amp;)</span></span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>其中 <code>Fn</code> 是更新函数，这个我们暂且不表。可以看到，这里提供了 <code>Read</code> 和 <code>Modify</code></p>
+<p>需要注意的是，<code>Read</code> 是侵入式的，需要一个 <code>ScopedPtr</code> 来管理读相关的 Ownership。<code>ScopedPtr</code> 同时支持 <code>tls</code>, 这是 thread local 相关的自定义语义。</p>
+<h3 id="实现"><a href="#实现" class="headerlink" title="实现"></a>实现</h3><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T, <span class="keyword">typename</span> TLS = Void&gt;</span><br><span class="line"><span class="keyword">class</span> DoublyBufferedData &#123;</span><br><span class="line">    <span class="keyword">class</span> Wrapper;</span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">    <span class="keyword">class</span> <span class="title class_">ScopedPtr</span> &#123;</span><br><span class="line">    <span class="keyword">friend</span> <span class="keyword">class</span> <span class="title class_">DoublyBufferedData</span>;</span><br><span class="line">    <span class="keyword">public</span>:</span><br><span class="line">        <span class="built_in">ScopedPtr</span>() : _data(<span class="literal">NULL</span>), _w(<span class="literal">NULL</span>) &#123;&#125;</span><br><span class="line">        ~<span class="built_in">ScopedPtr</span>() &#123;</span><br><span class="line">            <span class="keyword">if</span> (_w) &#123;</span><br><span class="line">                _w-&gt;<span class="built_in">EndRead</span>();</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="function"><span class="type">const</span> T* <span class="title">get</span><span class="params">()</span> <span class="type">const</span> </span>&#123; <span class="keyword">return</span> _data; &#125;</span><br><span class="line">        <span class="type">const</span> T&amp; <span class="keyword">operator</span>*() <span class="type">const</span> &#123; <span class="keyword">return</span> *_data; &#125;</span><br><span class="line">        <span class="type">const</span> T* <span class="keyword">operator</span>-&gt;() <span class="type">const</span> &#123; <span class="keyword">return</span> _data; &#125;</span><br><span class="line">        <span class="function">TLS&amp; <span class="title">tls</span><span class="params">()</span> </span>&#123; <span class="keyword">return</span> _w-&gt;<span class="built_in">user_tls</span>(); &#125;</span><br><span class="line">        </span><br><span class="line">    <span class="keyword">private</span>:</span><br><span class="line">        <span class="built_in">DISALLOW_COPY_AND_ASSIGN</span>(ScopedPtr);</span><br><span class="line">        <span class="type">const</span> T* _data;</span><br><span class="line">        Wrapper* _w;</span><br><span class="line">    &#125;;</span><br><span class="line"><span class="keyword">private</span>:</span><br><span class="line">    <span class="function"><span class="type">const</span> T* <span class="title">UnsafeRead</span><span class="params">()</span> <span class="type">const</span></span></span><br><span class="line"><span class="function">    </span>&#123; <span class="keyword">return</span> _data + _index.<span class="built_in">load</span>(butil::memory_order_acquire); &#125;</span><br><span class="line">    <span class="function">Wrapper* <span class="title">AddWrapper</span><span class="params">()</span></span>;</span><br><span class="line">    <span class="function"><span class="type">void</span> <span class="title">RemoveWrapper</span><span class="params">(Wrapper*)</span></span>;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// Foreground and background void.</span></span><br><span class="line">    T _data[<span class="number">2</span>];</span><br><span class="line"></span><br><span class="line">    <span class="comment">// Index of foreground instance.</span></span><br><span class="line">    butil::atomic&lt;<span class="type">int</span>&gt; _index;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// Key to access thread-local wrappers.</span></span><br><span class="line">    <span class="type">bool</span> _created_key;</span><br><span class="line">    <span class="type">pthread_key_t</span> _wrapper_key;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// All thread-local instances.</span></span><br><span class="line">    std::vector&lt;Wrapper*&gt; _wrappers;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// Sequence access to _wrappers.</span></span><br><span class="line">    <span class="type">pthread_mutex_t</span> _wrappers_mutex;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// Sequence modifications.</span></span><br><span class="line">    <span class="type">pthread_mutex_t</span> _modify_mutex;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>关于 <code>pthread_key_t</code> 和相关的，可以看看 Linux 系统编程手册 31节。它包含一些简单的生命周期管理的策略，线程会自动 destruct 数据。</p>
+<p><img src="https://image.mwish.me/blog-image/E38A4C61-DEEF-4C87-ADDF-9961485FC7BB.png" alt="E38A4C61-DEEF-4C87-ADDF-9961485FC7BB"></p>
+<p>然后可以注意到这个 wrapper 类型：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T, <span class="keyword">typename</span> TLS&gt;</span><br><span class="line"><span class="keyword">class</span> <span class="title class_">DoublyBufferedDataWrapperBase</span> &#123;</span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">    <span class="function">TLS&amp; <span class="title">user_tls</span><span class="params">()</span> </span>&#123; <span class="keyword">return</span> _user_tls; &#125;</span><br><span class="line"><span class="keyword">protected</span>:</span><br><span class="line">    TLS _user_tls;</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T&gt;</span><br><span class="line"><span class="keyword">class</span> <span class="title class_">DoublyBufferedDataWrapperBase</span>&lt;T, Void&gt; &#123;</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="comment">// 单个线程从 Wrapper 里面读是线程安全的。</span></span><br><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T, <span class="keyword">typename</span> TLS&gt;</span><br><span class="line"><span class="keyword">class</span> <span class="title class_">DoublyBufferedData</span>&lt;T, TLS&gt;::Wrapper</span><br><span class="line">    : <span class="keyword">public</span> DoublyBufferedDataWrapperBase&lt;T, TLS&gt; &#123;</span><br><span class="line"><span class="keyword">friend</span> <span class="keyword">class</span> <span class="title class_">DoublyBufferedData</span>;</span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">    <span class="function"><span class="keyword">explicit</span> <span class="title">Wrapper</span><span class="params">(DoublyBufferedData* c)</span> : _control(c) &#123;</span></span><br><span class="line">        <span class="built_in">pthread_mutex_init</span>(&amp;_mutex, <span class="literal">NULL</span>);</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    ~<span class="built_in">Wrapper</span>() &#123;</span><br><span class="line">        <span class="keyword">if</span> (_control != <span class="literal">NULL</span>) &#123;</span><br><span class="line">            _control-&gt;<span class="built_in">RemoveWrapper</span>(<span class="keyword">this</span>);</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="built_in">pthread_mutex_destroy</span>(&amp;_mutex);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// _mutex will be locked by the calling pthread and DoublyBufferedData.</span></span><br><span class="line">    <span class="comment">// Most of the time, no modifications are done, so the mutex is</span></span><br><span class="line">    <span class="comment">// uncontended and fast.</span></span><br><span class="line">    <span class="function"><span class="keyword">inline</span> <span class="type">void</span> <span class="title">BeginRead</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="built_in">pthread_mutex_lock</span>(&amp;_mutex);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">inline</span> <span class="type">void</span> <span class="title">EndRead</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="built_in">pthread_mutex_unlock</span>(&amp;_mutex);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">inline</span> <span class="type">void</span> <span class="title">WaitReadDone</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="built_in">BAIDU_SCOPED_LOCK</span>(_mutex);</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line"><span class="keyword">private</span>:</span><br><span class="line">    DoublyBufferedData* _control;</span><br><span class="line">    <span class="type">pthread_mutex_t</span> _mutex;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>这个 wrapper 是一个 TLS 相关的结构，它本身是会被存放在 <code>DoublyBufferedData</code> 的 TLS 相关内容中。而且它只有读相关的权限。他在内部有一个 <code>_control</code>, 控制的是具体读取 <code>DoublyBufferedData</code> 的数据。不过话说回来，<code>BeginRead</code> <code>EndRead</code> 甚至析构函数都比较好理解(<code>RemoveWrapper</code> 一会儿讲)，但是这个 <code>WaitReadDone()</code> 让人有些费解: 我们先看看它代码吧</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// NOTE(gejun): c++11 deduces additional reference to the type.</span></span><br><span class="line"><span class="keyword">namespace</span> butil &#123;</span><br><span class="line"><span class="keyword">namespace</span> detail &#123;</span><br><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T&gt;</span><br><span class="line">std::lock_guard&lt;<span class="keyword">typename</span> std::remove_reference&lt;T&gt;::type&gt; <span class="built_in">get_lock_guard</span>();</span><br><span class="line">&#125;  <span class="comment">// namespace detail</span></span><br><span class="line">&#125;  <span class="comment">// namespace butil</span></span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> BAIDU_SCOPED_LOCK(ref_of_lock)                                  \</span></span><br><span class="line"><span class="meta">    decltype(::butil::detail::get_lock_guard<span class="string">&lt;decltype(ref_of_lock)&gt;</span>()) \</span></span><br><span class="line"><span class="meta">    BAIDU_CONCAT(scoped_locker_dummy_at_line_, __LINE__)(ref_of_lock)</span></span><br><span class="line"><span class="meta">#<span class="keyword">endif</span></span></span><br><span class="line"></span><br><span class="line"><span class="keyword">template</span>&lt;&gt; <span class="keyword">class</span> <span class="title class_">lock_guard</span>&lt;<span class="type">pthread_mutex_t</span>&gt; &#123;</span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">    <span class="function"><span class="keyword">explicit</span> <span class="title">lock_guard</span><span class="params">(<span class="type">pthread_mutex_t</span> &amp; mutex)</span> : _pmutex(&amp;mutex) &#123;</span></span><br><span class="line"><span class="meta">#<span class="keyword">if</span> !defined(NDEBUG)</span></span><br><span class="line">        <span class="type">const</span> <span class="type">int</span> rc = <span class="built_in">pthread_mutex_lock</span>(_pmutex);</span><br><span class="line">        <span class="keyword">if</span> (rc) &#123;</span><br><span class="line">            <span class="built_in">LOG</span>(FATAL) &lt;&lt; <span class="string">&quot;Fail to lock pthread_mutex_t=&quot;</span> &lt;&lt; _pmutex &lt;&lt; <span class="string">&quot;, &quot;</span> &lt;&lt; <span class="built_in">berror</span>(rc);</span><br><span class="line">            _pmutex = <span class="literal">NULL</span>;</span><br><span class="line">        &#125;</span><br><span class="line"><span class="meta">#<span class="keyword">else</span></span></span><br><span class="line">        <span class="built_in">pthread_mutex_lock</span>(_pmutex);</span><br><span class="line"><span class="meta">#<span class="keyword">endif</span>  <span class="comment">// NDEBUG</span></span></span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    ~<span class="built_in">lock_guard</span>() &#123;</span><br><span class="line"><span class="meta">#<span class="keyword">ifndef</span> NDEBUG</span></span><br><span class="line">        <span class="keyword">if</span> (_pmutex) &#123;</span><br><span class="line">            <span class="built_in">pthread_mutex_unlock</span>(_pmutex);</span><br><span class="line">        &#125;</span><br><span class="line"><span class="meta">#<span class="keyword">else</span></span></span><br><span class="line">        <span class="built_in">pthread_mutex_unlock</span>(_pmutex);</span><br><span class="line"><span class="meta">#<span class="keyword">endif</span></span></span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line"><span class="keyword">private</span>:</span><br><span class="line">    <span class="built_in">DISALLOW_COPY_AND_ASSIGN</span>(lock_guard);</span><br><span class="line">    <span class="type">pthread_mutex_t</span>* _pmutex;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>这里它自己实现了一套 <code>lock_guard</code>, 然后局部 lock 了…等等，这个就是一个 <code>scoped_lock</code>, 那它怎么样 fence 呢？我们得看看 <code>Read</code> 和 <code>Modify</code> 了：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T, <span class="keyword">typename</span> TLS&gt;</span><br><span class="line"><span class="type">int</span> DoublyBufferedData&lt;T, TLS&gt;::<span class="built_in">Read</span>(</span><br><span class="line">    <span class="keyword">typename</span> DoublyBufferedData&lt;T, TLS&gt;::ScopedPtr* ptr) &#123;</span><br><span class="line">    <span class="keyword">if</span> (<span class="built_in">BAIDU_UNLIKELY</span>(!_created_key)) &#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="number">-1</span>;</span><br><span class="line">    &#125;</span><br><span class="line">    Wrapper* w = <span class="built_in">static_cast</span>&lt;Wrapper*&gt;(<span class="built_in">pthread_getspecific</span>(_wrapper_key));</span><br><span class="line">    <span class="keyword">if</span> (<span class="built_in">BAIDU_LIKELY</span>(w != <span class="literal">NULL</span>)) &#123;</span><br><span class="line">        w-&gt;<span class="built_in">BeginRead</span>();</span><br><span class="line">        ptr-&gt;_data = <span class="built_in">UnsafeRead</span>();</span><br><span class="line">        ptr-&gt;_w = w;</span><br><span class="line">        <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">    &#125;</span><br><span class="line">    w = <span class="built_in">AddWrapper</span>();</span><br><span class="line">    <span class="keyword">if</span> (<span class="built_in">BAIDU_LIKELY</span>(w != <span class="literal">NULL</span>)) &#123;</span><br><span class="line">        <span class="type">const</span> <span class="type">int</span> rc = <span class="built_in">pthread_setspecific</span>(_wrapper_key, w);</span><br><span class="line">        <span class="keyword">if</span> (rc == <span class="number">0</span>) &#123;</span><br><span class="line">            w-&gt;<span class="built_in">BeginRead</span>();</span><br><span class="line">            ptr-&gt;_data = <span class="built_in">UnsafeRead</span>();</span><br><span class="line">            ptr-&gt;_w = w;</span><br><span class="line">            <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> <span class="number">-1</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<ul>
+<li>获得 TLS 的 Wrapper, 否则尝试添加一个对应的 Wrapper</li>
+<li>读的时候，开启 <code>w-&gt;BeginRead</code> ，然后构造一个 <code>ScopedPtr</code> 对象，它在外部析构的时候会调用 <code>EndRead</code></li>
+</ul>
+<p><code>UnsafeRead</code> 逻辑如下：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">const</span> T* <span class="title">UnsafeRead</span><span class="params">()</span> <span class="type">const</span></span></span><br><span class="line"><span class="function"></span>&#123; <span class="keyword">return</span> _data + _index.<span class="built_in">load</span>(butil::memory_order_acquire); &#125;</span><br></pre></td></tr></table></figure>
+<p>注意这里是 <code>acquire</code>，我们下文会提到。</p>
+<p>而 <code>AddWrapper</code> 的逻辑也很清晰，它的逻辑受到 <code>_wrappers_mutex</code> 保护。</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// Called when thread initializes thread-local wrapper.</span></span><br><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T, <span class="keyword">typename</span> TLS&gt;</span><br><span class="line"><span class="keyword">typename</span> DoublyBufferedData&lt;T, TLS&gt;::Wrapper*</span><br><span class="line">DoublyBufferedData&lt;T, TLS&gt;::<span class="built_in">AddWrapper</span>() &#123;</span><br><span class="line">    <span class="function">std::unique_ptr&lt;Wrapper&gt; <span class="title">w</span><span class="params">(<span class="keyword">new</span> (std::nothrow) Wrapper(<span class="keyword">this</span>))</span></span>;</span><br><span class="line">    <span class="keyword">if</span> (<span class="literal">NULL</span> == w) &#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">NULL</span>;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">try</span> &#123;</span><br><span class="line">        <span class="built_in">BAIDU_SCOPED_LOCK</span>(_wrappers_mutex);</span><br><span class="line">        _wrappers.<span class="built_in">push_back</span>(w.<span class="built_in">get</span>());</span><br><span class="line">    &#125; <span class="built_in">catch</span> (std::exception&amp; e) &#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">NULL</span>;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> w.<span class="built_in">release</span>();</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// Called when thread quits.</span></span><br><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T, <span class="keyword">typename</span> TLS&gt;</span><br><span class="line"><span class="type">void</span> DoublyBufferedData&lt;T, TLS&gt;::<span class="built_in">RemoveWrapper</span>(</span><br><span class="line">    <span class="keyword">typename</span> DoublyBufferedData&lt;T, TLS&gt;::Wrapper* w) &#123;</span><br><span class="line">    <span class="keyword">if</span> (<span class="literal">NULL</span> == w) &#123;</span><br><span class="line">        <span class="keyword">return</span>;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="built_in">BAIDU_SCOPED_LOCK</span>(_wrappers_mutex);</span><br><span class="line">    <span class="keyword">for</span> (<span class="type">size_t</span> i = <span class="number">0</span>; i &lt; _wrappers.<span class="built_in">size</span>(); ++i) &#123;</span><br><span class="line">        <span class="keyword">if</span> (_wrappers[i] == w) &#123;</span><br><span class="line">            _wrappers[i] = _wrappers.<span class="built_in">back</span>();</span><br><span class="line">            _wrappers.<span class="built_in">pop_back</span>();</span><br><span class="line">            <span class="keyword">return</span>;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>目前都没什么问题，但是我们得看看写是怎么实现的：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T, <span class="keyword">typename</span> TLS&gt;</span><br><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> Fn&gt;</span><br><span class="line"><span class="type">size_t</span> DoublyBufferedData&lt;T, TLS&gt;::<span class="built_in">Modify</span>(Fn&amp; fn) &#123;</span><br><span class="line">    <span class="comment">// _modify_mutex sequences modifications. Using a separate mutex rather</span></span><br><span class="line">    <span class="comment">// than _wrappers_mutex is to avoid blocking threads calling</span></span><br><span class="line">    <span class="comment">// AddWrapper() or RemoveWrapper() too long. Most of the time, modifications</span></span><br><span class="line">    <span class="comment">// are done by one thread, contention should be negligible.</span></span><br><span class="line">    <span class="built_in">BAIDU_SCOPED_LOCK</span>(_modify_mutex);</span><br><span class="line">    <span class="type">int</span> bg_index = !_index.<span class="built_in">load</span>(butil::memory_order_relaxed);</span><br><span class="line">    <span class="comment">// background instance is not accessed by other threads, being safe to</span></span><br><span class="line">    <span class="comment">// modify.</span></span><br><span class="line">    <span class="type">const</span> <span class="type">size_t</span> ret = <span class="built_in">fn</span>(_data[bg_index]);</span><br><span class="line">    <span class="keyword">if</span> (!ret) &#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// Publish, flip background and foreground.</span></span><br><span class="line">    <span class="comment">// The release fence matches with the acquire fence in UnsafeRead() to</span></span><br><span class="line">    <span class="comment">// make readers which just begin to read the new foreground instance see</span></span><br><span class="line">    <span class="comment">// all changes made in fn.</span></span><br><span class="line">    _index.<span class="built_in">store</span>(bg_index, butil::memory_order_release);</span><br><span class="line">    bg_index = !bg_index;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// Wait until all threads finishes current reading. When they begin next</span></span><br><span class="line">    <span class="comment">// read, they should see updated _index.</span></span><br><span class="line">    &#123;</span><br><span class="line">        <span class="built_in">BAIDU_SCOPED_LOCK</span>(_wrappers_mutex);</span><br><span class="line">        <span class="keyword">for</span> (<span class="type">size_t</span> i = <span class="number">0</span>; i &lt; _wrappers.<span class="built_in">size</span>(); ++i) &#123;</span><br><span class="line">            _wrappers[i]-&gt;<span class="built_in">WaitReadDone</span>();</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="type">const</span> <span class="type">size_t</span> ret2 = <span class="built_in">fn</span>(_data[bg_index]);</span><br><span class="line">    <span class="built_in">CHECK_EQ</span>(ret2, ret) &lt;&lt; <span class="string">&quot;index=&quot;</span> &lt;&lt; _index.<span class="built_in">load</span>(butil::memory_order_relaxed);</span><br><span class="line">    <span class="keyword">return</span> ret2;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<ol>
+<li><p>写会 grab <code>_modify_mutex</code></p>
+</li>
+<li><p>拿到需要修改的 <code>index</code>, 因为 <code>_index</code> 只有 <code>0</code> <code>1</code></p>
+</li>
+<li><p><code>fn(_data[bg_index])</code> 修改。这个时候</p>
+<ol>
+<li>只有一个 modify，这是 <code>_modify_mutex</code> 保证的</li>
+<li>读不会读到 <code>_data[bg_index]</code> .这个保证得整体逻辑一起看</li>
+</ol>
+</li>
+<li><p>写入 <code>_index</code>, 这个时候读之前改过的是安全的</p>
+<ol>
+<li>Q: 为什么需要 release ?</li>
+<li>A: seq_cst 肯定是可以的，如果是 <code>relaxed</code> 的话，没有 <code>fence</code> 的话，<code>UnsafeRead</code> 会读到混写的数据。这里期望写不阻塞读。</li>
+</ol>
+</li>
+<li><p><code>BAIDU_SCOPED_LOCK</code> 来 grab <code>_wrappers_mutex</code>, 这里保证不会 <code>AddWrappers</code> 或者 <code>RemoveWrappers</code>, 每个分配出去的 <code>Wrappers</code> 出去下面两种状态之一：</p>
+<ol>
+<li>分配出去了，持有了自己的 <code>mutex_</code>，再进行 <code>UnsafeRead</code></li>
+<li>么有分配出去，也没有 <code>UnsafeRead</code></li>
+</ol>
+<p>所以上 <code>_wrappers_mutex</code> 后再 <code>WaitReadDone</code> 之后，状态是安全的. </p>
+</li>
+<li><p>修改原来的数据，返回。</p>
+</li>
+</ol>
+<p>上述感觉 <code>5</code> 里面有一些隐含的风险，假设一个线程拿了两个 <code>ScopedPtr</code>, 然后 Block 在第二个上，第一个死都不释放，那么程序就…感觉这个是不是其实改成可重入锁安全一些？</p>
+<h2 id="感想"><a href="#感想" class="headerlink" title="感想"></a>感想</h2><p>读了一遍，终于知道这个玩意怎么 work 了。但是我感觉我设计不出这么巧妙的东西，有什么参考材料吗，囧…</p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%9E%E7%8E%B0"><span class="toc-number">1.</span> <span class="toc-text">实现</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%84%9F%E6%83%B3"><span class="toc-number"></span> <span class="toc-text">感想</span></a>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/12/05/Notes-brpc-DoublyBuffer/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/12/05/Notes-brpc-DoublyBuffer/&text=Notes: brpc DoublyBufferedData"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/12/05/Notes-brpc-DoublyBuffer/&title=Notes: brpc DoublyBufferedData"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/12/05/Notes-brpc-DoublyBuffer/&is_video=false&description=Notes: brpc DoublyBufferedData"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Notes: brpc DoublyBufferedData&body=Check out this article: http://blog.mwish.me/2020/12/05/Notes-brpc-DoublyBuffer/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/12/05/Notes-brpc-DoublyBuffer/&title=Notes: brpc DoublyBufferedData"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/12/05/Notes-brpc-DoublyBuffer/&title=Notes: brpc DoublyBufferedData"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/12/05/Notes-brpc-DoublyBuffer/&title=Notes: brpc DoublyBufferedData"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/12/05/Notes-brpc-DoublyBuffer/&title=Notes: brpc DoublyBufferedData"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/12/05/Notes-brpc-DoublyBuffer/&name=Notes: brpc DoublyBufferedData&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/12/05/Notes-brpc-DoublyBuffer/&t=Notes: brpc DoublyBufferedData"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

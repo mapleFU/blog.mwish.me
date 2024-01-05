@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="（图来自 CMU 15-418 Spring 2020 和 UCB CS152） 当我们涉及多核的时候，我们的多个核可能会共享一份内存：  单个变量的访问可能会有问题：  我们访问 memory, 可能在直觉上会是：   读到最近一级别存储 x 的上一个写入的值  但是，memory 会遇到的问题是  有 global 的 storage 和 local cache，而且这两个可能是不一致的 所以">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Cache and Related Part3: Coherent">
+<meta property="og:url" content="http://blog.mwish.me/2020/11/01/Cache-and-Related-Part3-Coherent/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="（图来自 CMU 15-418 Spring 2020 和 UCB CS152） 当我们涉及多核的时候，我们的多个核可能会共享一份内存：  单个变量的访问可能会有问题：  我们访问 memory, 可能在直觉上会是：   读到最近一级别存储 x 的上一个写入的值  但是，memory 会遇到的问题是  有 global 的 storage 和 local cache，而且这两个可能是不一致的 所以">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/8A003FAC-7726-4EFA-8F98-721EAE514AC4.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/BB44A00B-A60B-4CB8-B063-728410EB5DE4.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/018B5523-101F-4E00-AF0D-B3C0EE915E7F.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/15293AC1-A830-4AB5-96BE-0ACEE96B962D.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/BF8647F2-AC2B-4ADD-BC99-353EEF618C16.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/A850F71C-E08B-4D09-A735-5E01922E811D.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/42AA0894-4FD5-4BF0-9A22-98F1A12F5B3C.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/5E768853-5AB5-4B1A-B940-F2E960E9C93A.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/97CF1A96-F3F9-4976-B35F-D30F6CD258BA.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/065D74C5-5B97-40DD-8087-1A31D2CD4A5C.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/8D07B6F6-9B06-45FB-A3DB-5BB1DDBE47AF.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/7A92B093-6B60-49FE-BA37-B121D2B1B686.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/5BC3991D-5012-489B-B26E-64169EAE16E7.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/71298E26-F19C-4084-B6D9-3D0F971475C5.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/166633FA-6A66-4370-A075-3FB0735136E8.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/70B65496-6C17-4448-9BD0-F14C42DD2CC4.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/C33C7C13-990F-440F-BC8F-95465B2E2B5C.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/CBE31CAA-B88D-410F-9F82-21D0F68FE031.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/D2ADEADD-86EA-4011-8033-2A4F28C1A960.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/D67A4594-E3A7-478D-A476-52922A7C3818.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/4390486F-3FF8-4C71-A8FB-DC0598E077CF.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/23F56E11-4461-4BB4-9D02-C2E38A64A60D.png">
+<meta property="article:published_time" content="2020-11-01T09:44:13.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.551Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/8A003FAC-7726-4EFA-8F98-721EAE514AC4.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>Cache and Related Part3: Coherent</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2020/11/08/%E8%BD%AF-%E7%A1%AC%E7%9A%84%E5%88%86%E7%95%8C-%E8%99%9A%E6%8B%9F/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2020/10/31/Cache-and-Related-Part2/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/11/01/Cache-and-Related-Part3-Coherent/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/11/01/Cache-and-Related-Part3-Coherent/&text=Cache and Related Part3: Coherent"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/11/01/Cache-and-Related-Part3-Coherent/&title=Cache and Related Part3: Coherent"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/11/01/Cache-and-Related-Part3-Coherent/&is_video=false&description=Cache and Related Part3: Coherent"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Cache and Related Part3: Coherent&body=Check out this article: http://blog.mwish.me/2020/11/01/Cache-and-Related-Part3-Coherent/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/11/01/Cache-and-Related-Part3-Coherent/&title=Cache and Related Part3: Coherent"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/11/01/Cache-and-Related-Part3-Coherent/&title=Cache and Related Part3: Coherent"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/11/01/Cache-and-Related-Part3-Coherent/&title=Cache and Related Part3: Coherent"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/11/01/Cache-and-Related-Part3-Coherent/&title=Cache and Related Part3: Coherent"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/11/01/Cache-and-Related-Part3-Coherent/&name=Cache and Related Part3: Coherent&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/11/01/Cache-and-Related-Part3-Coherent/&t=Cache and Related Part3: Coherent"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-3"><a class="toc-link" href="#Single-CPU-System-I-O"><span class="toc-number">1.</span> <span class="toc-text">Single CPU System: I&#x2F;O</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Coherence"><span class="toc-number">2.</span> <span class="toc-text">Coherence</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Memory-Consistency"><span class="toc-number"></span> <span class="toc-text">Memory Consistency</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Uniprocess-Memory-Model"><span class="toc-number">0.1.</span> <span class="toc-text">Uniprocess Memory Model</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Sequential-Consistency-SC"><span class="toc-number">1.</span> <span class="toc-text">Sequential Consistency: SC</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Relaxed-Memory-Model"><span class="toc-number">2.</span> <span class="toc-text">Relaxed Memory Model</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#ARM-amp-IBM-Power-%E7%9A%84%E5%86%85%E5%AD%98%E6%A8%A1%E5%9E%8B"><span class="toc-number">2.1.</span> <span class="toc-text">ARM &amp; IBM Power 的内存模型</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%8F%AF%E8%83%BD%E5%87%BA%E7%8E%B0%E7%9A%84%E9%97%AE%E9%A2%98%E5%92%8C%E5%90%8C%E6%AD%A5"><span class="toc-number">2.2.</span> <span class="toc-text">可能出现的问题和同步</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#RISC-V-%E4%B8%AD%E7%9A%84%E5%90%8C%E6%AD%A5"><span class="toc-number">2.3.</span> <span class="toc-text">RISC-V 中的同步</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#RISC-V-%E7%9A%84%E6%94%AF%E6%8C%81%EF%BC%9ARV32A"><span class="toc-number">3.</span> <span class="toc-text">RISC-V 的支持：RV32A</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%BC%96%E8%AF%91%E5%99%A8%E4%B9%B1%E5%BA%8F%E5%92%8C%E8%AF%AD%E8%A8%80%E7%9A%84-memory-order"><span class="toc-number">4.</span> <span class="toc-text">编译器乱序和语言的 memory_order</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#References"><span class="toc-number"></span> <span class="toc-text">References</span></a>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Cache and Related Part3: Coherent
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2020-11-01T09:44:13.000Z" itemprop="datePublished">2020-11-01</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>（图来自 CMU 15-418 Spring 2020 和 UCB CS152）</p>
+<p>当我们涉及多核的时候，我们的多个核可能会共享一份内存：</p>
+<p><img src="https://image.mwish.me/blog-image/8A003FAC-7726-4EFA-8F98-721EAE514AC4.png" alt="8A003FAC-7726-4EFA-8F98-721EAE514AC4"></p>
+<p>单个变量的访问可能会有问题：</p>
+<p><img src="https://image.mwish.me/blog-image/BB44A00B-A60B-4CB8-B063-728410EB5DE4.png" alt="BB44A00B-A60B-4CB8-B063-728410EB5DE4"></p>
+<p>我们访问 memory, 可能<strong>在直觉上</strong>会是：</p>
+<blockquote>
+<p> 读到最近一级别存储 x 的上一个写入的值</p>
+</blockquote>
+<p>但是，memory 会遇到的问题是</p>
+<ol>
+<li>有 global 的 storage 和 local cache，而且这两个可能是不一致的<ol>
+<li>所以我们有 write back 和 write through 的策略，来 trade 性能和 consitent</li>
+</ol>
+</li>
+<li>有多个 local cache 的话，可能也会导致这种视图上的不一致</li>
+</ol>
+<p>但是说到底，“读到上一个写入的值”，或者，“写入时间最近的值”，究竟是什么语义呢：</p>
+<p><img src="https://image.mwish.me/blog-image/018B5523-101F-4E00-AF0D-B3C0EE915E7F.png" alt="018B5523-101F-4E00-AF0D-B3C0EE915E7F"></p>
+<p>事实上，我们之前介绍过 CPU Cache, 现在给出一个 L1 L2 L3 的视图</p>
+<p><img src="https://image.mwish.me/blog-image/15293AC1-A830-4AB5-96BE-0ACEE96B962D.png" alt="15293AC1-A830-4AB5-96BE-0ACEE96B962D"></p>
+<p>显然，现在我们对同一个变量的访问，如上上张图所示，我各个处理器本身是顺序处理的，而它们在一起，会得到一个诡异的偏序，而 P1 P2 P3 的 x 值和内存中的 x 值是 inconsistent 的。这是问题所在：我们无法定义“上一个”逻辑意义上是什么。</p>
+<p>要在保证性能的同时，也作出各个处理器对 x 的值读写的偏序保证，我们需要 coherence</p>
+<h3 id="Single-CPU-System-I-O"><a href="#Single-CPU-System-I-O" class="headerlink" title="Single CPU System: I/O"></a>Single CPU System: I/O</h3><p><img src="https://image.mwish.me/blog-image/BF8647F2-AC2B-4ADD-BC99-353EEF618C16.png" alt="BF8647F2-AC2B-4ADD-BC99-353EEF618C16"></p>
+<p>单核 CPU IO 的时候，假设要读/写数据，可能会：</p>
+<ol>
+<li>processor 写到了 write-buffer 里，而网卡可能没有读到 buffer 中的数据，而是读到了 memory 中的 stale data，造成写 stale data</li>
+<li>网络中数据写到了 memory 中，通知 processor, processor <code>lw</code> 读到了 cache，造成读 stale data</li>
+</ol>
+<p>某种意义上说，这也是一种不一致导致的，为了解决这个问题，需要下列的支持</p>
+<ol>
+<li>CPU 写的时候可以写到和设备的 shared buffer 中，而不是本身的 write buffer。让设备能够读到正确信息</li>
+<li>OS 可以把读写的 page 设置成不可 cache 的，同时，IO 完成的时候 flush cache page</li>
+<li>在生产中，DMA transfer 的频率远比 <code>lw</code> <code>sw</code> 少，所以可以接受代价较高。</li>
+</ol>
+<h3 id="Coherence"><a href="#Coherence" class="headerlink" title="Coherence"></a>Coherence</h3><p>终于到了 conherence 了，那么我们来讲讲，memory coherence，我必须要说，下面这张图理的绝对很清晰了：</p>
+<p><img src="https://image.mwish.me/blog-image/A850F71C-E08B-4D09-A735-5E01922E811D.png" alt="A850F71C-E08B-4D09-A735-5E01922E811D"></p>
+<p>. </p>
+<ol>
+<li>单个 Processor 对单个变量 x 的读写是顺序的</li>
+<li><strong>write propagation</strong>: P 对一个变量的写入必须最终对其他 Process 可见</li>
+<li><strong>write serialization</strong> : 写有全局的顺序</li>
+</ol>
+<p><img src="https://image.mwish.me/blog-image/42AA0894-4FD5-4BF0-9A22-98F1A12F5B3C.png" alt="42AA0894-4FD5-4BF0-9A22-98F1A12F5B3C"></p>
+<p>以上便是违背 write serialization 的例子，对于 x 写入 <code>“a&quot;</code>  <code>&quot;b&quot;</code>, P3 P4 观察到的顺序不一致。</p>
+<p>那么，在这种假设下，假设有三个线程 t0, t1, t2:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// t0</span></span><br><span class="line"><span class="keyword">for</span> (i = <span class="number">0</span>; i &lt; N; i += <span class="number">2</span>) &#123;</span><br><span class="line">	X = i;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// t1</span></span><br><span class="line"><span class="keyword">for</span> (j = <span class="number">1</span>; j &lt; N; j += <span class="number">2</span>) &#123;</span><br><span class="line">	X = j;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// t3</span></span><br><span class="line"><span class="keyword">for</span> (k = <span class="number">0</span>; k &lt; ..; k++) &#123;</span><br><span class="line">	s[k] = X;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>那么，数组 s 中，可以看到我写的脑瘫程序可以输出：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">26980 626437 1226236 1806376 2449353 3083919 3382384 3734980 4165338 5994059 </span><br><span class="line">4872578 7435291 5586348 8893777 6262932 6539670 6875646 7205346 7535204 7873218 </span><br><span class="line">8256550 8658202 14268993 14634249 9901488 10347038 15693957 16119785 16529365 17135341 </span><br><span class="line">17836189 12867162 19251979 19962671 13929908 14261510 14598770 22698103 15331624 24051107 </span><br></pre></td></tr></table></figure>
+<p>这里奇数/偶数都是强 order 的，但是他们之间并没有什么保证，只能保证全局有一致的 order</p>
+<p>(题外话：但是我看到这有个问题，就是 <code>atomic + relaxed</code> 和 non-atomic 有什么区别，瞅了眼： <a target="_blank" rel="noopener" href="https://stackoverflow.com/questions/63810298/what-is-the-difference-between-load-store-relaxed-atomic-and-normal-variable">https://stackoverflow.com/questions/63810298/what-is-the-difference-between-load-store-relaxed-atomic-and-normal-variable</a> 这似乎保证单个操作的原子性，比如我们 RV32I 的 auipc 和 add…)</p>
+<p>关于实现 Cache Coherent，是下一节的内容，我们再次先看 Memory Model 吧。</p>
+<h2 id="Memory-Consistency"><a href="#Memory-Consistency" class="headerlink" title="Memory Consistency"></a>Memory Consistency</h2><p>最实用、最有挑战性、最令人困惑的部分来了。我们现在有了变量 <code>x</code> 的 coherence，我们还需要什么呢？</p>
+<p>Cache Coherence 保证了单个 cache block 的 loads and stores 是按照定义运行的，但是我们假设有一个 produce-consume:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">// produce</span><br><span class="line">value &lt;- 5</span><br><span class="line">flag &lt;- ok</span><br><span class="line"></span><br><span class="line">// consume</span><br><span class="line">wait until flag is ok</span><br><span class="line">-- 操作 value</span><br></pre></td></tr></table></figure>
+<p>那么，很尴尬的是，你会发现 cache coherent 没有提供可靠的保障。</p>
+<blockquote>
+<p>“Memory Consistency Model” (sometimes called “Memory Ordering”): do all loads and stores, even to separate cache blocks, behave correctly?</p>
+</blockquote>
+<p>实际上，你会发现问题的来源很多，而且来源不是上层应用，而是我们讲了2节的 cache write-buffer multi-level cache 这些给我们带来利好的东西，和 OoO 执行、编译器乱序等正常对程序员透明，现在全冒出来了的东西。</p>
+<h4 id="Uniprocess-Memory-Model"><a href="#Uniprocess-Memory-Model" class="headerlink" title="Uniprocess Memory Model"></a>Uniprocess Memory Model</h4><p>单个程序按 program order 的语义执行、读写</p>
+<p><img src="https://image.mwish.me/blog-image/5E768853-5AB5-4B1A-B940-F2E960E9C93A.png" alt="5E768853-5AB5-4B1A-B940-F2E960E9C93A"></p>
+<p>这图相当于我们 Part2 说的。</p>
+<p>那么，在并行的时候，也就是我们说的 producer-consumer 中，可能会有下图的问题：</p>
+<p><img src="https://image.mwish.me/blog-image/97CF1A96-F3F9-4976-B35F-D30F6CD258BA.png" alt="97CF1A96-F3F9-4976-B35F-D30F6CD258BA"></p>
+<p>write buffer 和 OoO 等乱序不能保证写入会被顺序的传播，没有 <code>happens-before</code> 的语义。</p>
+<p>更要命的是，cache 也会在其中添乱：（当然不止是 cache，所以回头来，你要理解到，<code>volatile</code> 这个词在 C/C++ 中是危险的，不能认为它们读写内存就万事大吉了，不过我也不太清楚搞 NVM 的大佬们会不会用到这个）</p>
+<p><img src="https://image.mwish.me/blog-image/065D74C5-5B97-40DD-8087-1A31D2CD4A5C.png" alt="065D74C5-5B97-40DD-8087-1A31D2CD4A5C"></p>
+<p>由于 P3 上有 A 的 cache, 它并不会从内存中读取应读的值，cache coherent 也没被违背，但是这会儿程序的语义就没法保证了！</p>
+<p>更要命的是，还有编译器的乱序，关于编译器乱序可以参考没有使用 <code>atomic</code> 的 LevelDB 的 SkipList, 它只是写了一个编译器 barrier，而没有用 CPU 的 barrier 和指令。</p>
+<h3 id="Sequential-Consistency-SC"><a href="#Sequential-Consistency-SC" class="headerlink" title="Sequential Consistency: SC"></a>Sequential Consistency: SC</h3><p>这个是老熟人了：</p>
+<p>Formalized by Lamport (1979)</p>
+<ul>
+<li>accesses of each processor in program order</li>
+<li>all accesses appear in sequential order</li>
+</ul>
+<p>我理解就是简单说所有操作有一个全序，就所有操作偏序变全序。你可以用 <code>seq_cst</code> 来体验一下（</p>
+<p>下面是它的硬件模型，描述的非常详细：</p>
+<p><img src="https://image.mwish.me/blog-image/8D07B6F6-9B06-45FB-A3DB-5BB1DDBE47AF.png" alt="8D07B6F6-9B06-45FB-A3DB-5BB1DDBE47AF"></p>
+<p>这个时候，写入要求：</p>
+<blockquote>
+<p>For each processor, delay start of memory access until previous one completes: each processor has only one outstanding memory access at a time</p>
+</blockquote>
+<p>读取要求</p>
+<blockquote>
+<p>a read completes when its return value is bound</p>
+</blockquote>
+<p><img src="https://image.mwish.me/blog-image/7A92B093-6B60-49FE-BA37-B121D2B1B686.png" alt="7A92B093-6B60-49FE-BA37-B121D2B1B686"></p>
+<p>上述会带来严格的限制和可靠性，但是性能…</p>
+<p><img src="https://image.mwish.me/blog-image/5BC3991D-5012-489B-B26E-64169EAE16E7.png" alt="5BC3991D-5012-489B-B26E-64169EAE16E7"></p>
+<p>顺便可以提一下，对 x86 而言，一些 <code>LOCK</code> 指令会获取 Lock 相关的信息，而 <code>MFENCE</code> 会清空 Store Buffer。这里指令会<strong>按照发送的顺序</strong>来提交。</p>
+<h3 id="Relaxed-Memory-Model"><a href="#Relaxed-Memory-Model" class="headerlink" title="Relaxed Memory Model"></a>Relaxed Memory Model</h3><p>于是我们有 relaxed 一些的模型，例如 TSO/PSO 等：</p>
+<p><img src="https://image.mwish.me/blog-image/71298E26-F19C-4084-B6D9-3D0F971475C5.png" alt="71298E26-F19C-4084-B6D9-3D0F971475C5"></p>
+<p>注：x86的 memory model 类似 TSO，只允许 store-load 乱序。</p>
+<p>这在优化中获得了权衡：</p>
+<p><img src="https://image.mwish.me/blog-image/166633FA-6A66-4370-A075-3FB0735136E8.png" alt="166633FA-6A66-4370-A075-3FB0735136E8"></p>
+<h4 id="ARM-amp-IBM-Power-的内存模型"><a href="#ARM-amp-IBM-Power-的内存模型" class="headerlink" title="ARM &amp; IBM Power 的内存模型"></a>ARM &amp; IBM Power 的内存模型</h4><p>在这里，我们的硬件和指令可能有下面的语义：</p>
+<p><img src="https://image.mwish.me/blog-image/70B65496-6C17-4448-9BD0-F14C42DD2CC4.png" alt="70B65496-6C17-4448-9BD0-F14C42DD2CC4"></p>
+<p>（上图实际上是一个 non-multi-copy 的模型）</p>
+<p>下面是指令，它的 commit 可能是乱序的，而且指令可能会在分支预测阶段：</p>
+<ol>
+<li>读取的时候，可能会直接读取</li>
+<li>写的时候，要等待之前的内容 Commit</li>
+</ol>
+<p><img src="https://image.mwish.me/blog-image/C33C7C13-990F-440F-BC8F-95465B2E2B5C.png" alt="C33C7C13-990F-440F-BC8F-95465B2E2B5C"></p>
+<p>摘录一下原文：</p>
+<blockquote>
+<p>For a read instruction, as soon as an address for the read is known, the read might be satisﬁed, binding its value to one received from the local memory (or in some cases forwarded from earlier in the thread). <strong>That value could immediately be used by later instructions in the thread that depend on it, but it and they are subject to being restarted or (if this is a speculative path) aborted until the read is committed.</strong></p>
+<p>For a write instruction, the key points are when the address and value become determined. After that (subject to other conditions) the write can be committed, sent to the local memory; this is not subject to restart or abort. After that, the write might propagate to other threads, becoming readable by them.</p>
+</blockquote>
+<p>同时，指令发送的顺序和收到的顺序可能是不一样的，这里有一些分类：</p>
+<ol>
+<li>Weak, multi-copy-atomic memory models<ol>
+<li>all processors see writes by another processor in same order</li>
+<li>RISC-V RVWMO, baseline weak memory model for RISC-V</li>
+</ol>
+</li>
+<li>Weak, non-multi-copy-atomic memory models<ol>
+<li>processors can see another’s writes in different orders</li>
+<li>ARM v7, original ARM v8, IBM POWER</li>
+</ol>
+</li>
+</ol>
+<p>IBM Power 和 ARM 中，可能会有 Load Buffer，读起来的顺序和写的顺序是不一样的。</p>
+<h4 id="可能出现的问题和同步"><a href="#可能出现的问题和同步" class="headerlink" title="可能出现的问题和同步"></a>可能出现的问题和同步</h4><p>但是，这个时候，我们仍然要面对最初的那个问题：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">// produce</span><br><span class="line">value &lt;- 5</span><br><span class="line">flag &lt;- ok</span><br><span class="line"></span><br><span class="line">// consume</span><br><span class="line">wait until flag is ok</span><br><span class="line">-- 操作 value</span><br></pre></td></tr></table></figure>
+<p>Data Race:</p>
+<ul>
+<li>two conflicting accesses on different processors</li>
+<li>not ordered by intervening accesses</li>
+</ul>
+<p>显然，我们对 flag 的操作本身没有经过同步，这个在仅允许 store-load 乱序的系统中，甚至没啥问题（不考虑编译器乱序）。但是，在 RISC-V 这种系统，或者 ARM 里，你就等死吧。我们需要一些机制来同步：</p>
+<p>Properly Synchronized Programs:</p>
+<ul>
+<li>all synchronizations are explicitly identified</li>
+<li>all data accesses are ordered through synchronization</li>
+</ul>
+<p>我们可以使用：</p>
+<ol>
+<li>memory barrier</li>
+<li>显式的锁，来隐式提供 fence</li>
+</ol>
+<p>逻辑如下：</p>
+<p><img src="https://image.mwish.me/blog-image/CBE31CAA-B88D-410F-9F82-21D0F68FE031.png" alt="CBE31CAA-B88D-410F-9F82-21D0F68FE031"></p>
+<ol>
+<li>x86 的 <code>xchg</code> 显式的帮你完成这一切，你可以 <code>acquire</code> 来获得锁，在互斥区维护 invariant，<code>release</code> 来释放锁。锁前，锁中，锁后都是可以 re-order 的，但是它们不能越过锁。</li>
+<li><strong>MFENCE</strong> <code>LFENCE</code> <code>MFENCE</code> , fence会 stall 程序，把之前的操作执行完，来创建偏序。</li>
+</ol>
+<h4 id="RISC-V-中的同步"><a href="#RISC-V-中的同步" class="headerlink" title="RISC-V 中的同步"></a>RISC-V 中的同步</h4><p>RISC-V 提供了 multi-copy model，然后提供了 <code>amo</code> 来支持原子操作，首先它们对操作的数据是原子完成的。首先有 <code>aq</code> 和 <code>rl</code> 两位：</p>
+<ol>
+<li>如果提供了 <code>aq</code>，这条指令 “Happens Before” 之后的 <code>load</code> 和 <code>store</code> </li>
+<li>如果提供了 <code>rl</code>，这条指令 “Happens After” 之前的 <code>store</code> 和 <code>load</code></li>
+</ol>
+<p>这里可以参考 <code>spinlock</code>:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// Acquire the lock.</span></span><br><span class="line"><span class="comment">// Loops (spins) until the lock is acquired.</span></span><br><span class="line"><span class="type">void</span></span><br><span class="line"><span class="title function_">acquire</span><span class="params">(<span class="keyword">struct</span> spinlock *lk)</span></span><br><span class="line">&#123;</span><br><span class="line">  <span class="comment">// 如果:</span></span><br><span class="line">  <span class="comment">// * acquire</span></span><br><span class="line">  <span class="comment">// * timer interrupt</span></span><br><span class="line">  <span class="comment">// * timer interrupt 在调度之前拿同一把锁, 哦吼.</span></span><br><span class="line">  push_off(); <span class="comment">// disable interrupts to avoid deadlock.</span></span><br><span class="line">  <span class="keyword">if</span>(holding(lk))</span><br><span class="line">    panic(<span class="string">&quot;acquire&quot;</span>);</span><br><span class="line"></span><br><span class="line">  <span class="comment">// On RISC-V, sync_lock_test_and_set turns into an atomic swap:</span></span><br><span class="line">  <span class="comment">//   a5 = 1</span></span><br><span class="line">  <span class="comment">//   s1 = &amp;lk-&gt;locked</span></span><br><span class="line">  <span class="comment">//   amoswap.w.aq a5, a5, (s1)</span></span><br><span class="line">  <span class="comment">//</span></span><br><span class="line">  <span class="comment">// 这个地方使用 acquire, 因为下面的内容不会被放到这前面.</span></span><br><span class="line">  <span class="keyword">while</span>(__sync_lock_test_and_set(&amp;lk-&gt;locked, <span class="number">1</span>) != <span class="number">0</span>)</span><br><span class="line">    ;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// Tell the C compiler and the processor to not move loads or stores</span></span><br><span class="line">  <span class="comment">// past this point, to ensure that the critical section&#x27;s memory</span></span><br><span class="line">  <span class="comment">// references happen strictly after the lock is acquired.</span></span><br><span class="line">  <span class="comment">// On RISC-V, this emits a fence instruction.</span></span><br><span class="line">  <span class="comment">//</span></span><br><span class="line">  <span class="comment">// 相当于手动给 lk-&gt;cpu 插入了一个 fencing, 让上面的东西不会被重拍下来</span></span><br><span class="line">  __sync_synchronize();</span><br><span class="line"></span><br><span class="line">  <span class="comment">// Record info about lock acquisition for holding() and debugging.</span></span><br><span class="line">  lk-&gt;cpu = mycpu();</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// Release the lock.</span></span><br><span class="line"><span class="type">void</span></span><br><span class="line"><span class="title function_">release</span><span class="params">(<span class="keyword">struct</span> spinlock *lk)</span></span><br><span class="line">&#123;</span><br><span class="line">  <span class="keyword">if</span>(!holding(lk))</span><br><span class="line">    panic(<span class="string">&quot;release&quot;</span>);</span><br><span class="line"></span><br><span class="line">  <span class="comment">// 这个不会被重排到下面去.</span></span><br><span class="line">  lk-&gt;cpu = <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// Tell the C compiler and the CPU to not move loads or stores</span></span><br><span class="line">  <span class="comment">// past this point, to ensure that all the stores in the critical</span></span><br><span class="line">  <span class="comment">// section are visible to other CPUs before the lock is released,</span></span><br><span class="line">  <span class="comment">// and that loads in the critical section occur strictly before</span></span><br><span class="line">  <span class="comment">// the lock is released.</span></span><br><span class="line">  <span class="comment">// On RISC-V, this emits a fence instruction.</span></span><br><span class="line">  __sync_synchronize();</span><br><span class="line"></span><br><span class="line">  <span class="comment">// Release the lock, equivalent to lk-&gt;locked = 0.</span></span><br><span class="line">  <span class="comment">// This code doesn&#x27;t use a C assignment, since the C standard</span></span><br><span class="line">  <span class="comment">// implies that an assignment might be implemented with</span></span><br><span class="line">  <span class="comment">// multiple store instructions.</span></span><br><span class="line">  <span class="comment">// On RISC-V, sync_lock_release turns into an atomic swap:</span></span><br><span class="line">  <span class="comment">//   s1 = &amp;lk-&gt;locked</span></span><br><span class="line">  <span class="comment">//   amoswap.w zero, zero, (s1)</span></span><br><span class="line">  __sync_lock_release(&amp;lk-&gt;locked);</span><br><span class="line"></span><br><span class="line">  pop_off();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>(上面用的仍然是 gnu C 的 <code>__sync_</code> 扩展，因为没有 <code>amoswap.rl</code>, 或者 <code>ac</code>，所以手动插入了一些 barrier)</p>
+<p>关于 fence，可以参考：</p>
+<p><img src="https://image.mwish.me/blog-image/D2ADEADD-86EA-4011-8033-2A4F28C1A960.png" alt="D2ADEADD-86EA-4011-8033-2A4F28C1A960"></p>
+<p>举例而言，对于下面的图，<code>fence w, w</code> 和 <code>fence r,r</code> 之间构建了 barrier，来保证顺序：</p>
+<p><img src="https://image.mwish.me/blog-image/D67A4594-E3A7-478D-A476-52922A7C3818.png" alt="D67A4594-E3A7-478D-A476-52922A7C3818"></p>
+<p>上述例子中，<code>fence w, w</code> 和 <code>fence r, r</code> 构建了一个偏序关系。<code>sw data, (xdatap)</code> 保证被 <code>lw xdata, (xdatap)</code> 感知了。</p>
+<h3 id="RISC-V-的支持：RV32A"><a href="#RISC-V-的支持：RV32A" class="headerlink" title="RISC-V 的支持：RV32A"></a>RISC-V 的支持：RV32A</h3><blockquote>
+<p>RISC-V 具有宽松的内存一致性模型(relaxed memory consistency model)，因此其他线程看 到的内存访问可以是乱序的。图 6.2 中，所有的 RV32A 指令都有一个请求位(aq)和一个 释放位(rl)。aq 被置位的原子指令保证其它线程在随后的内存访问中看到顺序的 AMO 操 作;rl 被置位的原子指令保证其它线程在此之前看到顺序的原子操作。想要了解更详细的 有关知识，可以查看[Adve and Gharachorloo 1996]。</p>
+</blockquote>
+<p><img src="https://image.mwish.me/blog-image/4390486F-3FF8-4C71-A8FB-DC0598E077CF.png" alt="4390486F-3FF8-4C71-A8FB-DC0598E077CF"></p>
+<p>RV32A 没有直接提供了 CAS FAA 的指令，而是提供了两套指令。RV32A 认为这样有更好的可扩展性：</p>
+<p><img src="https://image.mwish.me/blog-image/23F56E11-4461-4BB4-9D02-C2E38A64A60D.png" alt="23F56E11-4461-4BB4-9D02-C2E38A64A60D"></p>
+<h3 id="编译器乱序和语言的-memory-order"><a href="#编译器乱序和语言的-memory-order" class="headerlink" title="编译器乱序和语言的 memory_order"></a>编译器乱序和语言的 <code>memory_order</code></h3><p><a target="_blank" rel="noopener" href="https://chromium.googlesource.com/external/leveldb/+/v1.15/port/atomic_pointer.h#61">https://chromium.googlesource.com/external/leveldb/+/v1.15/port/atomic_pointer.h#61</a></p>
+<p>除了内存，编译器也会完成乱序。最佳的例子是 LevelDB 之前的编译器 barrier。</p>
+<p>语言会提供对应的语义，如 C++ 的六种 order （实话说我 consume 那几个完全不懂）: <a target="_blank" rel="noopener" href="https://en.cppreference.com/w/cpp/atomic/memory_order">https://en.cppreference.com/w/cpp/atomic/memory_order</a></p>
+<p>或者简单点可以看看 Golang 的（</p>
+<h2 id="References"><a href="#References" class="headerlink" title="References"></a>References</h2><ol>
+<li>CMU 15-418 Spring 2020</li>
+<li>UCB CS152 Spring 2020</li>
+<li>CPU Cache and Memory Ordering 何登成</li>
+<li>RISC-V Reader</li>
+<li>Computer Organization and Design RISC-V edition</li>
+</ol>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-3"><a class="toc-link" href="#Single-CPU-System-I-O"><span class="toc-number">1.</span> <span class="toc-text">Single CPU System: I&#x2F;O</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Coherence"><span class="toc-number">2.</span> <span class="toc-text">Coherence</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Memory-Consistency"><span class="toc-number"></span> <span class="toc-text">Memory Consistency</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Uniprocess-Memory-Model"><span class="toc-number">0.1.</span> <span class="toc-text">Uniprocess Memory Model</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Sequential-Consistency-SC"><span class="toc-number">1.</span> <span class="toc-text">Sequential Consistency: SC</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Relaxed-Memory-Model"><span class="toc-number">2.</span> <span class="toc-text">Relaxed Memory Model</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#ARM-amp-IBM-Power-%E7%9A%84%E5%86%85%E5%AD%98%E6%A8%A1%E5%9E%8B"><span class="toc-number">2.1.</span> <span class="toc-text">ARM &amp; IBM Power 的内存模型</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%8F%AF%E8%83%BD%E5%87%BA%E7%8E%B0%E7%9A%84%E9%97%AE%E9%A2%98%E5%92%8C%E5%90%8C%E6%AD%A5"><span class="toc-number">2.2.</span> <span class="toc-text">可能出现的问题和同步</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#RISC-V-%E4%B8%AD%E7%9A%84%E5%90%8C%E6%AD%A5"><span class="toc-number">2.3.</span> <span class="toc-text">RISC-V 中的同步</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#RISC-V-%E7%9A%84%E6%94%AF%E6%8C%81%EF%BC%9ARV32A"><span class="toc-number">3.</span> <span class="toc-text">RISC-V 的支持：RV32A</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%BC%96%E8%AF%91%E5%99%A8%E4%B9%B1%E5%BA%8F%E5%92%8C%E8%AF%AD%E8%A8%80%E7%9A%84-memory-order"><span class="toc-number">4.</span> <span class="toc-text">编译器乱序和语言的 memory_order</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#References"><span class="toc-number"></span> <span class="toc-text">References</span></a>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/11/01/Cache-and-Related-Part3-Coherent/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/11/01/Cache-and-Related-Part3-Coherent/&text=Cache and Related Part3: Coherent"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/11/01/Cache-and-Related-Part3-Coherent/&title=Cache and Related Part3: Coherent"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/11/01/Cache-and-Related-Part3-Coherent/&is_video=false&description=Cache and Related Part3: Coherent"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Cache and Related Part3: Coherent&body=Check out this article: http://blog.mwish.me/2020/11/01/Cache-and-Related-Part3-Coherent/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/11/01/Cache-and-Related-Part3-Coherent/&title=Cache and Related Part3: Coherent"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/11/01/Cache-and-Related-Part3-Coherent/&title=Cache and Related Part3: Coherent"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/11/01/Cache-and-Related-Part3-Coherent/&title=Cache and Related Part3: Coherent"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/11/01/Cache-and-Related-Part3-Coherent/&title=Cache and Related Part3: Coherent"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/11/01/Cache-and-Related-Part3-Coherent/&name=Cache and Related Part3: Coherent&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/11/01/Cache-and-Related-Part3-Coherent/&t=Cache and Related Part3: Coherent"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

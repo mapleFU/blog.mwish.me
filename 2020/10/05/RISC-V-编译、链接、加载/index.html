@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="我们介绍了 RISC-V 的指令，你可以当作介绍了汇编语言。但是，我们现在知道的是：  RV32I 的格式都是 32bit 的 以上内容可以以 beq 等格式让读者可读，但是机器执行的还是那6种格式的代码  我们也了解了 RISC-V 的 calling convention 和 ABI, 这一节介绍程序的编译、链接、加载。基础知识可以阅读 CSAPP 第七章和  https:&#x2F;&#x2F;zhuanlan">
+<meta property="og:type" content="article">
+<meta property="og:title" content="RISC-V 编译、链接、加载">
+<meta property="og:url" content="http://blog.mwish.me/2020/10/05/RISC-V-%E7%BC%96%E8%AF%91%E3%80%81%E9%93%BE%E6%8E%A5%E3%80%81%E5%8A%A0%E8%BD%BD/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="我们介绍了 RISC-V 的指令，你可以当作介绍了汇编语言。但是，我们现在知道的是：  RV32I 的格式都是 32bit 的 以上内容可以以 beq 等格式让读者可读，但是机器执行的还是那6种格式的代码  我们也了解了 RISC-V 的 calling convention 和 ABI, 这一节介绍程序的编译、链接、加载。基础知识可以阅读 CSAPP 第七章和  https:&#x2F;&#x2F;zhuanlan">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/7E604484-7BD6-4192-81E0-F5C0E8F31750.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/1AD78D8D-1536-428E-99BE-5E072623028C.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/FD540A48-C82E-41A5-9218-F3899DE2A9DA.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/DB8DEC4A-F78C-4641-9652-266DB487A1F0.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/0119C713-D3D9-4C9F-B9F2-91F26E82EBCE.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/B3419A1F-3922-41B9-8134-4EC45ED97B81.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/7D55935F-1A5F-426F-8332-0DC6BD807E4F.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/A7DC6FD7-197A-447C-9EC5-83058CEAE12C.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/9B1A0E60-E85D-4982-93E0-E573ECFA3C87.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/1C5CB001-2512-4A02-8763-9C2EFC1A8EF5.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/26164010-1C75-4033-9411-7ACB84CE5056.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/CB2186D3-34AB-4CD5-800E-51575F0E357C.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/33F0D9AE-C4D1-4BEF-ADB8-0D486BB11089.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/910B0674-2C61-403D-B5A2-C5BBEFF0DE82.png">
+<meta property="article:published_time" content="2020-10-04T17:30:15.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.557Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/7E604484-7BD6-4192-81E0-F5C0E8F31750.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>RISC-V 编译、链接、加载</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2020/10/14/SDS-Intro-RISC-V-Datapath/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2020/10/04/RISC-V-%E6%8C%87%E4%BB%A4%E6%A0%BC%E5%BC%8F/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/10/05/RISC-V-%E7%BC%96%E8%AF%91%E3%80%81%E9%93%BE%E6%8E%A5%E3%80%81%E5%8A%A0%E8%BD%BD/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/10/05/RISC-V-%E7%BC%96%E8%AF%91%E3%80%81%E9%93%BE%E6%8E%A5%E3%80%81%E5%8A%A0%E8%BD%BD/&text=RISC-V 编译、链接、加载"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/10/05/RISC-V-%E7%BC%96%E8%AF%91%E3%80%81%E9%93%BE%E6%8E%A5%E3%80%81%E5%8A%A0%E8%BD%BD/&title=RISC-V 编译、链接、加载"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/10/05/RISC-V-%E7%BC%96%E8%AF%91%E3%80%81%E9%93%BE%E6%8E%A5%E3%80%81%E5%8A%A0%E8%BD%BD/&is_video=false&description=RISC-V 编译、链接、加载"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=RISC-V 编译、链接、加载&body=Check out this article: http://blog.mwish.me/2020/10/05/RISC-V-%E7%BC%96%E8%AF%91%E3%80%81%E9%93%BE%E6%8E%A5%E3%80%81%E5%8A%A0%E8%BD%BD/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/10/05/RISC-V-%E7%BC%96%E8%AF%91%E3%80%81%E9%93%BE%E6%8E%A5%E3%80%81%E5%8A%A0%E8%BD%BD/&title=RISC-V 编译、链接、加载"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/10/05/RISC-V-%E7%BC%96%E8%AF%91%E3%80%81%E9%93%BE%E6%8E%A5%E3%80%81%E5%8A%A0%E8%BD%BD/&title=RISC-V 编译、链接、加载"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/10/05/RISC-V-%E7%BC%96%E8%AF%91%E3%80%81%E9%93%BE%E6%8E%A5%E3%80%81%E5%8A%A0%E8%BD%BD/&title=RISC-V 编译、链接、加载"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/10/05/RISC-V-%E7%BC%96%E8%AF%91%E3%80%81%E9%93%BE%E6%8E%A5%E3%80%81%E5%8A%A0%E8%BD%BD/&title=RISC-V 编译、链接、加载"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/10/05/RISC-V-%E7%BC%96%E8%AF%91%E3%80%81%E9%93%BE%E6%8E%A5%E3%80%81%E5%8A%A0%E8%BD%BD/&name=RISC-V 编译、链接、加载&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/10/05/RISC-V-%E7%BC%96%E8%AF%91%E3%80%81%E9%93%BE%E6%8E%A5%E3%80%81%E5%8A%A0%E8%BD%BD/&t=RISC-V 编译、链接、加载"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BC%96%E8%AF%91"><span class="toc-number">1.</span> <span class="toc-text">编译</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%B1%87%E7%BC%96"><span class="toc-number">2.</span> <span class="toc-text">汇编</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#tail-call-optimization"><span class="toc-number">2.0.1.</span> <span class="toc-text">tail call optimization</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E7%94%9F%E6%88%90%E6%9C%BA%E5%99%A8%E4%BB%A3%E7%A0%81"><span class="toc-number">2.0.2.</span> <span class="toc-text">生成机器代码</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%8E%8B%E7%BC%A9%E6%8C%87%E4%BB%A4"><span class="toc-number">2.0.3.</span> <span class="toc-text">压缩指令</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Forward-Reference"><span class="toc-number">2.0.4.</span> <span class="toc-text">Forward Reference</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#jal-la-static-%E5%8A%A0%E8%BD%BD"><span class="toc-number">2.0.5.</span> <span class="toc-text">jal&#x2F;la static 加载</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Tables"><span class="toc-number">2.1.</span> <span class="toc-text">Tables</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%93%BE%E6%8E%A5"><span class="toc-number">3.</span> <span class="toc-text">链接</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8A%A0%E8%BD%BD"><span class="toc-number">4.</span> <span class="toc-text">加载</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%A8%E6%B5%81%E7%A8%8B"><span class="toc-number">5.</span> <span class="toc-text">全流程</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8A%A8%E6%80%81%E9%93%BE%E6%8E%A5%E5%BA%93%E5%92%8C%E9%9D%99%E6%80%81%E9%93%BE%E6%8E%A5%E5%BA%93"><span class="toc-number">6.</span> <span class="toc-text">动态链接库和静态链接库</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        RISC-V 编译、链接、加载
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2020-10-04T17:30:15.000Z" itemprop="datePublished">2020-10-05</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>我们介绍了 RISC-V 的指令，你可以当作介绍了汇编语言。但是，我们现在知道的是：</p>
+<ul>
+<li>RV32I 的格式都是 32bit 的</li>
+<li>以上内容可以以 <code>beq</code> 等格式让读者可读，但是机器执行的还是那6种格式的代码</li>
+</ul>
+<p>我们也了解了 RISC-V 的 calling convention 和 ABI, 这一节介绍程序的编译、链接、加载。基础知识可以阅读 CSAPP 第七章和  <a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/125163040">https://zhuanlan.zhihu.com/p/125163040</a> 我之前写的垃圾。不过今天我写的会细一些。</p>
+<p><img src="https://image.mwish.me/blog-image/7E604484-7BD6-4192-81E0-F5C0E8F31750.png" alt="7E604484-7BD6-4192-81E0-F5C0E8F31750"></p>
+<h2 id="编译"><a href="#编译" class="headerlink" title="编译"></a>编译</h2><p>编译由 <code>.c</code>  转为汇编语言，形式是 <code>.s</code>, 这个我们之前都用过了</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">✗ riscv64-unknown-elf-gcc -march=rv32imac -mabi=ilp32 -S </span><br></pre></td></tr></table></figure>
+<p>这样体验一把就行。Compiler 需要走：</p>
+<ul>
+<li>Lexer: 语法分析，把目标转成 token. 实际上可以借用 Lex 工具，而 Flex 是 Lex 的一个实现。</li>
+<li>Parser: 将内容变为 AST</li>
+<li>Semantic Analysis and Optimization: 检查 AST, 然后做一些优化</li>
+<li>Code generation: 做寄存器 allocation, 代码生成</li>
+</ul>
+<p>实际上，我们生成 <code>-S</code> 也需要指定编译选项，能指定 <code>-O</code>。这里我们可以得到可靠的 RISC-V 的代码。它和我们的程序是逻辑上等价的，当然可能要进行一定的优化。</p>
+<p>注意，在 RISC-V 中，编译是会产生便于理解的伪指令的。</p>
+<h2 id="汇编"><a href="#汇编" class="headerlink" title="汇编"></a>汇编</h2><p>将汇编语言生成 ELF 的 object file, object file 属于 machine language 了。</p>
+<p><img src="https://image.mwish.me/blog-image/1AD78D8D-1536-428E-99BE-5E072623028C.png" alt="1AD78D8D-1536-428E-99BE-5E072623028C"></p>
+<p>ELF 文件包括：</p>
+<ul>
+<li>ELF Header, 以一个 16byte 的序列开始，描述系统 word 大小、字节顺序等</li>
+<li><code>.text</code> text segment, 编译程序的机器代码</li>
+<li><code>.data</code> 已初始化的 global/static C variable, 即源代码的 <code>static</code> 部分。<ul>
+<li>Local 是在 stack 中的</li>
+<li>未初始化的、被初始化为 0 的，在 <code>.bss</code> 中。它不占据实际空间，有点类似 gcc 的 <code>__weak__</code> .</li>
+</ul>
+</li>
+<li><code>.symtab</code> ，符号表，存放定义、引用的函数、全局变量和不可被 reference 的 static 变量</li>
+<li><code>.debug</code> 调试符号表，包含原始文件; <code>.line</code> 同样，包含行号和 <code>.text</code> 的映射。只有 <code>-g</code> 编译才会产生</li>
+<li><code>.strtab</code> 字符串表，包含定义的 string 和 section 的名字。</li>
+</ul>
+<p>ELF 具体信息可以看：</p>
+<p>那么我们还要注意，有的 directions, 即汇编指示符，会被丢给链接器，但不产生什么代码</p>
+<ol>
+<li><code>.text</code>  user text segment 中的片段</li>
+<li><code>.data</code>  需要写到 user data segment 中的片段</li>
+<li><code>.globl sym</code> 可以从其他文件引用的全局符号</li>
+<li><code>.string str</code> 把对应的 C-Style 字符串存在内存中</li>
+<li><code>.word w1...wn</code>  把这 n 个连续的符号连续存取</li>
+</ol>
+<p>同时，在链接的时候，会完成伪指令的替换，把它们全部替换成具体的指令（这里可以表示 RV32I 这样的）。</p>
+<p>我们来看看 hello world:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdio.h&gt;</span></span></span><br><span class="line"><span class="type">int</span> <span class="title function_">main</span><span class="params">()</span> &#123;</span><br><span class="line">	<span class="built_in">printf</span>(<span class="string">&quot;Hello, %s&quot;</span>, <span class="string">&quot;world&quot;</span>);</span><br><span class="line">	<span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>在 RISC-V Book 上，它生成了如下的汇编：</p>
+<p><img src="https://image.mwish.me/blog-image/FD540A48-C82E-41A5-9218-F3899DE2A9DA.png" alt="FD540A48-C82E-41A5-9218-F3899DE2A9DA"></p>
+<blockquote>
+<p>其中图 3.6 中用到的指示符有:</p>
+<ul>
+<li>.text:进入代码段。</li>
+<li>.align2:后续代码按22字节对齐。</li>
+<li>.globl main:声明全局符号“main”。</li>
+<li>.section .rodata:进入只读数据段</li>
+<li>.balign4:数据段按4字节对齐。</li>
+<li>.string “Hello, %s!\n”:创建空字符结尾的字符串。</li>
+<li>.string “world”:创建空字符结尾的字符串。</li>
+</ul>
+</blockquote>
+<h4 id="tail-call-optimization"><a href="#tail-call-optimization" class="headerlink" title="tail call optimization"></a>tail call optimization</h4><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">fn:</span><br><span class="line"> return foo(x)</span><br></pre></td></tr></table></figure>
+<p>这个时候，正常行为应该是：把 <code>a0</code> 设置 x, 然后返回调用后的 <code>a0</code>, 即：</p>
+<ul>
+<li>然后用 <code>j</code> 或者 <code>tail</code> 直接调用 <code>foo(y)</code> ，这玩意会做个保存，把本函数的 <code>ra</code>, <code>sp</code> 保存，这样跳转的话就可以直接跳转到 <code>fn</code> 的调用者。</li>
+</ul>
+<p>在 RISC-V 伪指令中，有一条 <code>tail</code>, 会被解释成</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">auipc x6, offset[32:12]</span><br><span class="line">jalr x0, x6, offset[11:0]</span><br></pre></td></tr></table></figure>
+<p>用 <code>tail</code> 和 <code>j</code> 来完成上述的 jump，而不再调用前再去设 sp/ra</p>
+<p>这个行为让我有些头晕，我在网上找到了这篇 blog: <a target="_blank" rel="noopener" href="https://www.sifive.com/blog/all-aboard-part-3-linker-relaxation-in-riscv-toolchain">https://www.sifive.com/blog/all-aboard-part-3-linker-relaxation-in-riscv-toolchain</a></p>
+<p>上面的链接倒是介绍的比较清楚。</p>
+<h4 id="生成机器代码"><a href="#生成机器代码" class="headerlink" title="生成机器代码"></a>生成机器代码</h4><p>我们描述过 ELF 格式了，我们有下列几个问题</p>
+<h4 id="压缩指令"><a href="#压缩指令" class="headerlink" title="压缩指令"></a>压缩指令</h4><p>RV32C 支持压缩指令：</p>
+<ul>
+<li>每条短指令长度为 16bits</li>
+<li>必须和 32bits 指令一一对应</li>
+<li>只对汇编器和连接器可见，并且是否以短指令取代对应的宽指令由 它们决定。编译器编写者和汇编语言程序员可以幸福地忽略 RV32C 指令及其格式，他们能 感知到的则是最后的程序大小小于大多数其它 ISA 的程序。</li>
+</ul>
+<p><img src="https://image.mwish.me/blog-image/DB8DEC4A-F78C-4641-9652-266DB487A1F0.png" alt="DB8DEC4A-F78C-4641-9652-266DB487A1F0"></p>
+<p>RV32C 如上</p>
+<p><img src="https://image.mwish.me/blog-image/0119C713-D3D9-4C9F-B9F2-91F26E82EBCE.png" alt="0119C713-D3D9-4C9F-B9F2-91F26E82EBCE"></p>
+<p>那么，考虑压缩指令，会有下列问题：</p>
+<blockquote>
+<p>So the presence of the 16b instructions <strong>doesn’t need to be known to anybody but the assembler and the RISC-V processor itself</strong>!</p>
+</blockquote>
+<h4 id="Forward-Reference"><a href="#Forward-Reference" class="headerlink" title="Forward Reference"></a>Forward Reference</h4><p>即假设 <code>L1 --&gt; L2</code>, 但 L1 在 L2 之前，那么这暗示编译器需要一张局部的符号表，并扫描不止一个 pass，来完成这个操作。</p>
+<h4 id="jal-la-static-加载"><a href="#jal-la-static-加载" class="headerlink" title="jal/la static 加载"></a>jal/la static 加载</h4><p><code>jal</code> 会跳转一个 imm, 而 static 变量加载中，可能对应的符号来自另一个文件定义的内存中。</p>
+<h3 id="Tables"><a href="#Tables" class="headerlink" title="Tables"></a>Tables</h3><p>为了解决上述问题，有了 symbol table 和 relocation table：</p>
+<p>symbol table 展示可能被其他文件用到的本文件符号，例如 function call 的 label, 和 <code>.data</code> 中可以被外部访问的符号。</p>
+<p>Relocation Table 展示 <code>jal</code> 和 <code>la</code> 中需要重定位的地址。</p>
+<h2 id="链接"><a href="#链接" class="headerlink" title="链接"></a>链接</h2><p>讲 ELF 的 objective code 转化为可执行文件，这一过程被称为 linking, 这一过程有逻辑上如下的流程：</p>
+<ul>
+<li>从 <code>.o</code> 文件把 text segment 合在一起</li>
+<li>拿到 data segment, 拼接到一起</li>
+<li>resolve reference, 解决掉跨文件的符号、依赖问题，用绝对的地址填充</li>
+</ul>
+<p>实际上，<code>beq</code> <code>bne</code> <code>jal</code> 这类 PC-relevant 的指令不会被 relocate, 而用 name/label 相关的和 static 的会 relocate.</p>
+<h2 id="加载"><a href="#加载" class="headerlink" title="加载"></a>加载</h2><p>通常 OS 会加载、运行程序：</p>
+<p><img src="https://image.mwish.me/blog-image/B3419A1F-3922-41B9-8134-4EC45ED97B81.png" alt="B3419A1F-3922-41B9-8134-4EC45ED97B81"></p>
+<p>它需要：</p>
+<ol>
+<li>读 executable 文件，加载 ELF，来知道 text 和 data 的大小</li>
+<li>创建带 stack、text 的地址空间</li>
+<li>把 instruction 和 data 拷贝到新的地址空间</li>
+<li>拷贝用户的参数，传到栈上，供程序运行</li>
+<li>初始化寄存器</li>
+<li>跳转到用户程序，并设置 PC</li>
+</ol>
+<h2 id="全流程"><a href="#全流程" class="headerlink" title="全流程"></a>全流程</h2><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdio.h&gt;</span></span></span><br><span class="line"><span class="type">int</span> <span class="title function_">main</span><span class="params">(<span class="type">int</span> argc, <span class="type">char</span>* argv[])</span> &#123;</span><br><span class="line">	<span class="type">int</span> i;</span><br><span class="line">	<span class="type">int</span> sum = <span class="number">0</span>;</span><br><span class="line">	<span class="keyword">for</span> (i = <span class="number">0</span>; i &lt;= <span class="number">100</span>; i++) </span><br><span class="line">		sum += i * i;</span><br><span class="line">	<span class="built_in">printf</span>(<span class="string">&quot;The sum of sq from 0 .. 100 is %d\n&quot;</span>, sum);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>编译后生成：</p>
+<p><img src="https://image.mwish.me/blog-image/7D55935F-1A5F-426F-8332-0DC6BD807E4F.png" alt="7D55935F-1A5F-426F-8332-0DC6BD807E4F"></p>
+<p>assembly 的时候处理伪指令：</p>
+<p><img src="https://image.mwish.me/blog-image/A7DC6FD7-197A-447C-9EC5-83058CEAE12C.png" alt="A7DC6FD7-197A-447C-9EC5-83058CEAE12C"></p>
+<p>assembly 的时候生成 symbol table 和 relocation table：</p>
+<p><img src="https://image.mwish.me/blog-image/9B1A0E60-E85D-4982-93E0-E573ECFA3C87.png" alt="9B1A0E60-E85D-4982-93E0-E573ECFA3C87"></p>
+<p>以上的信息在链接的时候一起使用。</p>
+<h2 id="动态链接库和静态链接库"><a href="#动态链接库和静态链接库" class="headerlink" title="动态链接库和静态链接库"></a>动态链接库和静态链接库</h2><p>对于静态库而言，它是可执行文件的一部分，库更新了，运行中的程序需要重新编译。这是编译时链接的。</p>
+<p>在 Linux 下，提供了 <code>.a</code> 文件，用于处理，单个文件即使没有用到所有部分，也需要全部加载。</p>
+<p><img src="https://image.mwish.me/blog-image/1C5CB001-2512-4A02-8763-9C2EFC1A8EF5.png" alt="1C5CB001-2512-4A02-8763-9C2EFC1A8EF5"></p>
+<p>在动态链接库中，允许编译时、运行时链接。</p>
+<p><img src="https://image.mwish.me/blog-image/26164010-1C75-4033-9411-7ACB84CE5056.png" alt="26164010-1C75-4033-9411-7ACB84CE5056"></p>
+<p>共享库有 <code>.so</code> 文件，引用库的用户可以共享这些数据，而在内存中，共享库的<code>.text</code> 可以共享内存，被多个进程使用：</p>
+<p><img src="https://image.mwish.me/blog-image/CB2186D3-34AB-4CD5-800E-51575F0E357C.png" alt="CB2186D3-34AB-4CD5-800E-51575F0E357C"></p>
+<p>CSAPP 中，指导可以在 <code>dlfcn.h</code> 中使用该功能。</p>
+<p>此外，为了共享，需要处理位置无关代码（Position-Independent Code, PIC）。这需要 <code>-fPIC</code> 选项。</p>
+<p>它在编译时成功设置一个便宜量，并在运行时不改变这个便宜量，让代码能够运行便宜量上的 <code>.text</code></p>
+<p><img src="https://image.mwish.me/blog-image/33F0D9AE-C4D1-4BEF-ADB8-0D486BB11089.png" alt="33F0D9AE-C4D1-4BEF-ADB8-0D486BB11089"></p>
+<p>而 PLT 条目类似懒惰加载，作为链接的表来完成工作：</p>
+<p><img src="https://image.mwish.me/blog-image/910B0674-2C61-403D-B5A2-C5BBEFF0DE82.png" alt="910B0674-2C61-403D-B5A2-C5BBEFF0DE82"></p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BC%96%E8%AF%91"><span class="toc-number">1.</span> <span class="toc-text">编译</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%B1%87%E7%BC%96"><span class="toc-number">2.</span> <span class="toc-text">汇编</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#tail-call-optimization"><span class="toc-number">2.0.1.</span> <span class="toc-text">tail call optimization</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E7%94%9F%E6%88%90%E6%9C%BA%E5%99%A8%E4%BB%A3%E7%A0%81"><span class="toc-number">2.0.2.</span> <span class="toc-text">生成机器代码</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%8E%8B%E7%BC%A9%E6%8C%87%E4%BB%A4"><span class="toc-number">2.0.3.</span> <span class="toc-text">压缩指令</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Forward-Reference"><span class="toc-number">2.0.4.</span> <span class="toc-text">Forward Reference</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#jal-la-static-%E5%8A%A0%E8%BD%BD"><span class="toc-number">2.0.5.</span> <span class="toc-text">jal&#x2F;la static 加载</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Tables"><span class="toc-number">2.1.</span> <span class="toc-text">Tables</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%93%BE%E6%8E%A5"><span class="toc-number">3.</span> <span class="toc-text">链接</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8A%A0%E8%BD%BD"><span class="toc-number">4.</span> <span class="toc-text">加载</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%A8%E6%B5%81%E7%A8%8B"><span class="toc-number">5.</span> <span class="toc-text">全流程</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8A%A8%E6%80%81%E9%93%BE%E6%8E%A5%E5%BA%93%E5%92%8C%E9%9D%99%E6%80%81%E9%93%BE%E6%8E%A5%E5%BA%93"><span class="toc-number">6.</span> <span class="toc-text">动态链接库和静态链接库</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/10/05/RISC-V-%E7%BC%96%E8%AF%91%E3%80%81%E9%93%BE%E6%8E%A5%E3%80%81%E5%8A%A0%E8%BD%BD/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/10/05/RISC-V-%E7%BC%96%E8%AF%91%E3%80%81%E9%93%BE%E6%8E%A5%E3%80%81%E5%8A%A0%E8%BD%BD/&text=RISC-V 编译、链接、加载"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/10/05/RISC-V-%E7%BC%96%E8%AF%91%E3%80%81%E9%93%BE%E6%8E%A5%E3%80%81%E5%8A%A0%E8%BD%BD/&title=RISC-V 编译、链接、加载"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/10/05/RISC-V-%E7%BC%96%E8%AF%91%E3%80%81%E9%93%BE%E6%8E%A5%E3%80%81%E5%8A%A0%E8%BD%BD/&is_video=false&description=RISC-V 编译、链接、加载"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=RISC-V 编译、链接、加载&body=Check out this article: http://blog.mwish.me/2020/10/05/RISC-V-%E7%BC%96%E8%AF%91%E3%80%81%E9%93%BE%E6%8E%A5%E3%80%81%E5%8A%A0%E8%BD%BD/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/10/05/RISC-V-%E7%BC%96%E8%AF%91%E3%80%81%E9%93%BE%E6%8E%A5%E3%80%81%E5%8A%A0%E8%BD%BD/&title=RISC-V 编译、链接、加载"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/10/05/RISC-V-%E7%BC%96%E8%AF%91%E3%80%81%E9%93%BE%E6%8E%A5%E3%80%81%E5%8A%A0%E8%BD%BD/&title=RISC-V 编译、链接、加载"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/10/05/RISC-V-%E7%BC%96%E8%AF%91%E3%80%81%E9%93%BE%E6%8E%A5%E3%80%81%E5%8A%A0%E8%BD%BD/&title=RISC-V 编译、链接、加载"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/10/05/RISC-V-%E7%BC%96%E8%AF%91%E3%80%81%E9%93%BE%E6%8E%A5%E3%80%81%E5%8A%A0%E8%BD%BD/&title=RISC-V 编译、链接、加载"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/10/05/RISC-V-%E7%BC%96%E8%AF%91%E3%80%81%E9%93%BE%E6%8E%A5%E3%80%81%E5%8A%A0%E8%BD%BD/&name=RISC-V 编译、链接、加载&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/10/05/RISC-V-%E7%BC%96%E8%AF%91%E3%80%81%E9%93%BE%E6%8E%A5%E3%80%81%E5%8A%A0%E8%BD%BD/&t=RISC-V 编译、链接、加载"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

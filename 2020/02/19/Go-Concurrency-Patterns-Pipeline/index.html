@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="Pipeline  Informally, a pipeline is a series of stages connected by channels, where each stage is a group of goroutines running the same function. In each stage, the goroutines  receive values from up">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Go Concurrency Patterns">
+<meta property="og:url" content="http://blog.mwish.me/2020/02/19/Go-Concurrency-Patterns-Pipeline/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="Pipeline  Informally, a pipeline is a series of stages connected by channels, where each stage is a group of goroutines running the same function. In each stage, the goroutines  receive values from up">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2020-02-19T12:22:32.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.563Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>Go Concurrency Patterns</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2020/02/25/GFS-%E7%AE%80%E8%AF%BB/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2020/01/31/bitcoin/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/02/19/Go-Concurrency-Patterns-Pipeline/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/02/19/Go-Concurrency-Patterns-Pipeline/&text=Go Concurrency Patterns"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/02/19/Go-Concurrency-Patterns-Pipeline/&title=Go Concurrency Patterns"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/02/19/Go-Concurrency-Patterns-Pipeline/&is_video=false&description=Go Concurrency Patterns"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Go Concurrency Patterns&body=Check out this article: http://blog.mwish.me/2020/02/19/Go-Concurrency-Patterns-Pipeline/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/02/19/Go-Concurrency-Patterns-Pipeline/&title=Go Concurrency Patterns"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/02/19/Go-Concurrency-Patterns-Pipeline/&title=Go Concurrency Patterns"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/02/19/Go-Concurrency-Patterns-Pipeline/&title=Go Concurrency Patterns"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/02/19/Go-Concurrency-Patterns-Pipeline/&title=Go Concurrency Patterns"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/02/19/Go-Concurrency-Patterns-Pipeline/&name=Go Concurrency Patterns&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/02/19/Go-Concurrency-Patterns-Pipeline/&t=Go Concurrency Patterns"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Pipeline"><span class="toc-number">1.</span> <span class="toc-text">Pipeline</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Fan-in-fan-out"><span class="toc-number">1.1.</span> <span class="toc-text">Fan-in&#x2F;fan-out</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%8F%92%E5%85%A5%E4%B8%80%E6%AE%B5-goroutine-%E7%9F%A5%E8%AF%86"><span class="toc-number">1.2.</span> <span class="toc-text">插入一段 goroutine 知识</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Explicit-cancellation"><span class="toc-number">1.3.</span> <span class="toc-text">Explicit cancellation</span></a></li></ol></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Go Concurrency Patterns
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2020-02-19T12:22:32.000Z" itemprop="datePublished">2020-02-19</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <h2 id="Pipeline"><a href="#Pipeline" class="headerlink" title="Pipeline"></a>Pipeline</h2><blockquote>
+<p> Informally, a pipeline is a series of <em>stages</em> connected by channels, where each stage is a group of goroutines running the same function. In each stage, the goroutines</p>
+<ul>
+<li>receive values from <em>upstream</em> via <em>inbound</em> channels</li>
+<li>perform some function on that data, usually producing new values</li>
+<li>send values <em>downstream</em> via <em>outbound</em> channels</li>
+</ul>
+</blockquote>
+<p>你可能对 OS 里面的 pipeline 相当熟悉，每天都用。实际上甚至在 6.828 2019 作业里面还实现了一个类似的模式实现 prime: <a target="_blank" rel="noopener" href="https://pdos.csail.mit.edu/6.828/2019/labs/util.html">https://pdos.csail.mit.edu/6.828/2019/labs/util.html</a></p>
+<p>这个 pipeline 意思是通过 <code>fn(in chan) out chan</code> 这样的模式不停套 channel 链，最后提供给一个消费者：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">chan1 := <span class="built_in">make</span>(<span class="keyword">chan</span> <span class="type">int</span>)</span><br><span class="line"><span class="keyword">go</span> <span class="function"><span class="keyword">func</span><span class="params">()</span></span> &#123;</span><br><span class="line">	<span class="keyword">for</span> i := <span class="number">2</span>; i &lt; <span class="number">100</span>; i++ &#123;</span><br><span class="line">		chan1 &lt;- i</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="built_in">close</span>(chan1)</span><br><span class="line">&#125;()</span><br><span class="line">primeChan := Filter(chan1, IsPrime)</span><br><span class="line"><span class="keyword">for</span> prime := <span class="keyword">range</span> primeChan &#123;</span><br><span class="line">	fmt.Println(<span class="string">&quot;Recv prime: &quot;</span>, prime)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这样甚至能很函数式(bushi)的套圈：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">main</span><span class="params">()</span></span> &#123;</span><br><span class="line">    <span class="comment">// Set up the pipeline and consume the output.</span></span><br><span class="line">    <span class="keyword">for</span> n := <span class="keyword">range</span> sq(sq(gen(<span class="number">2</span>, <span class="number">3</span>))) &#123;</span><br><span class="line">        fmt.Println(n) <span class="comment">// 16 then 81</span></span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="Fan-in-fan-out"><a href="#Fan-in-fan-out" class="headerlink" title="Fan-in/fan-out"></a>Fan-in/fan-out</h3><blockquote>
+<p>Multiple functions can read from the same channel until that channel is closed; this is called <em>fan-out</em>. This provides a way to distribute work amongst a group of workers to parallelize CPU use and I/O.</p>
+<p>A function can read from multiple inputs and proceed until all are closed by multiplexing the input channels onto a single channel that’s closed when all the inputs are closed. This is called <em>fan-in</em>.</p>
+</blockquote>
+<p>chan 其实类似一个很诡异(niubi)的 mpms 的 queue。上述的 <code>sq</code> , <code>gen</code> 都是：</p>
+<ul>
+<li>接受一个/零个 in channel</li>
+<li>apply 一系列操作</li>
+<li>吐出一个 out channel</li>
+</ul>
+<p>博客中提供了一个 <code>merge</code> 函数的例子：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">main</span><span class="params">()</span></span> &#123;</span><br><span class="line">    in := gen(<span class="number">2</span>, <span class="number">3</span>)</span><br><span class="line"></span><br><span class="line">    <span class="comment">// Distribute the sq work across two goroutines that both read from in.</span></span><br><span class="line">    c1 := sq(in)</span><br><span class="line">    c2 := sq(in)</span><br><span class="line"></span><br><span class="line">    <span class="comment">// Consume the merged output from c1 and c2.</span></span><br><span class="line">    <span class="keyword">for</span> n := <span class="keyword">range</span> merge(c1, c2) &#123;</span><br><span class="line">        fmt.Println(n) <span class="comment">// 4 then 9, or 9 then 4</span></span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这个函数同时做了 fan-in 和 fan-out:</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">merge</span><span class="params">(cs ...&lt;-<span class="keyword">chan</span> <span class="type">int</span>)</span></span> &lt;-<span class="keyword">chan</span> <span class="type">int</span> &#123;</span><br><span class="line">    <span class="keyword">var</span> wg sync.WaitGroup</span><br><span class="line">    out := <span class="built_in">make</span>(<span class="keyword">chan</span> <span class="type">int</span>)</span><br><span class="line"></span><br><span class="line">    <span class="comment">// Start an output goroutine for each input channel in cs.  output</span></span><br><span class="line">    <span class="comment">// copies values from c to out until c is closed, then calls wg.Done.</span></span><br><span class="line">    output := <span class="function"><span class="keyword">func</span><span class="params">(c &lt;-<span class="keyword">chan</span> <span class="type">int</span>)</span></span> &#123;</span><br><span class="line">        <span class="keyword">for</span> n := <span class="keyword">range</span> c &#123;</span><br><span class="line">            out &lt;- n</span><br><span class="line">        &#125;</span><br><span class="line">        wg.Done()</span><br><span class="line">    &#125;</span><br><span class="line">    wg.Add(<span class="built_in">len</span>(cs))</span><br><span class="line">    <span class="keyword">for</span> _, c := <span class="keyword">range</span> cs &#123;</span><br><span class="line">        <span class="keyword">go</span> output(c)</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// Start a goroutine to close out once all the output goroutines are</span></span><br><span class="line">    <span class="comment">// done.  This must start after the wg.Add call.</span></span><br><span class="line">    <span class="keyword">go</span> <span class="function"><span class="keyword">func</span><span class="params">()</span></span> &#123;</span><br><span class="line">        wg.Wait()</span><br><span class="line">        <span class="built_in">close</span>(out)</span><br><span class="line">    &#125;()</span><br><span class="line">    <span class="keyword">return</span> out</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>注意到我们前一篇博客提到的一些问题，比如 errors 的处理和 goroutine 泄漏：</p>
+<blockquote>
+<p>There is a pattern to our pipeline functions:</p>
+<ul>
+<li>stages close their outbound channels when all the send operations are done.</li>
+<li>stages keep receiving values from inbound channels until those channels are closed.</li>
+</ul>
+<p>This pattern allows each receiving stage to be written as a <code>range</code> loop and ensures that all goroutines exit once all values have been successfully sent downstream.</p>
+<p>But in real pipelines, stages don’t always receive all the inbound values. Sometimes this is by design: the receiver may only need a subset of values to make progress. More often, a stage exits early because an inbound value represents an error in an earlier stage. In either case the receiver should not have to wait for the remaining values to arrive, and we want earlier stages to stop producing values that later stages don’t need.</p>
+</blockquote>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">    <span class="comment">// Consume the first value from the output.</span></span><br><span class="line">    out := merge(c1, c2)</span><br><span class="line">    fmt.Println(&lt;-out) <span class="comment">// 4 or 9</span></span><br><span class="line">    <span class="keyword">return</span></span><br><span class="line">    <span class="comment">// Since we didn&#x27;t receive the second value from out,</span></span><br><span class="line">    <span class="comment">// one of the output goroutines is hung attempting to send it.</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>对于这样的消费者，生产的 goroutine 会卡住 —&gt; 泄漏。一定程度上，可以用 buffer + close 解决这个问题。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">gen</span><span class="params">(nums ...<span class="type">int</span>)</span></span> &lt;-<span class="keyword">chan</span> <span class="type">int</span> &#123;</span><br><span class="line">    out := <span class="built_in">make</span>(<span class="keyword">chan</span> <span class="type">int</span>, <span class="built_in">len</span>(nums))</span><br><span class="line">    <span class="keyword">for</span> _, n := <span class="keyword">range</span> nums &#123;</span><br><span class="line">        out &lt;- n</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="built_in">close</span>(out)</span><br><span class="line">    <span class="keyword">return</span> out</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="插入一段-goroutine-知识"><a href="#插入一段-goroutine-知识" class="headerlink" title="插入一段 goroutine 知识"></a>插入一段 goroutine 知识</h3><p>我们的 channel 和 close 有什么规则呢：</p>
+<ul>
+<li>channel 是 FIFO 的</li>
+<li>如果去 close, Channel 是一个空指针或者已经被关闭时，Go 语言运行时都会直接 <code>panic</code> 并抛出异常</li>
+<li>close 的时候不能是<code>&lt;-chan</code>, 即单向接受的 channel</li>
+<li>Channel 和 goroutine 的 GC：一边有数据就不能 gc.</li>
+</ul>
+<p>具体参考 Detailed Explanations for Channel Operations 一节，可以看到：</p>
+<blockquote>
+<p>To make the explanations for channel operations simple and clear, in the remaining of this article, channels will be classified into three categories:</p>
+<ol>
+<li>nil channels.</li>
+<li>non-nil but closed channels.</li>
+<li>not-closed non-nil channels.</li>
+</ol>
+<p>The following table simply summarizes the behaviors for all kinds of operations applying on nil, closed and not-closed non-nil channels.</p>
+<div class="table-container">
+<table>
+<thead>
+<tr>
+<th style="text-align:center">Operation</th>
+<th style="text-align:center">A Nil Channel</th>
+<th style="text-align:center">A Closed Channel</th>
+<th style="text-align:center">A Not-Closed Non-Nil Channel</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">Close</td>
+<td style="text-align:center">panic</td>
+<td style="text-align:center">panic</td>
+<td style="text-align:center">succeed to close (C)</td>
+</tr>
+<tr>
+<td style="text-align:center">Send Value To</td>
+<td style="text-align:center">block for ever</td>
+<td style="text-align:center">panic</td>
+<td style="text-align:center">block or succeed to send (B)</td>
+</tr>
+<tr>
+<td style="text-align:center">Receive Value From</td>
+<td style="text-align:center">block for ever</td>
+<td style="text-align:center">never block (D)</td>
+<td style="text-align:center">block or succeed to receive (A)</td>
+</tr>
+</tbody>
+</table>
+</div>
+</blockquote>
+<p>其实我挺好奇的， Rust 区分了 sender receiver, 这里为啥不…</p>
+<h3 id="Explicit-cancellation"><a href="#Explicit-cancellation" class="headerlink" title="Explicit cancellation"></a>Explicit cancellation</h3><blockquote>
+<p>When <code>main</code> decides to exit without receiving all the values from <code>out</code>, it must tell the goroutines in the upstream stages to abandon the values they’re trying to send. It does so by sending values on a channel called <code>done</code>. It sends two values since there are potentially two blocked senders:</p>
+</blockquote>
+<p>具体来说，下游已经拿到了数据或者出现了 err, 需要告诉上游这样的消息。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">main</span><span class="params">()</span></span> &#123;</span><br><span class="line">    in := gen(<span class="number">2</span>, <span class="number">3</span>)</span><br><span class="line"></span><br><span class="line">    <span class="comment">// Distribute the sq work across two goroutines that both read from in.</span></span><br><span class="line">    c1 := sq(in)</span><br><span class="line">    c2 := sq(in)</span><br><span class="line"></span><br><span class="line">    <span class="comment">// Consume the first value from output.</span></span><br><span class="line">    done := <span class="built_in">make</span>(<span class="keyword">chan</span> <span class="keyword">struct</span>&#123;&#125;)</span><br><span class="line">    <span class="keyword">defer</span> <span class="built_in">close</span>(done)</span><br><span class="line">    out := merge(done, c1, c2)</span><br><span class="line">    fmt.Println(&lt;-out) <span class="comment">// 4 or 9</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>加入了 done 这个 flag 后，这里只需要一个值，同时有两个 input channel. 那么，merge 我们可以实现：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">merge</span><span class="params">(done &lt;-<span class="keyword">chan</span> <span class="keyword">struct</span>&#123;&#125;, cs ...&lt;-<span class="keyword">chan</span> <span class="type">int</span>)</span></span> &lt;-<span class="keyword">chan</span> <span class="type">int</span> &#123;</span><br><span class="line">    <span class="keyword">var</span> wg sync.WaitGroup</span><br><span class="line">    out := <span class="built_in">make</span>(<span class="keyword">chan</span> <span class="type">int</span>)</span><br><span class="line"></span><br><span class="line">    <span class="comment">// Start an output goroutine for each input channel in cs.  output</span></span><br><span class="line">    <span class="comment">// copies values from c to out until c is closed or it receives a value</span></span><br><span class="line">    <span class="comment">// from done, then output calls wg.Done.</span></span><br><span class="line">    output := <span class="function"><span class="keyword">func</span><span class="params">(c &lt;-<span class="keyword">chan</span> <span class="type">int</span>)</span></span> &#123;</span><br><span class="line">        <span class="keyword">defer</span> wg.Done()</span><br><span class="line">        <span class="keyword">for</span> n := <span class="keyword">range</span> c &#123;</span><br><span class="line">            <span class="keyword">select</span> &#123;</span><br><span class="line">            <span class="keyword">case</span> out &lt;- n:</span><br><span class="line">            <span class="keyword">case</span> &lt;-done:</span><br><span class="line">               <span class="keyword">return</span></span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        </span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    wg.Add(<span class="built_in">len</span>(cs))</span><br><span class="line">    <span class="keyword">for</span> _, c := <span class="keyword">range</span> cs &#123;</span><br><span class="line">        <span class="keyword">go</span> output(c)</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// Start a goroutine to close out once all the output goroutines are</span></span><br><span class="line">    <span class="comment">// done.  This must start after the wg.Add call.</span></span><br><span class="line">    <span class="keyword">go</span> <span class="function"><span class="keyword">func</span><span class="params">()</span></span> &#123;</span><br><span class="line">        wg.Wait()</span><br><span class="line">        <span class="built_in">close</span>(out)</span><br><span class="line">    &#125;()</span><br><span class="line">    <span class="keyword">return</span> out</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Pipeline"><span class="toc-number">1.</span> <span class="toc-text">Pipeline</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Fan-in-fan-out"><span class="toc-number">1.1.</span> <span class="toc-text">Fan-in&#x2F;fan-out</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%8F%92%E5%85%A5%E4%B8%80%E6%AE%B5-goroutine-%E7%9F%A5%E8%AF%86"><span class="toc-number">1.2.</span> <span class="toc-text">插入一段 goroutine 知识</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Explicit-cancellation"><span class="toc-number">1.3.</span> <span class="toc-text">Explicit cancellation</span></a></li></ol></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/02/19/Go-Concurrency-Patterns-Pipeline/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/02/19/Go-Concurrency-Patterns-Pipeline/&text=Go Concurrency Patterns"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/02/19/Go-Concurrency-Patterns-Pipeline/&title=Go Concurrency Patterns"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/02/19/Go-Concurrency-Patterns-Pipeline/&is_video=false&description=Go Concurrency Patterns"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Go Concurrency Patterns&body=Check out this article: http://blog.mwish.me/2020/02/19/Go-Concurrency-Patterns-Pipeline/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/02/19/Go-Concurrency-Patterns-Pipeline/&title=Go Concurrency Patterns"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/02/19/Go-Concurrency-Patterns-Pipeline/&title=Go Concurrency Patterns"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/02/19/Go-Concurrency-Patterns-Pipeline/&title=Go Concurrency Patterns"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/02/19/Go-Concurrency-Patterns-Pipeline/&title=Go Concurrency Patterns"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/02/19/Go-Concurrency-Patterns-Pipeline/&name=Go Concurrency Patterns&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/02/19/Go-Concurrency-Patterns-Pipeline/&t=Go Concurrency Patterns"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

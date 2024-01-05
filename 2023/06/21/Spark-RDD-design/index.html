@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="以 2023 年的视角来看，MapReduce 是个过度力大砖飞的软件，它强调强制的 2个 Stage （一些其他第三方之类的方案会有别的 Stage），然后 Stage 中间 Sort + 落 HDFS 文件来做 Shuffle，靠 Reducer Pull 来传输数据。这样的计算流很固定、性能比较低效，但是相对来说确实是个力大砖飞的方案。 Spark 之前，首先是微软在 SCOPE 系统和 D">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Spark: RDD design">
+<meta property="og:url" content="http://blog.mwish.me/2023/06/21/Spark-RDD-design/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="以 2023 年的视角来看，MapReduce 是个过度力大砖飞的软件，它强调强制的 2个 Stage （一些其他第三方之类的方案会有别的 Stage），然后 Stage 中间 Sort + 落 HDFS 文件来做 Shuffle，靠 Reducer Pull 来传输数据。这样的计算流很固定、性能比较低效，但是相对来说确实是个力大砖飞的方案。 Spark 之前，首先是微软在 SCOPE 系统和 D">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/image-20230619195027384.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/0CAF7F90-40E2-474C-A42C-19B76FF70AB1.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/cluster-overview.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/image-20230620221329414.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/EBF3B6DA-0602-4995-B618-93751F38FD6C.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/image-20230620225708643.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/0D7ADA36-5AD3-482E-B1BC-21766A1C686B.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/14AC10E6-1CB9-40C2-AAAC-2CA613DAF85B.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/BC2A9E92-563A-4D1D-8647-7336690F0C24.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/C0F5047D-EBFA-4C60-9265-16E8822B489B.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/63816205-6672-4A0D-8A47-E3AD07D1A28D.png">
+<meta property="article:published_time" content="2023-06-20T16:45:00.000Z">
+<meta property="article:modified_time" content="2023-06-20T16:44:21.221Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/image-20230619195027384.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>Spark: RDD design</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2023/06/22/Snowflake-Streaming-and-Change-in-Table/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2023/06/14/Parallel-Data-Processing-with-MapReduce-A-Survey/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2023/06/21/Spark-RDD-design/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2023/06/21/Spark-RDD-design/&text=Spark: RDD design"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2023/06/21/Spark-RDD-design/&title=Spark: RDD design"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2023/06/21/Spark-RDD-design/&is_video=false&description=Spark: RDD design"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Spark: RDD design&body=Check out this article: http://blog.mwish.me/2023/06/21/Spark-RDD-design/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2023/06/21/Spark-RDD-design/&title=Spark: RDD design"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2023/06/21/Spark-RDD-design/&title=Spark: RDD design"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2023/06/21/Spark-RDD-design/&title=Spark: RDD design"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2023/06/21/Spark-RDD-design/&title=Spark: RDD design"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2023/06/21/Spark-RDD-design/&name=Spark: RDD design&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2023/06/21/Spark-RDD-design/&t=Spark: RDD design"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#RDD"><span class="toc-number">1.</span> <span class="toc-text">RDD</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Spark-Programming-Interface"><span class="toc-number">1.1.</span> <span class="toc-text">Spark Programming Interface</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#RDD-%E7%9A%84%E7%BB%84%E6%88%90"><span class="toc-number">2.</span> <span class="toc-text">RDD 的组成</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Dependency-and-Shuffle"><span class="toc-number">2.1.</span> <span class="toc-text">Dependency and Shuffle</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Stage"><span class="toc-number">2.2.</span> <span class="toc-text">Stage</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-number">3.</span> <span class="toc-text">总结</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#References"><span class="toc-number">4.</span> <span class="toc-text">References</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Spark: RDD design
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2023-06-20T16:45:00.000Z" itemprop="datePublished">2023-06-21</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>以 2023 年的视角来看，MapReduce 是个过度力大砖飞的软件，它强调强制的 2个 Stage （一些其他第三方之类的方案会有别的 Stage），然后 Stage 中间 Sort + 落 HDFS 文件来做 Shuffle，靠 Reducer Pull 来传输数据。这样的计算流很固定、性能比较低效，但是相对来说确实是个力大砖飞的方案。</p>
+<p>Spark 之前，首先是微软在 SCOPE 系统和 DryadLinq 之类的地方做出了贡献，包括 DAG 一样的计算流、（类）SQL 的支持，但是 Spark 确实是开源社区很早掏出来的，并且在今天已经茁壮成长为了 DataBricks 这样的巨大公司和拥有了庞大的周边生态，可见这套东西打法还是很重要。Spark 支持的对象有 DataSet/DataFrame 和 SQL 甚至 Streaming / ML 等多个目标的庞大系统。不过我们会在之后的内容中提到 Spark SQL 甚至 DataFrame，我们今天只涉及 Spark 论文中提出的 RDD。</p>
+<h2 id="RDD"><a href="#RDD" class="headerlink" title="RDD"></a>RDD</h2><p>Spark 最初版本整个在 Scala 上编写，它提供的抽象是 RDD。在论文写作的时候，它只做一些 Batch Exec 的计算，并且论文中提到的优势场景包括 iterative algorithms (eg: 图计算，ML 的训练) 和 interactive data mining tools(给同一份数据发多次 adhoc query). 同时，RDD 的目标是<strong>尽量用上内存</strong>(利用上内存并不难，但是 MPI 可能需要知道对应机器的位置，此外还需要能够从故障或者 worker failover 中恢复出来)、利用 Intermediate result。</p>
+<p>相对于 MPI, Pregel 等系统，Spark RDD 构建的是一种<strong>粗粒度的抽象</strong>，它：</p>
+<ul>
+<li>类似 Fp，本身是 immutable 的</li>
+<li>描述计算过程，同时也有一些相对 internal 的东西， 比如 Partition。也允许有 <code>persist</code> (持久化) 和 <code>cache</code> (缓存/物化结果并尽量在内存)</li>
+<li>Parallel：因为 RDD 只描述计算过程，同时一些 Map 累的计算流程通常是相同的，所以允许 Parallel 的去执行。当然也可以根据 partition 之类的东西来决定这部分的描述</li>
+<li>Fault Tolerant: 这个 FT 名字有点抽象，并不是和 TP Workload 一样的 FT，而是和 MapReduce 那种没算完或者挂了，就去重新 Exec 对应的任务</li>
+</ul>
+<p>上面的部分其实有点抽象。不过后面都会讲。论文先举了两个 RDD 的例子：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">lines = spark.textFile(<span class="string">&quot;hdfs://...&quot;</span>) </span><br><span class="line">errors = lines.filter(_.startsWith(<span class="string">&quot;ERROR&quot;</span>))</span><br><span class="line">errors.persist()</span><br><span class="line">errors.count()</span><br><span class="line"></span><br><span class="line">errors.filter(_.contains(<span class="string">&quot;MySQL&quot;</span>)).count()</span><br></pre></td></tr></table></figure>
+<p>这里的计算流程可以如下所示：可以看到 RDD 要么来自文件输入（<code>lines</code>） 要么来自对之前 RDD 的 transformation。</p>
+<p><img src="https://image.mwish.me/blog-image/image-20230619195027384.png" alt="image-20230619195027384"></p>
+<p>文章也对比了 Spark 和 Distributed Memory 的优势（不过我个人认为 RDD 和 Distributed Memory 完全不是一套东西，也用在不同的场景，我现在觉得 Distributed Memory 是 “Internal”）下面的表格吹了很多有点，但我觉得主要区别还是：</p>
+<ul>
+<li>Spark 自己维护了 lineage，表述数据的构造和血缘关系</li>
+<li>声明式需要某种计算 vs 具体实现对应的计算</li>
+<li>RDD 在内存不够的时候也可以 downgrade 成类似 MapReduce 那种模式（利用 Spill 和 Shuffle）</li>
+</ul>
+<p>别的都是虚头巴脑的，感觉扯来扯去浪费时间。</p>
+<p><img src="https://image.mwish.me/blog-image/0CAF7F90-40E2-474C-A42C-19B76FF70AB1.png" alt="0CAF7F90-40E2-474C-A42C-19B76FF70AB1"></p>
+<p>这里论文还描述了一下不适合 RDD 不适合 Streaming 或者小亮多次更新的应用，看见 DataBricks 的 Live Table，我陷入了沉思。嘛，技术是发展的，Delta-IO 提供的数据湖本身也是一种绕弯弯的方案吧。</p>
+<h3 id="Spark-Programming-Interface"><a href="#Spark-Programming-Interface" class="headerlink" title="Spark Programming Interface"></a>Spark Programming Interface</h3><p>Spark 的 Cluster 模式如链接所述：<a target="_blank" rel="noopener" href="https://spark.apache.org/docs/latest/cluster-overview.html">https://spark.apache.org/docs/latest/cluster-overview.html</a> 。本身把 worker 部署的时候部署在机器或者容器上，有 standalone, Yarn/Mesos 调度, Kubernetes 模式。这里有几个（全宇宙都一样的）模型：</p>
+<p><img src="https://image.mwish.me/blog-image/cluster-overview.png" alt="cluster-overview"></p>
+<p><img src="https://image.mwish.me/blog-image/image-20230620221329414.png" alt="image-20230620221329414"></p>
+<p>用户可以用 Scala 编写 RDD，RDD 是带类型的对象 <code>RDD[T]</code>, 对 RDD 操作分为 <code>transformation</code> 和 <code>action</code>，里面内容其实非常好理解（我感觉一些带副作用的在这里反而显得有点怪）：</p>
+<p><img src="https://image.mwish.me/blog-image/EBF3B6DA-0602-4995-B618-93751F38FD6C.png" alt="EBF3B6DA-0602-4995-B618-93751F38FD6C"></p>
+<p> 这里会显得有点混乱，但是其实很简单，首先这些功能差不多都是函数式或者 db 类似的原语. 这里有几个值得注意的：</p>
+<ul>
+<li><code>join</code> <code>union</code> <code>cogroup</code> <code>crossProduct</code>: 令人熟悉的数据库老朋友</li>
+<li><code>sort</code>: 懂得都懂（其实类型上 sort 还没有，我感觉类似会有个 properties 的东西在里面？）</li>
+<li><code>partitionBy</code>: 需要注意的是，这里指定的是类似「物理执行」的属性，这点感觉其实对性能之类的相对来说比较重要，举个例子，比如本身可能走 shuffle 的计算，在 Partition 之后就不一定要走 Shuffle 了。</li>
+</ul>
+<p>论文这里提供了一个 <code>PageRank</code> 的例子，其实 MR 之类的都会在这介绍 PageRank，什么公共靶场. 这里需要注意的是，它把 <code>links</code> 给 <code>cache</code> 下来了，然后在每一步都可以用这个基本的 RDD，而不需要重新计算。这里有个 Python 的例子：<a target="_blank" rel="noopener" href="https://github.com/apache/spark/blob/master/examples/src/main/python/pagerank.py">https://github.com/apache/spark/blob/master/examples/src/main/python/pagerank.py</a> （注意 <code>cache</code> 和迭代）</p>
+<p><img src="https://image.mwish.me/blog-image/image-20230620225708643.png" alt="image-20230620225708643"></p>
+<p>需要注意的是，作者认为这里 links 很大，所以没有去 <code>broadcast</code> 它，这里也提到，如果负载比较明确，可以去 <code>partition</code> 一把：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">links = spark.textFile(...).map(...).partitionBy(myPartFunc).persist()</span><br></pre></td></tr></table></figure>
+<p>对的，其实 Spark RDD 还带了一组比较物理性质的操作：</p>
+<p><img src="https://image.mwish.me/blog-image/0D7ADA36-5AD3-482E-B1BC-21766A1C686B.png" alt="0D7ADA36-5AD3-482E-B1BC-21766A1C686B"></p>
+<p>Spark 的操作可以指定 <code>numPartition</code> 和对应的 <code>partitioner</code>, 甚至去 <code>repartition</code>，不过这里需要注意 <code>partition</code> 本身不生成 RDD （ <code>repartition</code> 肯定会）。它有：</p>
+<ul>
+<li>List Partition</li>
+<li>Hash Partition</li>
+<li>Range Partition</li>
+</ul>
+<p>上面几种，具体还是看业务了。<code>cache</code> / <code>presist</code> 本身是个 lazy 的操作，会在执行的时候才处理，<strong>Cache / Persist 的对象是 RDD 的结果</strong></p>
+<h2 id="RDD-的组成"><a href="#RDD-的组成" class="headerlink" title="RDD 的组成"></a>RDD 的组成</h2><p>作者在这里认为，RDD 包含：</p>
+<ul>
+<li>Partitions</li>
+<li>Dependencies (对应的数据源)</li>
+<li>Compute Function</li>
+<li>Metadata About Schema</li>
+</ul>
+<p>我个人觉得其实有点像数据库的 Physical Plan 一类的东西（或许 Spark SQL 的论文会告诉我有什么区别）。</p>
+<p>关于 RDD，几个要关注的操作是：</p>
+<ul>
+<li>dependency and shuffle</li>
+<li>plan 构建</li>
+<li>cache / persist</li>
+</ul>
+<p>我们先讲 dependency &amp; shuffle. 也是 Spark 的核心之一。</p>
+<h3 id="Dependency-and-Shuffle"><a href="#Dependency-and-Shuffle" class="headerlink" title="Dependency and Shuffle"></a>Dependency and Shuffle</h3><p><img src="https://image.mwish.me/blog-image/14AC10E6-1CB9-40C2-AAAC-2CA613DAF85B.png" alt="14AC10E6-1CB9-40C2-AAAC-2CA613DAF85B"></p>
+<p>Spark 会根据操作类型来判断是否要 Shuffle，这里的判断方式其实看上面，意外很简单，它把 Spark 区分为 Narrow Dependencies 和 Wide Dependencies:</p>
+<ul>
+<li>Narrow Dependencies: where each <strong>partition</strong> of the parent RDD is used by at most one <strong>partition</strong> of the child RDD</li>
+<li>Wide Dependencies: wide dependencies, where multiple child partitions may depend on it.</li>
+</ul>
+<p>这里我特地贴原文，因为它含义还是比较清晰的，因为这里一对一 和多对一的单位是 <strong>RDD中的 Partition</strong> ！</p>
+<ul>
+<li>OneToOne、ManyToOne 之类的关系显然肯定是 Narrow Dependencies</li>
+<li>多对一参照 Partition，co-locate Join 这种可能会是 Narrow Dependencies!</li>
+</ul>
+<p>我们下面区分到 Shuffle 的实现，Shuffle 在 MapReduce 中也能见到，它是一个部分整个写过去，另一部分整个读的操作。这个操作还是相当重的，而且可能涉及排序。这里考虑分成 Shuffle Write 和 Shuffle Read 的阶段，写的时候可能走排序或者 Hash + Agg，读的时候可能还需要再走一个类似多路归并的操作。</p>
+<p><img src="https://image.mwish.me/blog-image/BC2A9E92-563A-4D1D-8647-7336690F0C24.png" alt="BC2A9E92-563A-4D1D-8647-7336690F0C24"></p>
+<p>在 VLDB‘20 上，LinkedIn 的工程师提供了一个 Spark Shuffle 的方案，Spark 3.2 的时候被 Merge 进去了。之后写篇单独文章介绍这个 Shuffle 的流程好了。</p>
+<h3 id="Stage"><a href="#Stage" class="headerlink" title="Stage"></a>Stage</h3><p><img src="https://image.mwish.me/blog-image/C0F5047D-EBFA-4C60-9265-16E8822B489B.png" alt="C0F5047D-EBFA-4C60-9265-16E8822B489B"></p>
+<p>Spark 会按照 Wide Dependencies 拆分成多个 Stage，Stage 内并行执行（有点类似 Push-based Execution Engine？）</p>
+<p><img src="https://image.mwish.me/blog-image/63816205-6672-4A0D-8A47-E3AD07D1A28D.png" alt="63816205-6672-4A0D-8A47-E3AD07D1A28D"></p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>本文关注 Spark 计算和 Shuffle，省略了内存管理、代码生成等部分，因为我感觉这些东西要么我们之前讲过更现代的方案，要么 Photon 自己做了，没必要在意这么老论文是怎么 codegen 、内存管理的。</p>
+<p>Spark 感觉论文里也提出了力大砖飞的方式。此外，对于 Shuffle 等地方的优化，本文也只是提到，没有深入（入门阶段先 move-fast 先扫一遍，之后懂得多了再补回来吧）。关于各个 transform，其实本来应该大有可以讲的地方，不过目前点到为止算了。</p>
+<p>Spark 还有一套比较大的杀手锏是 Adaptive Query Execution，它能根据大小来动态调整执行的资源，来处理大数据场景的 skew，这是个比较重要的优化，但本文也略过了，实在深感惭愧。</p>
+<h2 id="References"><a href="#References" class="headerlink" title="References"></a>References</h2><ul>
+<li><p>Resilient Distributed Datasets: A Fault-Tolerant Abstraction for In-Memory Cluster Computing</p>
+</li>
+<li><p>VLDB’20  Magnet: 领英Spark Shuffle解决方案 - Sovnlo的文章 - 知乎 <a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/397391514">https://zhuanlan.zhihu.com/p/397391514</a></p>
+</li>
+<li><p>关于Spark 3.2.0 push-based shuffle - 斜杠代码日记的文章 - 知乎 <a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/443752106">https://zhuanlan.zhihu.com/p/443752106</a></p>
+</li>
+<li><p>大数据处理框架Apache Spark设计与实现(<a target="_blank" rel="noopener" href="https://book.douban.com/subject/35140409/">https://book.douban.com/subject/35140409/</a>)  许利杰、方亚芬 / 电子工业出版社</p>
+</li>
+</ul>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#RDD"><span class="toc-number">1.</span> <span class="toc-text">RDD</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Spark-Programming-Interface"><span class="toc-number">1.1.</span> <span class="toc-text">Spark Programming Interface</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#RDD-%E7%9A%84%E7%BB%84%E6%88%90"><span class="toc-number">2.</span> <span class="toc-text">RDD 的组成</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Dependency-and-Shuffle"><span class="toc-number">2.1.</span> <span class="toc-text">Dependency and Shuffle</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Stage"><span class="toc-number">2.2.</span> <span class="toc-text">Stage</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-number">3.</span> <span class="toc-text">总结</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#References"><span class="toc-number">4.</span> <span class="toc-text">References</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2023/06/21/Spark-RDD-design/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2023/06/21/Spark-RDD-design/&text=Spark: RDD design"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2023/06/21/Spark-RDD-design/&title=Spark: RDD design"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2023/06/21/Spark-RDD-design/&is_video=false&description=Spark: RDD design"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Spark: RDD design&body=Check out this article: http://blog.mwish.me/2023/06/21/Spark-RDD-design/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2023/06/21/Spark-RDD-design/&title=Spark: RDD design"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2023/06/21/Spark-RDD-design/&title=Spark: RDD design"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2023/06/21/Spark-RDD-design/&title=Spark: RDD design"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2023/06/21/Spark-RDD-design/&title=Spark: RDD design"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2023/06/21/Spark-RDD-design/&name=Spark: RDD design&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2023/06/21/Spark-RDD-design/&t=Spark: RDD design"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

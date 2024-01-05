@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="事务处理很多成果是在上世纪完成的，在本世纪初，关于事务的研究是相对较少的。占主导地位的是 2PL 协议，作为最标准的并发控制实现。但是，本世纪关于事务有着不同变化：  由于应用上的不同需求，相对上世纪，本世纪的应用有了显著的变化：显然，上世纪没有这么大规模的、高事务提交的互联网应用，现在的应用可能有数 M甚至数百M 的 qps，希望 ~10ms 的时间内完成一个事务。  同时，新时代也有硬件性能的">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Transaction, OCC and modern hardware">
+<meta property="og:url" content="http://blog.mwish.me/2022/01/28/Transaction-OCC-and-modern-hardware/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="事务处理很多成果是在上世纪完成的，在本世纪初，关于事务的研究是相对较少的。占主导地位的是 2PL 协议，作为最标准的并发控制实现。但是，本世纪关于事务有着不同变化：  由于应用上的不同需求，相对上世纪，本世纪的应用有了显著的变化：显然，上世纪没有这么大规模的、高事务提交的互联网应用，现在的应用可能有数 M甚至数百M 的 qps，希望 ~10ms 的时间内完成一个事务。  同时，新时代也有硬件性能的">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/C5C7DF9D-3E2E-4319-B086-FE4190228FB8.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/F3F65886-E3F4-4F68-B301-92A7CEC90B55.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/3BABC5DC-0A29-4463-84DE-37BE2845A7A6.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/57BC7AB9-C874-4F0C-BD3E-07F1C5E69FE4.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/FAF180FF-6C3F-42EF-BAEF-BE41229EDD86.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/DB4555BD-7807-478C-81FD-316C74FEDD2B.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/4957A2A6-1267-4612-9C76-6DA6FF12EF93.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/CE64E7F2-9568-4A42-AD43-EAA8131EB290.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/WechatIMG82.jpeg">
+<meta property="og:image" content="https://image.mwish.me/blog-image/D4A2FD3F-B881-421D-B11C-458EA5A9AD0C.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/D6E37BA2-6115-4E2A-8540-C02C6AFC725B.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/EAD56C87-EDB8-452D-80B0-5F14C2909524.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/90BDE6B4-B17D-40BE-8E5E-849EBC623311.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/08ACD15D-C2A3-47EA-A380-CB814782A18E.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/1723F877-F9AD-43CE-A01A-88874F6C94BC.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/DDC124F9-1D35-420E-B0E8-651E37EB7AE4.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/2F6E5D66-44A7-4FAB-B5D5-62045A6FF2A0.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/2B014146-E822-4198-9DE2-085512A9271C.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/27916230-345F-43AC-996F-AF4F539D29C8.png">
+<meta property="article:published_time" content="2022-01-28T06:05:56.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.572Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/C5C7DF9D-3E2E-4319-B086-FE4190228FB8.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>Transaction, OCC and modern hardware</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2022/01/30/Database-System-Concepts-7th/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2022/01/15/format-thinking-2/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2022/01/28/Transaction-OCC-and-modern-hardware/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2022/01/28/Transaction-OCC-and-modern-hardware/&text=Transaction, OCC and modern hardware"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2022/01/28/Transaction-OCC-and-modern-hardware/&title=Transaction, OCC and modern hardware"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2022/01/28/Transaction-OCC-and-modern-hardware/&is_video=false&description=Transaction, OCC and modern hardware"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Transaction, OCC and modern hardware&body=Check out this article: http://blog.mwish.me/2022/01/28/Transaction-OCC-and-modern-hardware/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2022/01/28/Transaction-OCC-and-modern-hardware/&title=Transaction, OCC and modern hardware"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2022/01/28/Transaction-OCC-and-modern-hardware/&title=Transaction, OCC and modern hardware"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2022/01/28/Transaction-OCC-and-modern-hardware/&title=Transaction, OCC and modern hardware"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2022/01/28/Transaction-OCC-and-modern-hardware/&title=Transaction, OCC and modern hardware"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2022/01/28/Transaction-OCC-and-modern-hardware/&name=Transaction, OCC and modern hardware&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2022/01/28/Transaction-OCC-and-modern-hardware/&t=Transaction, OCC and modern hardware"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#On-Optimistic-Methods-for-Concurrency-Control"><span class="toc-number">1.</span> <span class="toc-text">On Optimistic Methods for Concurrency Control</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Read-Write-%E9%98%B6%E6%AE%B5"><span class="toc-number">1.1.</span> <span class="toc-text">Read&#x2F;Write 阶段</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Validation-Phase"><span class="toc-number">1.2.</span> <span class="toc-text">Validation Phase</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Transaction-Number"><span class="toc-number">1.2.1.</span> <span class="toc-text">Transaction Number</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E4%B8%80%E4%BA%9B%E5%B7%A5%E7%A8%8B%E8%80%83%E9%87%8F"><span class="toc-number">1.2.2.</span> <span class="toc-text">一些工程考量</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Serial-Validation"><span class="toc-number">1.3.</span> <span class="toc-text">Serial Validation</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Parallel-Validation"><span class="toc-number">1.4.</span> <span class="toc-text">Parallel Validation</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A6%82%E5%BF%B5%E8%A1%A5%E5%85%85"><span class="toc-number">2.</span> <span class="toc-text">概念补充</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#OCC-%E8%AF%84%E4%BC%B0"><span class="toc-number">3.</span> <span class="toc-text">OCC 评估</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#MVOCC"><span class="toc-number">4.</span> <span class="toc-text">MVOCC</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Hekaton"><span class="toc-number">5.</span> <span class="toc-text">Hekaton</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#HyPer"><span class="toc-number">6.</span> <span class="toc-text">HyPer</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Silo-Speedy-Transactions-in-Multicore-In-Memory-Databases"><span class="toc-number">7.</span> <span class="toc-text">Silo: Speedy Transactions in Multicore In-Memory Databases</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#TicToc"><span class="toc-number">8.</span> <span class="toc-text">TicToc</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8F%82%E8%80%83"><span class="toc-number">9.</span> <span class="toc-text">参考</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Transaction, OCC and modern hardware
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2022-01-28T06:05:56.000Z" itemprop="datePublished">2022-01-28</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>事务处理很多成果是在上世纪完成的，在本世纪初，关于事务的研究是相对较少的。占主导地位的是 2PL 协议，作为最标准的并发控制实现。但是，本世纪关于事务有着不同变化：</p>
+<ol>
+<li><p>由于应用上的不同需求，相对上世纪，本世纪的应用有了显著的变化：显然，上世纪没有这么大规模的、高事务提交的互联网应用，现在的应用可能有数 M甚至数百M 的 qps，希望 ~10ms 的时间内完成一个事务。</p>
+</li>
+<li><p>同时，新时代也有硬件性能的飞速变化，这点主要体现在：</p>
+<ol>
+<li>CPU 单核撞上了功耗墙，但也拥有了更多的核心；</li>
+<li>缓存大量提升，L3/L2/L1 Cache 变得大了很多；</li>
+<li>存储也有同样的提升，SSD 取代了 HDD 成为了硬件的宠儿，NVMe 等协议提供了助力，同时也有 SPDK 等 Bypass 的技术；</li>
+<li>同时，分布式事务的实现变得更加重要了。</li>
+</ol>
+</li>
+</ol>
+<p>应用侧的需求、硬件的提升甚至软件栈变薄，给事务处理带来了一些变化。然而，最著名的靠谱开源数据库 MySQL、PostgreSQL 使用的还是上世纪九十年代的模型；比较常见的 Google Percolator 等模型在单机事务上还是比较简单的；H-Store/VoltDB 的方式似乎没有很主流的被采纳。</p>
+<p><img src="https://image.mwish.me/blog-image/C5C7DF9D-3E2E-4319-B086-FE4190228FB8.png" alt="C5C7DF9D-3E2E-4319-B086-FE4190228FB8"></p>
+<p>我们可以套用到 MySQL 这样传统的 RDBMS 中：</p>
+<ol>
+<li>ARIES 那样的 Undo Redo Log</li>
+<li>MV2PL, 采用 Delta Space 存储变更的版本</li>
+<li>采用 Btree 索引</li>
+<li>并发本身和 2PL 有关，模型是线程（PG 甚至是进程），然后本身 Btree 之类的也会有一些 Latch Protocol</li>
+</ol>
+<p>它可以很方便的做一些内部的优化，比如说：对于 counter，它可以维护计数器锁，使用 Page 相关的逻辑物理日志，来达到细粒度的更改。</p>
+<p>同时，并发控制可以分为乐观的/悲观的，大概划分如下：</p>
+<p><img src="https://image.mwish.me/blog-image/F3F65886-E3F4-4F68-B301-92A7CEC90B55.png" alt="F3F65886-E3F4-4F68-B301-92A7CEC90B55"></p>
+<p>OCC 本身是一种乐观并发协议，1981 年 <code>&lt;On Optimistic Methods for Concurrency Control&gt;</code> 中被提出。在近十年中，因为模型的变化，使用者认为，它在低数据 contention 的情况下会有良好的性能。</p>
+<p>本文主要关注并发控制部分，并主要关注单机事务。</p>
+<h2 id="On-Optimistic-Methods-for-Concurrency-Control"><a href="#On-Optimistic-Methods-for-Concurrency-Control" class="headerlink" title="On Optimistic Methods for Concurrency Control"></a>On Optimistic Methods for Concurrency Control</h2><p>本论文是 OCC 的提出，在 1982 年发表在 TODS (Transactions on Database Systems) 上, 本论文提出的方法是基于时间戳的方法，并且提出了基本的模型。需要注意的是，类似 T-Tree，当时 Memory/Cache 之类的模型和现在也略有不同。</p>
+<p>Optimistic 表示：</p>
+<blockquote>
+<p>Most current approaches to concurrency control in database systems rely on locking of data objects as a control mechanism. In this paper, two families of nonlocking concurrency controls are presented. The methods used are “optimistic” in the sense that they rely mainly on transaction backup as a control mechanism, “hoping” that conflicts between transactions will not occur. Applications for which these methods should be more efficient than locking are discussed.</p>
+</blockquote>
+<p>作者认为，事务本身因为访问盘的 latency gap 和 多核心等原因会需要并发执行，而 2PL 有几个问题：</p>
+<ol>
+<li>Lock 会给读或者不产生冲突的事务也带来开销</li>
+<li>Deadlock</li>
+<li>Lock 需要等待事务执行完毕才能释放</li>
+<li>Lock 只有在 worst case 才有用</li>
+</ol>
+<p>也就是说，可以手动推导出下列的前提：</p>
+<ol>
+<li>正在执行的事务本身需要的数据数量占数据总量较小</li>
+<li>修改热点概率较小</li>
+</ol>
+<p>在这个前提下，可以使用 OCC 的方式，来高效执行，并且避免死锁。当然，死罪可免，活罪难逃，遇到活锁的情况下，可能可以退化为悲观的事务等方法来处理（Doug Lea 在设计一些数据结构提到过类似的方法，提供 global lock，如果重试失败集采，那么使用 Global lock）。同时，这里读事务会几乎不带来开销。（What about MVCC?）</p>
+<p><img src="https://image.mwish.me/blog-image/3BABC5DC-0A29-4463-84DE-37BE2845A7A6.png" alt="3BABC5DC-0A29-4463-84DE-37BE2845A7A6"></p>
+<p>这里切分为了 read/validation/write 三个阶段，值得一提的是，这里大部分还是 read 在内存操作，write 阶段切换一下 read 的时候的指针，然后 read 本身读都是原子的。因此作者认为，write 本身是非常快能完成的。<strong>文中表示了 Write 阶段很快而且是串行的。</strong></p>
+<h3 id="Read-Write-阶段"><a href="#Read-Write-阶段" class="headerlink" title="Read/Write 阶段"></a>Read/Write 阶段</h3><p>这里需要提供下列的原语</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">create --  创建对象, 返回 handler</span><br><span class="line">delete(handler) -- 删除对象 handler</span><br><span class="line">read(handler, i) -- 读取对象 handler 的字段 i</span><br><span class="line">write(handler, i, v) -- 给对象 handler 的 i 赋值 v</span><br><span class="line"></span><br><span class="line">copy(n) -- 拷贝对象 n, 返回一个新的 handler</span><br><span class="line">exchange(handler1, handler2) -- 交换 </span><br></pre></td></tr></table></figure>
+<p>然后，需要在 read 阶段提供 <code>tcreate</code> , <code>tdelete</code>, <code>tread</code>, <code>twrite</code> 等方法，使用上面的原语来操作。同时，事务开始和结束分别使用 <code>tbegin</code> 和 <code>tend</code> 操作。事务的内部结构里保存了 <code>WriteSet</code> 还有 <code>DeleteSet</code>、<code>ReadSet</code>，同时有一个 <code>copy</code> 数组。具体操作就读的时候拷贝到 <code>copy</code> 数组，创建删除之类的处理好对应集合，把 handler 丢到 <code>Set</code> 中。</p>
+<p>当 Validation 完成之后，这里逻辑就基本上是把 <code>WriteSet</code> 和 <code>DeleteSet</code> 去 apply。然后我这边截取一段假设，这里论文使用了串行 write，因为：</p>
+<blockquote>
+<p>Note that since objects are virtual (objects are referred to by name, not by physical address), the exchange operation, and hence the write phase, can be made quite fast: essentially, all that is necessary is to exchange the physical address parts of the two object descriptors.</p>
+</blockquote>
+<h3 id="Validation-Phase"><a href="#Validation-Phase" class="headerlink" title="Validation Phase"></a>Validation Phase</h3><p>这里只描述了 Serializable 的验证，论文使用了时间戳有关的协议。对于一个给定的事务 <code>T(i)</code>, 都能找到一个 <code>t(i)</code> 来表达事务执行的时间。事务读写的时候，需要保证 <code>t</code> 的顺序，即是事务的顺序。那么，这里可以给到一些条件，对于 <code>t(i) &lt; t(j)</code></p>
+<p>一: <code>T(i)</code> 在 <code>T(j)</code> 读阶段之前完成了写阶段</p>
+<p>应该不需要怎么理解，很 trivial</p>
+<p>二：<code>T(j)</code> 在进入 Write Phase 之前, <code>T(i)</code> 完成了 Write Phase ，且 <code>WriteSet(i)</code> 和 <code>ReadSet(j)</code> 无交集</p>
+<p>这里后来怎么改都行，但是不能读到之前改的地方</p>
+<p>三：<code>T(i)</code> 的 WriteSet 和 <code>T(j)</code> 的 <code>ReadSet</code> / <code>WriteSet</code> 都没有交集。且 <code>T(i)</code> 在 <code>T(j)</code> 之前完成 Read Phase</p>
+<p>这里有点点复杂，是说 <code>T(i)</code> 的没有影响到 <code>T(j)</code> 的事务。</p>
+<p>下图也同样说明了这三条规则对应的时间范围：</p>
+<p><img src="https://image.mwish.me/blog-image/57BC7AB9-C874-4F0C-BD3E-07F1C5E69FE4.png" alt="57BC7AB9-C874-4F0C-BD3E-07F1C5E69FE4"></p>
+<p>Rule3 还是相对复杂一些，关于这点可以从 CMU 的 slide 里面偷一下图：</p>
+<p><img src="https://image.mwish.me/blog-image/FAF180FF-6C3F-42EF-BAEF-BE41229EDD86.png" alt="FAF180FF-6C3F-42EF-BAEF-BE41229EDD86"></p>
+<h4 id="Transaction-Number"><a href="#Transaction-Number" class="headerlink" title="Transaction Number"></a>Transaction Number</h4><p>对事务 T, 需要找到对应的时间戳，这里选用的是 Validation 的时间戳。</p>
+<blockquote>
+<p>Here we use the simple solution of maintaining a global integer counter tnc (transaction number counter); when a transaction number is needed, the counter is incremented, and the resulting value returned. Also, transaction numbers must be assigned somewhere before validation, since the validation conditions above require knowledge of the transaction number of the transaction being validated.</p>
+</blockquote>
+<p>这里也讲了为啥不在 Read 或者 Begin 的时候拿时间戳。如果 <code>t(i) &lt; t(j)</code>, 但 <code>T(j)</code> 更早进入 Validation，那就需要等待 <code>T(i)</code> 了。在 Validation Phase 拿到 TS 能自然满足这个条件</p>
+<h4 id="一些工程考量"><a href="#一些工程考量" class="headerlink" title="一些工程考量"></a>一些工程考量</h4><p>如果读事务很长，那么，它很有可能 Starve，这里解决方式是留一些事务的 WriteSet 到内存中（类似 MVCC 了）：</p>
+<blockquote>
+<p>We solve this problem by only requiring the concurrency control to maintain some finite number of the most recent write sets where the number is large enough to validate almost all transactions (we say write set a is more recent than write set b if the transaction number associated with a is greater than that associated with 6). In the case of transactions like T, if old write sets are unavailable, validation fails, and the transaction is backed up (probably to the beginning). </p>
+</blockquote>
+<p>此外，这里活锁导致问题的时候，可以用全局锁或者降级到悲观的方式来处理。</p>
+<h3 id="Serial-Validation"><a href="#Serial-Validation" class="headerlink" title="Serial Validation"></a>Serial Validation</h3><p>论文中，Validation Phase 和 Write Phase 都是串行执行的，Read Phase 是并行执行的，但是后续会串行 Validation 然后写（我感觉这个也太怪了…）。记 <code>tnc</code> 为 全局事务counter，那么有：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line">tbegin() &#123;</span><br><span class="line">	初始化 CreateSet, ReadSet, WriteSet, DeleteSet</span><br><span class="line">	StartTn := tnc</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">tend() &#123;</span><br><span class="line">  临界区开始</span><br><span class="line">	FinishTn := tnc</span><br><span class="line">	valid := true</span><br><span class="line">	for t from start tn + 1 to finish tn do</span><br><span class="line">		if (write set of transaction with transaction number t intersects read set)</span><br><span class="line">			then valid := false</span><br><span class="line">  if valid</span><br><span class="line">    # 完成写阶段后 inc tnc.</span><br><span class="line">		then ((write phase); tnc := tnc + 1; tn := tnc))</span><br><span class="line">	if valid</span><br><span class="line">		then ( cleanup )</span><br><span class="line">		else ( backup )</span><br><span class="line">  临界区结束</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>上述情况很容易验证是合法的，因为 <code>tend</code> 整个就是串行的，<code>(3)</code> 之所以不需要是因为进这个阶段就读写完了。</p>
+<p>对于单核系统+验证/写入本身会非常快的场景，上面差不多就够用了，但是多核系统或者要 I/O 的话，可能我们就希望并行处理了。</p>
+<p>有一种优化的方式是，进入临界区之前，读一下 <code>tnc</code>, 作为 <code>midTn</code>，然后先做一次验证。读取 tnc 之后，后续的提交事务 ts 都是大于 <code>tnc</code> 的。这里先模糊做一次 <code>[StartTn + 1, midTn]</code> 内的检查（是开始到现在已经提交的事务），再进临界区的时候，再拿到一个具体的 <code>FinishTn</code>，做验证。</p>
+<p>这里的核心逻辑就是检测 <code>[StartTn, FinishTn]</code> 这个 Window 中的写没有和本事务的读冲突。</p>
+<p>因为查询没有编号，所以这里不需要给查询作 tnc increment.</p>
+<p>再回顾一下这一段，这里本身把 Validation 串行操作了，其中关键的部分在于 <code>tnc</code> 的读取和增加，再之前的 Rules 中，Rule1/Rule2 是显而易见的，这里通过 tnc 递增和验证区间来保证；拿到这个 id 之后，再去检查读写。</p>
+<h3 id="Parallel-Validation"><a href="#Parallel-Validation" class="headerlink" title="Parallel Validation"></a>Parallel Validation</h3><p>在这里，validation 阶段将会变成并行的。这里将会使用所有的三条规则。</p>
+<p>关于 Rule2, 验证规则和之前是相同的，对 Rule 3，这里需要维护一个 <code>active</code> 事务集合。那么，validation 如下(这里分别记 <code>&lt;</code> 和 <code>&gt;</code> 为临界区的开始和结束)</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line">tend() &#123;</span><br><span class="line">	&lt;</span><br><span class="line">    FinishTn := tnc</span><br><span class="line">    FinishActive := &#123;拷贝一份 active&#125;</span><br><span class="line">    active.Append(&#123;本事务 id&#125;)</span><br><span class="line">	&gt;</span><br><span class="line"></span><br><span class="line">	检查 [StartTn + 1, FinishTn] 中, 读集合是否和它们的写集合冲突</span><br><span class="line">	检查 FinishActive 中，它的写是否与自身的读冲突</span><br><span class="line">	</span><br><span class="line">	if valid:</span><br><span class="line">		then (</span><br><span class="line">			(write phase)</span><br><span class="line">			&lt;</span><br><span class="line">				tnc := tnc + 1</span><br><span class="line">				tn := tnc</span><br><span class="line">				active.erase(&#123;本事务 id&#125;)</span><br><span class="line">			&gt;</span><br><span class="line">		)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>显然，这里是没问题的～</p>
+<h2 id="概念补充"><a href="#概念补充" class="headerlink" title="概念补充"></a>概念补充</h2><p>这里有一个 Validation 顺序的问题，实际上，原论文描述的就是一种 BOCC(Backward OCC) 的算法，当事务进入 validation 阶段的时候，它会与之前进 Validation 的事务验证。</p>
+<blockquote>
+<p>Backward Validation: Check whether the committing txn intersects its read/write sets with those of any txns that have already committed.</p>
+</blockquote>
+<p><img src="https://image.mwish.me/blog-image/DB4555BD-7807-478C-81FD-316C74FEDD2B.png" alt="DB4555BD-7807-478C-81FD-316C74FEDD2B"></p>
+<p>Forward Validation 在提交的时候广播自己的 WriteSet，让读取的事务来做一些判断。读取事务可以当即判断，也可以 Buffer 一些，最后一起判断。</p>
+<blockquote>
+<p>Forward Validation: Check whether the committing txn intersects its read/write sets with any active txns that have not yet committed.</p>
+</blockquote>
+<p><img src="https://image.mwish.me/blog-image/4957A2A6-1267-4612-9C76-6DA6FF12EF93.png" alt="4957A2A6-1267-4612-9C76-6DA6FF12EF93"></p>
+<p>此外，我们还可以考虑基于版本的 OCC，每个数据项和一个写入版本相关联，读取的时候拿到一个时间戳，成功提交的事务会带一个唯一的时间戳写入。验证的时候通过 ts 比对来进行验证：读取的 w-ts 和现有的 w-ts 一样，就没啥问题，这里 15-445 slide 演示了相关的例子。</p>
+<p>具体一些细节可以在： <a target="_blank" rel="noopener" href="https://wangziqi2013.github.io/article/2018/03/21/Analyzing-OCC-Anomalies-and-Solutions.html">https://wangziqi2013.github.io/article/2018/03/21/Analyzing-OCC-Anomalies-and-Solutions.html</a> 这里看看。</p>
+<h2 id="OCC-评估"><a href="#OCC-评估" class="headerlink" title="OCC 评估"></a>OCC 评估</h2><p><code>&lt;Main Memory Database Systems&gt;</code> 里面描述了一种现状：关于性能，实际上大家各执一词，有的时候 Benchmark 的结果甚至是相反的。我们可以大概知道 OCC 在低冲突的情况下，有相对好一些的性能。我可以大概复述一段这个车轱辘话：</p>
+<blockquote>
+<p>有的比较认为，悲观事务 Blocking (wound-wait?) 优于 悲观事务重启 (wait-die?)，但一些研究有相反的结论。在另一些对比中，乐观并发模式比 基于锁的并发模式更优，有的则相反。有一个比较令人信服的结论由 Agrawal 等人的出，他们表示，在低数据竞争的场景下，乐观并发性能更优，但冲突增加的时候，由于 rollback 和 restart，出现了更高的冲突率。</p>
+</blockquote>
+<p><code>&lt;Staring into the Abyss: An Evaluation of Concurrency Control with One Thousand Cores&gt;</code> 这篇论文发表于 VLDB’14. 本身是描述 OCC/2PL/TS/MVCC/H-Store 等协议在 1000核心的模拟器下并发的。采用硬件寄存器来并发有比较优的效率:</p>
+<p><img src="https://image.mwish.me/blog-image/CE64E7F2-9568-4A42-AD43-EAA8131EB290.png" alt="CE64E7F2-9568-4A42-AD43-EAA8131EB290"></p>
+<p>需要注意的是，这里的 counter 肯定不是线性增长的，atomic counter 可以参考下列性能表：</p>
+<p><img src="https://image.mwish.me/blog-image/WechatIMG82.jpeg" alt="WechatIMG82"></p>
+<p>这篇文章显示，OCC 的拷贝数据、ts 申请等方式会带来不小的瓶颈。这里的问题是能否 Partition（counter 层次的 Partition），更高的性能可能导致一些语义上的变化，比如不原子递增的 counter，甚至类似 snowflake 那样带有 id 的 counter。</p>
+<p>本文中，OCC 性能受制于时间戳分配、拷贝到 private space、高冲突下的 abort。</p>
+<p>我觉得这篇文章有一定的参考价值，但是意义没那么大，因为很多东西和实现细节关系很大，本身是有很多优化和商榷空间的，文章中瓶颈在 timestamp 分配上也是可以理解的。</p>
+<h2 id="MVOCC"><a href="#MVOCC" class="headerlink" title="MVOCC"></a>MVOCC</h2><p><img src="https://image.mwish.me/blog-image/D4A2FD3F-B881-421D-B11C-458EA5A9AD0C.png" alt="D4A2FD3F-B881-421D-B11C-458EA5A9AD0C"></p>
+<p>对于 MVOCC 而言，可以给每个数据带上一个 begin-ts 和 end-ts，这里就不用拷贝事务的 private space 了，取而代之的是 GC 问题。</p>
+<p>还需要注意的是，MVCC 并不是万灵药，它不会在任何场景都能提供优化。它提供的更像是一种对抗 读/写混合的防颠簸。</p>
+<p>在 benchmark 中，论文测试了下列三种负载：</p>
+<ol>
+<li>read-only (100% reads)</li>
+<li>read-intensive (80% reads, 20% updates)</li>
+<li>update-intensive (20% reads, 80% updates).</li>
+</ol>
+<p>论文里记号如下：</p>
+<p><img src="https://image.mwish.me/blog-image/D6E37BA2-6115-4E2A-8540-C02C6AFC725B.png" alt="D6E37BA2-6115-4E2A-8540-C02C6AFC725B"></p>
+<p>在低竞争的测试下，MVOCC 有着尚可的性能，报告如下：</p>
+<p><img src="https://image.mwish.me/blog-image/EAD56C87-EDB8-452D-80B0-5F14C2909524.png" alt="EAD56C87-EDB8-452D-80B0-5F14C2909524"></p>
+<p>很符合直觉的，在高数据竞争的情况下，有如下 case:</p>
+<p><img src="https://image.mwish.me/blog-image/90BDE6B4-B17D-40BE-8E5E-849EBC623311.png" alt="90BDE6B4-B17D-40BE-8E5E-849EBC623311"></p>
+<p>再混合负载下，给出一定写，增加读，MVOCC 本身受读事务干扰较小，而随着写冲突增加，它可以立马性能下降给你看：</p>
+<p><img src="https://image.mwish.me/blog-image/08ACD15D-C2A3-47EA-A380-CB814782A18E.png" alt="08ACD15D-C2A3-47EA-A380-CB814782A18E"></p>
+<p>论文还有 TPC-C 测试等，如下图：</p>
+<p><img src="https://image.mwish.me/blog-image/1723F877-F9AD-43CE-A01A-88874F6C94BC.png" alt="1723F877-F9AD-43CE-A01A-88874F6C94BC"></p>
+<p>笔者认为，本文给的策略还是相对靠谱的，感觉比较靠谱的是类似 Hekaton 那样，在同一套模型上支持乐观 + 悲观的形式，方便适合各种何样的负载。</p>
+<h2 id="Hekaton"><a href="#Hekaton" class="headerlink" title="Hekaton"></a>Hekaton</h2><p>本协议是一个基于验证的协议，本身是 MVCC 的. 论文乐观的假设了碰到的冲突的事务都会成功，并且用无锁并发来实现这样一个模型：</p>
+<p><img src="https://image.mwish.me/blog-image/DDC124F9-1D35-420E-B0E8-651E37EB7AE4.png" alt="DDC124F9-1D35-420E-B0E8-651E37EB7AE4"></p>
+<h2 id="HyPer"><a href="#HyPer" class="headerlink" title="HyPer"></a>HyPer</h2><p>本协议是一个基于验证的协议，本身是 MVCC 的. 有趣的地方是谓词锁的实现。</p>
+<p>这里用再次 Scan 的方式来验证，同时，它会保留谓词锁，而不是数据的锁，来减轻开销。</p>
+<p><img src="https://image.mwish.me/blog-image/2F6E5D66-44A7-4FAB-B5D5-62045A6FF2A0.png" alt="2F6E5D66-44A7-4FAB-B5D5-62045A6FF2A0"></p>
+<h2 id="Silo-Speedy-Transactions-in-Multicore-In-Memory-Databases"><a href="#Silo-Speedy-Transactions-in-Multicore-In-Memory-Databases" class="headerlink" title="Silo: Speedy Transactions in Multicore In-Memory Databases"></a>Silo: Speedy Transactions in Multicore In-Memory Databases</h2><p>本协议是一个基于 TS 的协议. Silo 本身是设计在新硬件上的，特点是 Batch 来取 Ts</p>
+<p><img src="https://image.mwish.me/blog-image/2B014146-E822-4198-9DE2-085512A9271C.png" alt="2B014146-E822-4198-9DE2-085512A9271C"></p>
+<h2 id="TicToc"><a href="#TicToc" class="headerlink" title="TicToc"></a>TicToc</h2><p>本协议是一个基于 TS 的协议. 之前的协议可能都要拿到一个具体的 ts, TicToc 做出的优化是，拿到一个大概的 ts 范围，而不取具体的时间戳。</p>
+<p><img src="https://image.mwish.me/blog-image/27916230-345F-43AC-996F-AF4F539D29C8.png" alt="27916230-345F-43AC-996F-AF4F539D29C8"></p>
+<h2 id="参考"><a href="#参考" class="headerlink" title="参考"></a>参考</h2><p>[1] On Optimistic Methods for Concurrency Control</p>
+<p>[2] Transaction Processing on Modern Hardware</p>
+<p>[3] <a target="_blank" rel="noopener" href="https://wangziqi2013.github.io/article/2018/03/21/Analyzing-OCC-Anomalies-and-Solutions.html">https://wangziqi2013.github.io/article/2018/03/21/Analyzing-OCC-Anomalies-and-Solutions.html</a></p>
+<p>[4] An Empirical Evaluation of In-Memory Multi-Version Concurrency Control</p>
+<p>[5] Staring into the Abyss: An Evaluation of Concurrency Control with One Thousand Cores</p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#On-Optimistic-Methods-for-Concurrency-Control"><span class="toc-number">1.</span> <span class="toc-text">On Optimistic Methods for Concurrency Control</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Read-Write-%E9%98%B6%E6%AE%B5"><span class="toc-number">1.1.</span> <span class="toc-text">Read&#x2F;Write 阶段</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Validation-Phase"><span class="toc-number">1.2.</span> <span class="toc-text">Validation Phase</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Transaction-Number"><span class="toc-number">1.2.1.</span> <span class="toc-text">Transaction Number</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E4%B8%80%E4%BA%9B%E5%B7%A5%E7%A8%8B%E8%80%83%E9%87%8F"><span class="toc-number">1.2.2.</span> <span class="toc-text">一些工程考量</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Serial-Validation"><span class="toc-number">1.3.</span> <span class="toc-text">Serial Validation</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Parallel-Validation"><span class="toc-number">1.4.</span> <span class="toc-text">Parallel Validation</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A6%82%E5%BF%B5%E8%A1%A5%E5%85%85"><span class="toc-number">2.</span> <span class="toc-text">概念补充</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#OCC-%E8%AF%84%E4%BC%B0"><span class="toc-number">3.</span> <span class="toc-text">OCC 评估</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#MVOCC"><span class="toc-number">4.</span> <span class="toc-text">MVOCC</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Hekaton"><span class="toc-number">5.</span> <span class="toc-text">Hekaton</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#HyPer"><span class="toc-number">6.</span> <span class="toc-text">HyPer</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Silo-Speedy-Transactions-in-Multicore-In-Memory-Databases"><span class="toc-number">7.</span> <span class="toc-text">Silo: Speedy Transactions in Multicore In-Memory Databases</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#TicToc"><span class="toc-number">8.</span> <span class="toc-text">TicToc</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8F%82%E8%80%83"><span class="toc-number">9.</span> <span class="toc-text">参考</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2022/01/28/Transaction-OCC-and-modern-hardware/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2022/01/28/Transaction-OCC-and-modern-hardware/&text=Transaction, OCC and modern hardware"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2022/01/28/Transaction-OCC-and-modern-hardware/&title=Transaction, OCC and modern hardware"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2022/01/28/Transaction-OCC-and-modern-hardware/&is_video=false&description=Transaction, OCC and modern hardware"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Transaction, OCC and modern hardware&body=Check out this article: http://blog.mwish.me/2022/01/28/Transaction-OCC-and-modern-hardware/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2022/01/28/Transaction-OCC-and-modern-hardware/&title=Transaction, OCC and modern hardware"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2022/01/28/Transaction-OCC-and-modern-hardware/&title=Transaction, OCC and modern hardware"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2022/01/28/Transaction-OCC-and-modern-hardware/&title=Transaction, OCC and modern hardware"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2022/01/28/Transaction-OCC-and-modern-hardware/&title=Transaction, OCC and modern hardware"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2022/01/28/Transaction-OCC-and-modern-hardware/&name=Transaction, OCC and modern hardware&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2022/01/28/Transaction-OCC-and-modern-hardware/&t=Transaction, OCC and modern hardware"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="std::collections::VecDequeRust 的 VecDeque 采取的是 ring buffer 的方式来实现的。我们首先看看它的结构： 12345678910111213141516171819202122&#x2F;&#x2F;&#x2F; A double-ended queue implemented with a growable ring buffer.&#x2F;&#x2F;&#x2F;&#x2F;&#x2F;&#x2F; The &quot;defa">
+<meta property="og:type" content="article">
+<meta property="og:title" content="deque in Rust">
+<meta property="og:url" content="http://blog.mwish.me/2020/01/01/deque-in-Rust-and-C/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="std::collections::VecDequeRust 的 VecDeque 采取的是 ring buffer 的方式来实现的。我们首先看看它的结构： 12345678910111213141516171819202122&#x2F;&#x2F;&#x2F; A double-ended queue implemented with a growable ring buffer.&#x2F;&#x2F;&#x2F;&#x2F;&#x2F;&#x2F; The &quot;defa">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2020-01-01T09:05:22.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.568Z">
+<meta property="article:author" content="mwish">
+<meta property="article:tag" content="language">
+<meta name="twitter:card" content="summary">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>deque in Rust</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2020/01/09/Rust-std-sync-Arc/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2019/12/27/Naive-C-STL-searching-and-copying/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/01/01/deque-in-Rust-and-C/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/01/01/deque-in-Rust-and-C/&text=deque in Rust"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/01/01/deque-in-Rust-and-C/&title=deque in Rust"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/01/01/deque-in-Rust-and-C/&is_video=false&description=deque in Rust"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=deque in Rust&body=Check out this article: http://blog.mwish.me/2020/01/01/deque-in-Rust-and-C/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/01/01/deque-in-Rust-and-C/&title=deque in Rust"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/01/01/deque-in-Rust-and-C/&title=deque in Rust"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/01/01/deque-in-Rust-and-C/&title=deque in Rust"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/01/01/deque-in-Rust-and-C/&title=deque in Rust"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/01/01/deque-in-Rust-and-C/&name=deque in Rust&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/01/01/deque-in-Rust-and-C/&t=deque in Rust"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#std-collections-VecDeque"><span class="toc-number">1.</span> <span class="toc-text">std::collections::VecDeque</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Index-Wrap"><span class="toc-number">1.0.1.</span> <span class="toc-text">Index Wrap</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Pop"><span class="toc-number">1.1.</span> <span class="toc-text">Pop</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#grow-if-neccessary"><span class="toc-number">1.2.</span> <span class="toc-text">grow_if_neccessary</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Drop"><span class="toc-number">1.3.</span> <span class="toc-text">Drop</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%A7%E8%83%BD"><span class="toc-number">1.4.</span> <span class="toc-text">性能</span></a></li></ol></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        deque in Rust
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2020-01-01T09:05:22.000Z" itemprop="datePublished">2020-01-01</time>
+        
+      
+    </div>
+
+
+      
+
+      
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/language/" rel="tag">language</a>
+    </div>
+
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <h1 id="std-collections-VecDeque"><a href="#std-collections-VecDeque" class="headerlink" title="std::collections::VecDeque"></a>std::collections::VecDeque</h1><p>Rust 的 <code>VecDeque</code> 采取的是 ring buffer 的方式来实现的。我们首先看看它的结构：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// A double-ended queue implemented with a growable ring buffer.</span></span><br><span class="line"><span class="comment">///</span></span><br><span class="line"><span class="comment">/// The &quot;default&quot; usage of this type as a queue is to use [`push_back`] to add to</span></span><br><span class="line"><span class="comment">/// the queue, and [`pop_front`] to remove from the queue. [`extend`] and [`append`]</span></span><br><span class="line"><span class="comment">/// push onto the back in this manner, and iterating over `VecDeque` goes front</span></span><br><span class="line"><span class="comment">/// to back.</span></span><br><span class="line"><span class="comment">///</span></span><br><span class="line"><span class="comment">/// [`push_back`]: #method.push_back</span></span><br><span class="line"><span class="comment">/// [`pop_front`]: #method.pop_front</span></span><br><span class="line"><span class="comment">/// [`extend`]: #method.extend</span></span><br><span class="line"><span class="comment">/// [`append`]: #method.append</span></span><br><span class="line">#[<span class="built_in">stable</span>(feature = <span class="string">&quot;rust1&quot;</span>, since = <span class="string">&quot;1.0.0&quot;</span>)]</span><br><span class="line">pub <span class="keyword">struct</span> <span class="title class_">VecDeque</span>&lt;T&gt; &#123;</span><br><span class="line">    <span class="comment">// tail and head are pointers into the buffer. Tail always points</span></span><br><span class="line">    <span class="comment">// to the first element that could be read, Head always points</span></span><br><span class="line">    <span class="comment">// to where data should be written.</span></span><br><span class="line">    <span class="comment">// If tail == head the buffer is empty. The length of the ringbuffer</span></span><br><span class="line">    <span class="comment">// is defined as the distance between the two.</span></span><br><span class="line">    tail: usize,</span><br><span class="line">    head: usize,</span><br><span class="line">    buf: RawVec&lt;T&gt;,</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<ul>
+<li><em>RawVec</em> 我们稍后去看，目前可以理解成一段分配的、连续的 Unininitialize Memory</li>
+</ul>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#[allow(missing_debug_implementations)]</span></span><br><span class="line"><span class="keyword">pub</span> <span class="keyword">struct</span> <span class="title class_">RawVec</span>&lt;T, A: Alloc = Global&gt; &#123;</span><br><span class="line">    ptr: Unique&lt;T&gt;,</span><br><span class="line">    cap: <span class="type">usize</span>,</span><br><span class="line">    a: A,</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>他们具体结构可以看看我随手弄的图：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">buf		tail	head buf(end)</span><br><span class="line">|     |     |    |</span><br></pre></td></tr></table></figure>
+<p>写入的时候向 head 写入，tail 是 可读的头（老实说我看代码之前总觉得是反过来的）。</p>
+<p>当 <code>new</code> 的时候会 call <code>with_capacity</code></p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#[stable(feature = <span class="string">&quot;rust1&quot;</span>, since = <span class="string">&quot;1.0.0&quot;</span>)]</span></span><br><span class="line"><span class="keyword">pub</span> <span class="keyword">fn</span> <span class="title function_">with_capacity</span>(capacity: <span class="type">usize</span>) <span class="punctuation">-&gt;</span> VecDeque&lt;T&gt; &#123;</span><br><span class="line">    <span class="comment">// +1 since the ringbuffer always leaves one space empty</span></span><br><span class="line">    <span class="keyword">let</span> <span class="variable">cap</span> = cmp::<span class="title function_ invoke__">max</span>(capacity + <span class="number">1</span>, MINIMUM_CAPACITY + <span class="number">1</span>).<span class="title function_ invoke__">next_power_of_two</span>();</span><br><span class="line">    <span class="built_in">assert!</span>(cap &gt; capacity, <span class="string">&quot;capacity overflow&quot;</span>);</span><br><span class="line"></span><br><span class="line">    VecDeque &#123;</span><br><span class="line">        tail: <span class="number">0</span>,</span><br><span class="line">        head: <span class="number">0</span>,</span><br><span class="line">        buf: RawVec::<span class="title function_ invoke__">with_capacity</span>(cap),</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>cap 会让大小成为 2 的倍数。因为 head == tail 是 empty 的表示，所以需要 <code>capacity + 1</code></p>
+<p>对于 <code>push_back</code>:</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#[stable(feature = <span class="string">&quot;rust1&quot;</span>, since = <span class="string">&quot;1.0.0&quot;</span>)]</span></span><br><span class="line"><span class="keyword">pub</span> <span class="keyword">fn</span> <span class="title function_">push_back</span>(&amp;<span class="keyword">mut</span> <span class="keyword">self</span>, value: T) &#123;</span><br><span class="line">    <span class="keyword">self</span>.<span class="title function_ invoke__">grow_if_necessary</span>();</span><br><span class="line"></span><br><span class="line">    <span class="keyword">let</span> <span class="variable">head</span> = <span class="keyword">self</span>.head;</span><br><span class="line">    <span class="keyword">self</span>.head = <span class="keyword">self</span>.<span class="title function_ invoke__">wrap_add</span>(<span class="keyword">self</span>.head, <span class="number">1</span>);</span><br><span class="line">    <span class="keyword">unsafe</span> &#123; <span class="keyword">self</span>.<span class="title function_ invoke__">buffer_write</span>(head, value) &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p><code>grow_if_necessary</code> 比较重要，我们后面介绍</p>
+<h3 id="Index-Wrap"><a href="#Index-Wrap" class="headerlink" title="Index Wrap"></a>Index Wrap</h3><p><code>wrap</code> 其实想一想很清晰，这个不是直接去取地址，而是在 ring buffer 里面拿到一个相对的地址。</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"></span><br><span class="line"><span class="comment">/// Returns the index in the underlying buffer for a given logical element</span></span><br><span class="line"><span class="comment">/// index + addend.</span></span><br><span class="line"><span class="meta">#[inline]</span></span><br><span class="line"><span class="keyword">fn</span> <span class="title function_">wrap_add</span>(&amp;<span class="keyword">self</span>, idx: <span class="type">usize</span>, addend: <span class="type">usize</span>) <span class="punctuation">-&gt;</span> <span class="type">usize</span> &#123;</span><br><span class="line">    <span class="title function_ invoke__">wrap_index</span>(idx.<span class="title function_ invoke__">wrapping_add</span>(addend), <span class="keyword">self</span>.<span class="title function_ invoke__">cap</span>())</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p><code>wrap_index</code>:</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// Returns the index in the underlying buffer for a given logical element index.</span></span><br><span class="line"><span class="meta">#[inline]</span></span><br><span class="line"><span class="keyword">fn</span> <span class="title function_">wrap_index</span>(index: <span class="type">usize</span>, size: <span class="type">usize</span>) <span class="punctuation">-&gt;</span> <span class="type">usize</span> &#123;</span><br><span class="line">    <span class="comment">// size is always a power of 2</span></span><br><span class="line">    <span class="built_in">debug_assert!</span>(size.<span class="title function_ invoke__">is_power_of_two</span>());</span><br><span class="line">    index &amp; (size - <span class="number">1</span>)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这个 size 其实是 <code>RawVec</code> 的 cap. 我们之前看到了 cap 会保证自己是 2 的倍数, 这里也有 <code>debug_assert</code>。所以 <code>index &amp; (size - 1)</code> 相当于 <code>index % size</code>. 拿到这里对应的 index。迭代器、<code>index</code> 都是用这一套的。</p>
+<p>所以之前的 <code>push_back</code> ：</p>
+<ul>
+<li>检查是否要 grow, 如果要的话肯定会先 grow, grow 方法一会儿介绍。</li>
+<li>拿到 old head (可写入的)</li>
+<li>head 在 ringbuffer 里面前进</li>
+<li>写入 old head</li>
+</ul>
+<p>然后可以看看 <code>push_front</code> , 很类似</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#[stable(feature = <span class="string">&quot;rust1&quot;</span>, since = <span class="string">&quot;1.0.0&quot;</span>)]</span></span><br><span class="line"><span class="keyword">pub</span> <span class="keyword">fn</span> <span class="title function_">push_front</span>(&amp;<span class="keyword">mut</span> <span class="keyword">self</span>, value: T) &#123;</span><br><span class="line">    <span class="keyword">self</span>.<span class="title function_ invoke__">grow_if_necessary</span>();</span><br><span class="line"></span><br><span class="line">    <span class="keyword">self</span>.tail = <span class="keyword">self</span>.<span class="title function_ invoke__">wrap_sub</span>(<span class="keyword">self</span>.tail, <span class="number">1</span>);</span><br><span class="line">    <span class="keyword">let</span> <span class="variable">tail</span> = <span class="keyword">self</span>.tail;</span><br><span class="line">    <span class="keyword">unsafe</span> &#123;</span><br><span class="line">        <span class="keyword">self</span>.<span class="title function_ invoke__">buffer_write</span>(tail, value);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>不需要我过多解释，你肯定知道：</p>
+<ul>
+<li>检查是否要 grow, 如果要的话肯定会先 grow, grow 方法一会儿介绍。</li>
+<li>拿到 old tail </li>
+<li>tail 在 ringbuffer 里面后退</li>
+<li>写入 old tail</li>
+</ul>
+<h2 id="Pop"><a href="#Pop" class="headerlink" title="Pop"></a>Pop</h2><figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#[stable(feature = <span class="string">&quot;rust1&quot;</span>, since = <span class="string">&quot;1.0.0&quot;</span>)]</span></span><br><span class="line"><span class="keyword">pub</span> <span class="keyword">fn</span> <span class="title function_">pop_front</span>(&amp;<span class="keyword">mut</span> <span class="keyword">self</span>) <span class="punctuation">-&gt;</span> <span class="type">Option</span>&lt;T&gt; &#123;</span><br><span class="line">    <span class="keyword">if</span> <span class="keyword">self</span>.<span class="title function_ invoke__">is_empty</span>() &#123;</span><br><span class="line">        <span class="literal">None</span></span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        <span class="keyword">let</span> <span class="variable">tail</span> = <span class="keyword">self</span>.tail;</span><br><span class="line">        <span class="keyword">self</span>.tail = <span class="keyword">self</span>.<span class="title function_ invoke__">wrap_add</span>(<span class="keyword">self</span>.tail, <span class="number">1</span>);</span><br><span class="line">        <span class="keyword">unsafe</span> &#123; <span class="title function_ invoke__">Some</span>(<span class="keyword">self</span>.<span class="title function_ invoke__">buffer_read</span>(tail)) &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h2 id="grow-if-neccessary"><a href="#grow-if-neccessary" class="headerlink" title="grow_if_neccessary"></a><code>grow_if_neccessary</code></h2><figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// This may panic or abort</span></span><br><span class="line"><span class="meta">#[inline]</span></span><br><span class="line"><span class="keyword">fn</span> <span class="title function_">grow_if_necessary</span>(&amp;<span class="keyword">mut</span> <span class="keyword">self</span>) &#123;</span><br><span class="line">    <span class="keyword">if</span> <span class="keyword">self</span>.<span class="title function_ invoke__">is_full</span>() &#123;</span><br><span class="line">        <span class="keyword">let</span> <span class="variable">old_cap</span> = <span class="keyword">self</span>.<span class="title function_ invoke__">cap</span>();</span><br><span class="line">        <span class="keyword">self</span>.buf.<span class="title function_ invoke__">double</span>();</span><br><span class="line">        <span class="keyword">unsafe</span> &#123;</span><br><span class="line">            <span class="keyword">self</span>.<span class="title function_ invoke__">handle_capacity_increase</span>(old_cap);</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="built_in">debug_assert!</span>(!<span class="keyword">self</span>.<span class="title function_ invoke__">is_full</span>());</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p><code>double</code> 是 raw_vec 的一个方法：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#[inline(never)]</span></span><br><span class="line">   <span class="meta">#[cold]</span></span><br><span class="line">   <span class="keyword">pub</span> <span class="keyword">fn</span> <span class="title function_">double</span>(&amp;<span class="keyword">mut</span> <span class="keyword">self</span>) &#123;</span><br><span class="line">       <span class="keyword">unsafe</span> &#123;</span><br><span class="line">           <span class="keyword">let</span> <span class="variable">elem_size</span> = mem::size_of::&lt;T&gt;();</span><br><span class="line"></span><br><span class="line">           <span class="comment">// since we set the capacity to usize::MAX when elem_size is</span></span><br><span class="line">           <span class="comment">// 0, getting to here necessarily means the RawVec is overfull.</span></span><br><span class="line">           <span class="built_in">assert!</span>(elem_size != <span class="number">0</span>, <span class="string">&quot;capacity overflow&quot;</span>);</span><br><span class="line"></span><br><span class="line">           <span class="keyword">let</span> (new_cap, uniq) = <span class="keyword">match</span> <span class="keyword">self</span>.<span class="title function_ invoke__">current_layout</span>() &#123;</span><br><span class="line">               <span class="title function_ invoke__">Some</span>(cur) =&gt; &#123;</span><br><span class="line">                   <span class="comment">// Since we guarantee that we never allocate more than</span></span><br><span class="line">                   <span class="comment">// isize::MAX bytes, `elem_size * self.cap &lt;= isize::MAX` as</span></span><br><span class="line">                   <span class="comment">// a precondition, so this can&#x27;t overflow. Additionally the</span></span><br><span class="line">                   <span class="comment">// alignment will never be too large as to &quot;not be</span></span><br><span class="line">                   <span class="comment">// satisfiable&quot;, so `Layout::from_size_align` will always</span></span><br><span class="line">                   <span class="comment">// return `Some`.</span></span><br><span class="line">                   <span class="comment">//</span></span><br><span class="line">                   <span class="comment">// tl;dr; we bypass runtime checks due to dynamic assertions</span></span><br><span class="line">                   <span class="comment">// in this module, allowing us to use</span></span><br><span class="line">                   <span class="comment">// `from_size_align_unchecked`.</span></span><br><span class="line">                   <span class="keyword">let</span> <span class="variable">new_cap</span> = <span class="number">2</span> * <span class="keyword">self</span>.cap;</span><br><span class="line">                   <span class="keyword">let</span> <span class="variable">new_size</span> = new_cap * elem_size;</span><br><span class="line">                   <span class="title function_ invoke__">alloc_guard</span>(new_size).<span class="title function_ invoke__">unwrap_or_else</span>(|_| <span class="title function_ invoke__">capacity_overflow</span>());</span><br><span class="line">                   <span class="keyword">let</span> <span class="variable">ptr_res</span> = <span class="keyword">self</span>.a.<span class="title function_ invoke__">realloc</span>(NonNull::<span class="title function_ invoke__">from</span>(<span class="keyword">self</span>.ptr).<span class="title function_ invoke__">cast</span>(),</span><br><span class="line">                                                cur,</span><br><span class="line">                                                new_size);</span><br><span class="line">                   <span class="keyword">match</span> ptr_res &#123;</span><br><span class="line">                       <span class="title function_ invoke__">Ok</span>(ptr) =&gt; (new_cap, ptr.<span class="title function_ invoke__">cast</span>().<span class="title function_ invoke__">into</span>()),</span><br><span class="line">                       <span class="title function_ invoke__">Err</span>(_) =&gt; <span class="title function_ invoke__">handle_alloc_error</span>(</span><br><span class="line">                           Layout::<span class="title function_ invoke__">from_size_align_unchecked</span>(new_size, cur.<span class="title function_ invoke__">align</span>())</span><br><span class="line">                       ),</span><br><span class="line">                   &#125;</span><br><span class="line">               &#125;</span><br><span class="line">               <span class="literal">None</span> =&gt; &#123;</span><br><span class="line">                   <span class="comment">// skip to 4 because tiny Vec&#x27;s are dumb; but not if that</span></span><br><span class="line">                   <span class="comment">// would cause overflow</span></span><br><span class="line">                   <span class="keyword">let</span> <span class="variable">new_cap</span> = <span class="keyword">if</span> elem_size &gt; (!<span class="number">0</span>) / <span class="number">8</span> &#123; <span class="number">1</span> &#125; <span class="keyword">else</span> &#123; <span class="number">4</span> &#125;;</span><br><span class="line">                   <span class="keyword">match</span> <span class="keyword">self</span>.a.alloc_array::&lt;T&gt;(new_cap) &#123;</span><br><span class="line">                       <span class="title function_ invoke__">Ok</span>(ptr) =&gt; (new_cap, ptr.<span class="title function_ invoke__">into</span>()),</span><br><span class="line">                       <span class="title function_ invoke__">Err</span>(_) =&gt; <span class="title function_ invoke__">handle_alloc_error</span>(Layout::array::&lt;T&gt;(new_cap).<span class="title function_ invoke__">unwrap</span>()),</span><br><span class="line">                   &#125;</span><br><span class="line">               &#125;</span><br><span class="line">           &#125;;</span><br><span class="line">           <span class="keyword">self</span>.ptr = uniq;</span><br><span class="line">           <span class="keyword">self</span>.cap = new_cap;</span><br><span class="line">       &#125;</span><br><span class="line">   &#125;</span><br></pre></td></tr></table></figure>
+<p>调用 <code>realloc</code> ，<em>不改变现有布局</em>的情况下 buffer 倍扩，所以接下来需要：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">unsafe</span> &#123;</span><br><span class="line">		<span class="keyword">self</span>.<span class="title function_ invoke__">handle_capacity_increase</span>(old_cap);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>实现上代码写的很清晰：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// Frobs the head and tail sections around to handle the fact that we</span></span><br><span class="line"><span class="comment">/// just reallocated. Unsafe because it trusts old_capacity.</span></span><br><span class="line"><span class="meta">#[inline]</span></span><br><span class="line"><span class="keyword">unsafe</span> <span class="keyword">fn</span> <span class="title function_">handle_capacity_increase</span>(&amp;<span class="keyword">mut</span> <span class="keyword">self</span>, old_capacity: <span class="type">usize</span>) &#123;</span><br><span class="line">    <span class="keyword">let</span> <span class="variable">new_capacity</span> = <span class="keyword">self</span>.<span class="title function_ invoke__">cap</span>();</span><br><span class="line"></span><br><span class="line">    <span class="comment">// Move the shortest contiguous section of the ring buffer</span></span><br><span class="line">    <span class="comment">//    T             H</span></span><br><span class="line">    <span class="comment">//   [o o o o o o o . ]</span></span><br><span class="line">    <span class="comment">//    T             H</span></span><br><span class="line">    <span class="comment">// A [o o o o o o o . . . . . . . . . ]</span></span><br><span class="line">    <span class="comment">//        H T</span></span><br><span class="line">    <span class="comment">//   [o o . o o o o o ]</span></span><br><span class="line">    <span class="comment">//          T             H</span></span><br><span class="line">    <span class="comment">// B [. . . o o o o o o o . . . . . . ]</span></span><br><span class="line">    <span class="comment">//              H T</span></span><br><span class="line">    <span class="comment">//   [o o o o o . o o ]</span></span><br><span class="line">    <span class="comment">//              H                 T</span></span><br><span class="line">    <span class="comment">// C [o o o o o . . . . . . . . . o o ]</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> <span class="keyword">self</span>.tail &lt;= <span class="keyword">self</span>.head &#123;</span><br><span class="line">        <span class="comment">// A</span></span><br><span class="line">        <span class="comment">// Nop</span></span><br><span class="line">    &#125; <span class="keyword">else</span> <span class="keyword">if</span> <span class="keyword">self</span>.head &lt; old_capacity - <span class="keyword">self</span>.tail &#123;</span><br><span class="line">        <span class="comment">// B</span></span><br><span class="line">        <span class="keyword">self</span>.<span class="title function_ invoke__">copy_nonoverlapping</span>(old_capacity, <span class="number">0</span>, <span class="keyword">self</span>.head);</span><br><span class="line">        <span class="keyword">self</span>.head += old_capacity;</span><br><span class="line">        <span class="built_in">debug_assert!</span>(<span class="keyword">self</span>.head &gt; <span class="keyword">self</span>.tail);</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        <span class="comment">// C</span></span><br><span class="line">        <span class="keyword">let</span> <span class="variable">new_tail</span> = new_capacity - (old_capacity - <span class="keyword">self</span>.tail);</span><br><span class="line">        <span class="keyword">self</span>.<span class="title function_ invoke__">copy_nonoverlapping</span>(new_tail, <span class="keyword">self</span>.tail, old_capacity - <span class="keyword">self</span>.tail);</span><br><span class="line">        <span class="keyword">self</span>.tail = new_tail;</span><br><span class="line">        <span class="built_in">debug_assert!</span>(<span class="keyword">self</span>.head &lt; <span class="keyword">self</span>.tail);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="built_in">debug_assert!</span>(<span class="keyword">self</span>.head &lt; <span class="keyword">self</span>.<span class="title function_ invoke__">cap</span>());</span><br><span class="line">    <span class="built_in">debug_assert!</span>(<span class="keyword">self</span>.tail &lt; <span class="keyword">self</span>.<span class="title function_ invoke__">cap</span>());</span><br><span class="line">    <span class="built_in">debug_assert!</span>(<span class="keyword">self</span>.<span class="title function_ invoke__">cap</span>().<span class="title function_ invoke__">count_ones</span>() == <span class="number">1</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这个算法会保证尽量移动最少的元素。</p>
+<ul>
+<li>A: 不需要调整. 刚好 tail 完全在开头，可以想象成只有 push_back。(front push pop 同样也有可能啦，准确的说)</li>
+<li>B: <code>self.head &lt; old_capacity - self.tail</code> 保证移动前段元素</li>
+<li>C: 否则 移动后段元素。</li>
+</ul>
+<h2 id="Drop"><a href="#Drop" class="headerlink" title="Drop"></a>Drop</h2><figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#[stable(feature = <span class="string">&quot;rust1&quot;</span>, since = <span class="string">&quot;1.0.0&quot;</span>)]</span></span><br><span class="line"><span class="keyword">unsafe</span> <span class="keyword">impl</span>&lt;<span class="meta">#[may_dangle]</span> T&gt; <span class="built_in">Drop</span> <span class="keyword">for</span> <span class="title class_">VecDeque</span>&lt;T&gt; &#123;</span><br><span class="line">    <span class="keyword">fn</span> <span class="title function_">drop</span>(&amp;<span class="keyword">mut</span> <span class="keyword">self</span>) &#123;</span><br><span class="line">        <span class="keyword">let</span> (front, back) = <span class="keyword">self</span>.<span class="title function_ invoke__">as_mut_slices</span>();</span><br><span class="line">        <span class="keyword">unsafe</span> &#123;</span><br><span class="line">            <span class="comment">// use drop for [T]</span></span><br><span class="line">            ptr::<span class="title function_ invoke__">drop_in_place</span>(front);</span><br><span class="line">            ptr::<span class="title function_ invoke__">drop_in_place</span>(back);</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="comment">// RawVec handles deallocation</span></span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这个 front back 是 [start, head) 到 [tail, end) 的 slice</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#[inline]</span></span><br><span class="line"><span class="meta">#[stable(feature = <span class="string">&quot;deque_extras_15&quot;</span>, since = <span class="string">&quot;1.5.0&quot;</span>)]</span></span><br><span class="line"><span class="keyword">pub</span> <span class="keyword">fn</span> <span class="title function_">as_mut_slices</span>(&amp;<span class="keyword">mut</span> <span class="keyword">self</span>) <span class="punctuation">-&gt;</span> (&amp;<span class="keyword">mut</span> [T], &amp;<span class="keyword">mut</span> [T]) &#123;</span><br><span class="line">    <span class="keyword">unsafe</span> &#123;</span><br><span class="line">        <span class="keyword">let</span> <span class="variable">head</span> = <span class="keyword">self</span>.head;</span><br><span class="line">        <span class="keyword">let</span> <span class="variable">tail</span> = <span class="keyword">self</span>.tail;</span><br><span class="line">        <span class="keyword">let</span> <span class="variable">buf</span> = <span class="keyword">self</span>.<span class="title function_ invoke__">buffer_as_mut_slice</span>();</span><br><span class="line">        RingSlices::<span class="title function_ invoke__">ring_slices</span>(buf, head, tail)</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这个 <code>ring_slice</code> 实现是：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// Returns the two slices that cover the `VecDeque`&#x27;s valid range</span></span><br><span class="line"><span class="keyword">trait</span> <span class="title class_">RingSlices</span>: <span class="built_in">Sized</span> &#123;</span><br><span class="line">    <span class="keyword">fn</span> <span class="title function_">slice</span>(<span class="keyword">self</span>, from: <span class="type">usize</span>, to: <span class="type">usize</span>) <span class="punctuation">-&gt;</span> <span class="keyword">Self</span>;</span><br><span class="line">    <span class="keyword">fn</span> <span class="title function_">split_at</span>(<span class="keyword">self</span>, i: <span class="type">usize</span>) <span class="punctuation">-&gt;</span> (<span class="keyword">Self</span>, <span class="keyword">Self</span>);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">fn</span> <span class="title function_">ring_slices</span>(buf: <span class="keyword">Self</span>, head: <span class="type">usize</span>, tail: <span class="type">usize</span>) <span class="punctuation">-&gt;</span> (<span class="keyword">Self</span>, <span class="keyword">Self</span>) &#123;</span><br><span class="line">        <span class="keyword">let</span> <span class="variable">contiguous</span> = tail &lt;= head;</span><br><span class="line">        <span class="keyword">if</span> contiguous &#123;</span><br><span class="line">            <span class="keyword">let</span> (empty, buf) = buf.<span class="title function_ invoke__">split_at</span>(<span class="number">0</span>);</span><br><span class="line">            (buf.<span class="title function_ invoke__">slice</span>(tail, head), empty)</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            <span class="keyword">let</span> (mid, right) = buf.<span class="title function_ invoke__">split_at</span>(tail);</span><br><span class="line">            <span class="keyword">let</span> (left, _) = mid.<span class="title function_ invoke__">split_at</span>(head);</span><br><span class="line">            (right, left)</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这个 contiguous 类似我们之前扩容 的时候。</p>
+<p>而内存的回收交给 <code>RawVec</code>.</p>
+<h2 id="性能"><a href="#性能" class="headerlink" title="性能"></a>性能</h2><ul>
+<li><code>push_front</code> <code>push_back</code>: 均摊复杂度和 <code>Vec</code> 的 <code>push_back</code>一样，不过可能扩容的时候需要 1.5 倍 size 的复制</li>
+</ul>
+<p>下面这段从官方文档复制过来的</p>
+<div class="table-container">
+<table>
+<thead>
+<tr>
+<th style="text-align:left"></th>
+<th style="text-align:left">get(i)</th>
+<th style="text-align:left">insert(i)</th>
+<th style="text-align:left">remove(i)</th>
+<th style="text-align:left">append</th>
+<th style="text-align:left">split_off(i)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left"><a target="_blank" rel="noopener" href="https://doc.rust-lang.org/std/vec/struct.Vec.html"><code>Vec</code></a></td>
+<td style="text-align:left">O(1)</td>
+<td style="text-align:left">O(n-i)*</td>
+<td style="text-align:left">O(n-i)</td>
+<td style="text-align:left">O(m)*</td>
+<td style="text-align:left">O(n-i)</td>
+</tr>
+<tr>
+<td style="text-align:left"><a target="_blank" rel="noopener" href="https://doc.rust-lang.org/std/collections/struct.VecDeque.html"><code>VecDeque</code></a></td>
+<td style="text-align:left">O(1)</td>
+<td style="text-align:left">O(min(i, n-i))*</td>
+<td style="text-align:left">O(min(i, n-i))</td>
+<td style="text-align:left">O(m)*</td>
+<td style="text-align:left">O(min(i, n-i))</td>
+</tr>
+<tr>
+<td style="text-align:left"><a target="_blank" rel="noopener" href="https://doc.rust-lang.org/std/collections/struct.LinkedList.html"><code>LinkedList</code></a></td>
+<td style="text-align:left">O(min(i, n-i))</td>
+<td style="text-align:left">O(min(i, n-i))</td>
+<td style="text-align:left">O(min(i, n-i))</td>
+<td style="text-align:left">O(1)</td>
+<td style="text-align:left">O(min(i, n-i))</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Note that where ties occur, <a target="_blank" rel="noopener" href="https://doc.rust-lang.org/std/vec/struct.Vec.html"><code>Vec</code></a> is generally going to be faster than <a target="_blank" rel="noopener" href="https://doc.rust-lang.org/std/collections/struct.VecDeque.html"><code>VecDeque</code></a>, and <a target="_blank" rel="noopener" href="https://doc.rust-lang.org/std/collections/struct.VecDeque.html"><code>VecDeque</code></a> is generally going to be faster than</p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#std-collections-VecDeque"><span class="toc-number">1.</span> <span class="toc-text">std::collections::VecDeque</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Index-Wrap"><span class="toc-number">1.0.1.</span> <span class="toc-text">Index Wrap</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Pop"><span class="toc-number">1.1.</span> <span class="toc-text">Pop</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#grow-if-neccessary"><span class="toc-number">1.2.</span> <span class="toc-text">grow_if_neccessary</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Drop"><span class="toc-number">1.3.</span> <span class="toc-text">Drop</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%A7%E8%83%BD"><span class="toc-number">1.4.</span> <span class="toc-text">性能</span></a></li></ol></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/01/01/deque-in-Rust-and-C/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/01/01/deque-in-Rust-and-C/&text=deque in Rust"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/01/01/deque-in-Rust-and-C/&title=deque in Rust"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/01/01/deque-in-Rust-and-C/&is_video=false&description=deque in Rust"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=deque in Rust&body=Check out this article: http://blog.mwish.me/2020/01/01/deque-in-Rust-and-C/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/01/01/deque-in-Rust-and-C/&title=deque in Rust"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/01/01/deque-in-Rust-and-C/&title=deque in Rust"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/01/01/deque-in-Rust-and-C/&title=deque in Rust"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/01/01/deque-in-Rust-and-C/&title=deque in Rust"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/01/01/deque-in-Rust-and-C/&name=deque in Rust&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/01/01/deque-in-Rust-and-C/&t=deque in Rust"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="传统的 ARIES 算法一直是「数据库的成人礼」，Azure SQL 之前用的是 ARIES 算法实现恢复。但是在有长事务的时候，恢复会比较恶心，特别是在 Undo 阶段。要拿到长事务修改过的每个地方给他嗯 Undo 回来，直到这个长事务 Log 开头，然后这些 Log 也不能 GC 掉，这个显然就很 waste of time。 Azure SQL 曾经遇到过一个大事务，改了一堆元素，恢复的时候">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Constant Time Recovery in Azure SQL Database">
+<meta property="og:url" content="http://blog.mwish.me/2022/05/28/Constant-Time-Recovery-in-Azure-SQL-Database/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="传统的 ARIES 算法一直是「数据库的成人礼」，Azure SQL 之前用的是 ARIES 算法实现恢复。但是在有长事务的时候，恢复会比较恶心，特别是在 Undo 阶段。要拿到长事务修改过的每个地方给他嗯 Undo 回来，直到这个长事务 Log 开头，然后这些 Log 也不能 GC 掉，这个显然就很 waste of time。 Azure SQL 曾经遇到过一个大事务，改了一堆元素，恢复的时候">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/1EE46719-2743-4D24-9B39-819CDC57EEDB.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/F8277752-FDF1-4D22-8604-77A2D0A235F5.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/76002207-4750-4DDD-9410-0C08E189746A.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/9A30DEDC-1EC1-44B3-8500-20D3160224CD.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/665C7137-EB70-4AC3-8734-270C38E5A003.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/2786AFA9-67ED-4B8F-AE4B-9A29506ECB4A.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/5B8EE8B5-479B-4F4E-B322-26F2701F2B18.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/8F2FC8D4-E2D1-494C-814E-7DC971EE6C7F.png">
+<meta property="article:published_time" content="2022-05-28T06:19:21.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.556Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/1EE46719-2743-4D24-9B39-819CDC57EEDB.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>Constant Time Recovery in Azure SQL Database</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2022/05/29/Scheduling-Blog-Overview/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2022/05/24/perfbook-notes-defered-processing/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2022/05/28/Constant-Time-Recovery-in-Azure-SQL-Database/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2022/05/28/Constant-Time-Recovery-in-Azure-SQL-Database/&text=Constant Time Recovery in Azure SQL Database"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2022/05/28/Constant-Time-Recovery-in-Azure-SQL-Database/&title=Constant Time Recovery in Azure SQL Database"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2022/05/28/Constant-Time-Recovery-in-Azure-SQL-Database/&is_video=false&description=Constant Time Recovery in Azure SQL Database"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Constant Time Recovery in Azure SQL Database&body=Check out this article: http://blog.mwish.me/2022/05/28/Constant-Time-Recovery-in-Azure-SQL-Database/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2022/05/28/Constant-Time-Recovery-in-Azure-SQL-Database/&title=Constant Time Recovery in Azure SQL Database"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2022/05/28/Constant-Time-Recovery-in-Azure-SQL-Database/&title=Constant Time Recovery in Azure SQL Database"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2022/05/28/Constant-Time-Recovery-in-Azure-SQL-Database/&title=Constant Time Recovery in Azure SQL Database"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2022/05/28/Constant-Time-Recovery-in-Azure-SQL-Database/&title=Constant Time Recovery in Azure SQL Database"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2022/05/28/Constant-Time-Recovery-in-Azure-SQL-Database/&name=Constant Time Recovery in Azure SQL Database&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2022/05/28/Constant-Time-Recovery-in-Azure-SQL-Database/&t=Constant Time Recovery in Azure SQL Database"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B9%8B%E5%89%8D%E7%9A%84%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%9E%8B"><span class="toc-number">1.</span> <span class="toc-text">之前的设计模型</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Constant-Time-Recovery"><span class="toc-number">2.</span> <span class="toc-text">Constant Time Recovery</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Data-Modifications"><span class="toc-number">2.0.1.</span> <span class="toc-text">Data Modifications</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#System-Operations"><span class="toc-number">2.0.2.</span> <span class="toc-text">System Operations</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Logical-and-Other-Non-versioned-Operations"><span class="toc-number">2.0.3.</span> <span class="toc-text">Logical and Other Non-versioned Operations</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Persistent-Version-Storage"><span class="toc-number">2.1.</span> <span class="toc-text">Persistent Version Storage</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Logical-Revert"><span class="toc-number">2.2.</span> <span class="toc-text">Logical Revert</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Transaction-State-Management"><span class="toc-number">2.2.1.</span> <span class="toc-text">Transaction State Management</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Short-Transaction-Optimization"><span class="toc-number">2.2.2.</span> <span class="toc-text">Short Transaction Optimization</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Non-versioned-Operations"><span class="toc-number">2.3.</span> <span class="toc-text">Non-versioned Operations</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#SLog-A-Secondary-Log-Stream"><span class="toc-number">2.3.1.</span> <span class="toc-text">SLog: A Secondary Log Stream</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Leveraging-System-Transactions"><span class="toc-number">2.3.2.</span> <span class="toc-text">Leveraging System Transactions</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Redo-Locking-Optimization"><span class="toc-number">2.4.</span> <span class="toc-text">Redo Locking Optimization</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Aggressive-Log-Truncation"><span class="toc-number">2.5.</span> <span class="toc-text">Aggressive Log Truncation</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Background-Cleanup"><span class="toc-number">2.6.</span> <span class="toc-text">Background Cleanup</span></a></li></ol></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Constant Time Recovery in Azure SQL Database
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2022-05-28T06:19:21.000Z" itemprop="datePublished">2022-05-28</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>传统的 ARIES 算法一直是「数据库的成人礼」，Azure SQL 之前用的是 ARIES 算法实现恢复。但是在有长事务的时候，恢复会比较恶心，特别是在 Undo 阶段。要拿到长事务修改过的每个地方给他嗯 Undo 回来，直到这个长事务 Log 开头，然后这些 Log 也不能 GC 掉，这个显然就很 waste of time。</p>
+<p>Azure SQL 曾经遇到过一个大事务，改了一堆元素，恢复的时候花了 12个小时。后来 Azure SQL 在原先 ARIES 的基础上实现了并行恢复，让这个时间变快不少。不过这个可以看出，混合负载下恢复确实是成问题的。</p>
+<p>此外，公司内部的数据库可以跑在一些核心硬件上，利用各种规模效应，来降低成本；核心服务甚至自己有一套硬件设备，但是，作为云上的 TP 数据库，可能需要考虑：</p>
+<ol>
+<li>数据规模变大，可能会导致单机数据规模变大，恢复时间变长</li>
+<li>云上硬件不一定好，增加了各种出现问题的概率</li>
+<li>可能会有各种云上软件升级、调度之类的事情，导致出问题频率变高</li>
+</ol>
+<p>论文在 SQL Server 中设计了 Constant Time Recovery(CTR) 的恢复机制，将 MVCC 和 Undo 结合，实现了常数时间恢复的恢复算法。然后进行了不少工程优化，包括小事务优化等，因为没有大事务的情况下恢复本身很快，所以它尽量只让大事务走这套机制。有了这个恢复算法后，带长事务的系统恢复时间大大减少了。</p>
+<h2 id="之前的设计模型"><a href="#之前的设计模型" class="headerlink" title="之前的设计模型"></a>之前的设计模型</h2><p>SQL Server 之前使用的是修改过的 ARIES，具体而言，它的数据模型是数据 + Log，数据和 Log 是分开存储的，Log 遵循 ARIES 的语义，如下图：</p>
+<p><img src="https://image.mwish.me/blog-image/1EE46719-2743-4D24-9B39-819CDC57EEDB.png" alt="1EE46719-2743-4D24-9B39-819CDC57EEDB"></p>
+<p>它的数据在内存中逻辑上是 MVCC 的，模型是 N2O + Main/Delta。这里它的 Delta 是一个 volatile 的结构，因为 crash 之后它认为不需要之前那些数据了，详见 Figure3:</p>
+<p><img src="https://image.mwish.me/blog-image/F8277752-FDF1-4D22-8604-77A2D0A235F5.png" alt="F8277752-FDF1-4D22-8604-77A2D0A235F5"></p>
+<p>在系统中，它会走一个 Recover 的流程，类似 ARIES，但是有一些小小的区别，如 Figure2:</p>
+<p><img src="https://image.mwish.me/blog-image/76002207-4750-4DDD-9410-0C08E189746A.png" alt="76002207-4750-4DDD-9410-0C08E189746A"></p>
+<p>我们都很熟悉 ARIES 的流程，所以会看到 Phase 2a: <code>Redo Lock Acquisition</code> 这玩意比较奇怪，怎么会是呢？因为在 SQL Server 中，它在 Redo 完了就可以 Serve 外部系统了。那没 Undo 完的怎么办呢？Redo 的时候会占上该获得的锁，这个时候请求的事务会被这些锁 block 住，直到 Undo 完成。这相当于用 Phase 2a 的恢复时间换来了没有锁的各个 Tuple 的恢复时间。</p>
+<h2 id="Constant-Time-Recovery"><a href="#Constant-Time-Recovery" class="headerlink" title="Constant Time Recovery"></a>Constant Time Recovery</h2><p>这个算法目标如下：</p>
+<blockquote>
+<ul>
+<li>Database recovery in constant time, regardless of the user workload and transaction sizes.</li>
+<li>Transaction rollback in constant time regardless of the transaction size.</li>
+<li>Continuous transaction log truncation, even in the presence of long running transactions.</li>
+</ul>
+</blockquote>
+<p>具体而言，这个算法把对数据库的操作分为了下面的类型：</p>
+<ol>
+<li>Data Modifications</li>
+<li>System Operations</li>
+<li>Logical and Other Non-versioned operations</li>
+</ol>
+<h4 id="Data-Modifications"><a href="#Data-Modifications" class="headerlink" title="Data Modifications"></a>Data Modifications</h4><p>对于 Data Modifications，就是 Row/Tuple 的修改，由外部事务驱动。这里改动如下：</p>
+<ol>
+<li>由一个 volatile 的内容存储版本，改成和 InnoDB 那样的持久化存储。这个估计实现就类似 InnoDB Undo 那套</li>
+<li>版本链可以装 aborted 的版本，无论在 main 还是 delta 中。abort 的版本可以被忽略</li>
+<li>每个 Row 上会有一个 TxnID，可以识别出它是否被 abort，来判断是否可读取</li>
+</ol>
+<p>那么实际上，恢复的时候，<strong>只需要知道哪些事务 abort 了，并不需要手动 undo 这些。而多余的版本由 GC( Cleanup ) 来回收</strong>。</p>
+<h4 id="System-Operations"><a href="#System-Operations" class="headerlink" title="System Operations"></a>System Operations</h4><p>这里通常是空间(Page) 的 alloc 或者 dealloc，SMO 操作。这些操作本身不那么带版本。它们其实不一定会被事务完成之后 undone，一般会有一些后台线程来回收这些数据。</p>
+<h4 id="Logical-and-Other-Non-versioned-Operations"><a href="#Logical-and-Other-Non-versioned-Operations" class="headerlink" title="Logical and Other Non-versioned Operations"></a>Logical and Other Non-versioned Operations</h4><p>这里操作包括 Logical 的操作，比如 Lock acquisition；或者是一些需要在 Recover 之前就 aware 的行为，比如修改 Catalog 的操作。这些操作是非版本化的，但仍然是可回滚的。CTR 使用了一个独立的 SLog 系统来承载这些操作。</p>
+<h3 id="Persistent-Version-Storage"><a href="#Persistent-Version-Storage" class="headerlink" title="Persistent Version Storage"></a>Persistent Version Storage</h3><p>这个我看了下，和 MySQL 的 Undo Space 没啥区别。这里通过 <code>&lt;PageID, SlotID&gt;</code> 定位具体的 Row，有点类似 PG HeapTuple 那套。然后修改操作反正也和 MySQL mtr 差不多。一些优化如下：</p>
+<blockquote>
+<p>The off-row PVS leverages the table infrastructure to simplify storing and accessing versions but is highly optimized for concurrent inserts. The accessors required to read or write to this table are cached and partitioned per core, while inserts are logged in a non-transactional manner (logged as redo-only operations) to avoid instantiating additional transactions. Threads running in parallel can insert rows into different sets of pages to eliminate contention. Finally, space is pre-allocated to avoid having to perform allocations as part of generating a version.</p>
+</blockquote>
+<p>还有一个优化点是 in-row version store:</p>
+<p><img src="https://image.mwish.me/blog-image/9A30DEDC-1EC1-44B3-8500-20D3160224CD.png" alt="9A30DEDC-1EC1-44B3-8500-20D3160224CD"></p>
+<p>这里是一个 trade-off，将 row 空间放大和修改做到本地做权衡，这种方式能很好的优化 Deleted 的结构，在 main 标记删除即可。</p>
+<p><img src="https://image.mwish.me/blog-image/665C7137-EB70-4AC3-8734-270C38E5A003.png" alt="665C7137-EB70-4AC3-8734-270C38E5A003"></p>
+<p>当然，这里有个问题，就是这些空间放大会不会有影响。SQL Server 似乎会判断 <em>Delta 会不会很大</em> 和 <em>这样标记会不会影响分裂</em> 来决定是否做成 inline 的</p>
+<h3 id="Logical-Revert"><a href="#Logical-Revert" class="headerlink" title="Logical Revert"></a>Logical Revert</h3><p>这里其实就是，对于 Data Modification，某种意义上说 Redo 完就行了，然后查的时候，MainTable 扫一扫，如果某个版本 abort 了就不要读它，就行了。如果最新的版本是个 aborted 的，那么可能有下图的优化：</p>
+<p><img src="https://image.mwish.me/blog-image/2786AFA9-67ED-4B8F-AE4B-9A29506ECB4A.png" alt="2786AFA9-67ED-4B8F-AE4B-9A29506ECB4A"></p>
+<ol>
+<li>Logical Revert，把 Version Store 的内容提到主表中，缩短链长。这由一个 System Transaction 完成，而且是只修改单个 Row 的操作，所以会非常非常短</li>
+<li>Overwrite: 新事务直接覆盖掉主表的 aborted version</li>
+</ol>
+<h4 id="Transaction-State-Management"><a href="#Transaction-State-Management" class="headerlink" title="Transaction State Management"></a>Transaction State Management</h4><p>一般事务内部会 keep 内存的事务表集合，之所以只要在内存中，因为这些可以根据 Log 全量构建。MySQL 的模型和 SQL Server 修改后差不多，但是它有 Undo 流程，所以不需要引入额外的结构。</p>
+<p>SQL Server 因为会在 Main/Delta 中直接有 aborted 的结构，所以必须引入一个 aborted 事务表，来进行操作。这个 aborted 事务表的增/删也要落 Log。当某个事务 aborted，它会被加入表中，当它修改的所有 rows 不可见了（由 Cleanup 操作完成），这个东西会在事务表中被回收掉。</p>
+<p>CTR 引入了一个 Aborted Transaction Map，来存储这些信息，ATM 还会随着 ckpt 存储下去，加速恢复：</p>
+<blockquote>
+<p>CTR stores the aborted transaction information in the “Aborted Transaction Map” (ATM), a hash table that allows fast access based on the Transaction Id. When a transaction aborts, before releasing any locks, it will add its Transaction Id to the ATM and generate an “ABORT” log record indicating that it was aborted.</p>
+<p>As part of the Undo phase, any uncommitted transactions will also be marked as aborted, generating the corresponding ABORT log records, and added to the ATM.</p>
+<p>Once all versions generated by an aborted transaction have been reverted, the transaction is no longer interesting for recovery and can be removed from the ATM. Removing a transaction is also a logged operation, using a “FORGET” log record, to guarantee that the content of the ATM is recovered correctly.</p>
+</blockquote>
+<p>读者肯定会有一个疑问，ATM 会不会疯狂膨胀，下一小节就是讲这个的。</p>
+<h4 id="Short-Transaction-Optimization"><a href="#Short-Transaction-Optimization" class="headerlink" title="Short Transaction Optimization"></a>Short Transaction Optimization</h4><p>ATM 会带来两种问题：</p>
+<ol>
+<li>任何一个小事务，如果 abort 了，要记 log；如果清理完了，还要记 log。相对原本 ARIES 来说，空间和延迟都会放大</li>
+<li>ATM 本身可能膨胀</li>
+</ol>
+<p>总之，引入 ATM 让系统能够常数时间恢复，但是这会对性能造成不小的负面影响。这里引入了一个动态抉择方案：<strong>「只有大事务会走 CTR，小事务就走原来的，因为不影响」</strong>：</p>
+<blockquote>
+<p>To optimize for both scenarios, CTR dynamically decides, based on the transaction size, whether a transaction should be marked as aborted, using the CTR mechanisms, or undone using the transaction log.</p>
+</blockquote>
+<p>其实我觉得很合理，这么修改以后，整个算法不是「常数时间」了，但是解决了根本问题。</p>
+<h3 id="Non-versioned-Operations"><a href="#Non-versioned-Operations" class="headerlink" title="Non-versioned Operations"></a>Non-versioned Operations</h3><p>上面介绍了正常的 data-modification 版本化语义的操作，这里再来介绍一下 non-version 的操作，这里有下面对应的流：</p>
+<blockquote>
+<ul>
+<li>逻辑上的锁和 SMO 操作，对 Page 的申请/释放等</li>
+<li>对 Catalog、Schema 之类的系统的修改</li>
+<li>对系统启动/关闭之类的 metapage 的修改</li>
+</ul>
+</blockquote>
+<p>这些东西是非版本化的，SQL Server 抽了一条额外的流来优化。</p>
+<h4 id="SLog-A-Secondary-Log-Stream"><a href="#SLog-A-Secondary-Log-Stream" class="headerlink" title="SLog: A Secondary Log Stream"></a>SLog: A Secondary Log Stream</h4><blockquote>
+<p>SLog is a secondary log stream designed to only track nonversioned operations that must be redone or undone using information from the corresponding log records.</p>
+</blockquote>
+<p>本质上又是一个 Log 流存储系统，如下图：</p>
+<p><img src="https://image.mwish.me/blog-image/5B8EE8B5-479B-4F4E-B322-26F2701F2B18.png" alt="5B8EE8B5-479B-4F4E-B322-26F2701F2B18"></p>
+<p>它们会存储到内存中，然后 Batch Flush 下去：</p>
+<blockquote>
+<p>When a checkpoint occurs, all in-memory records with LSN ≤ the Checkpoint Begin LSN get serialized and written into the transaction log.</p>
+</blockquote>
+<p>这个时候可以再度引入变更了的系统：</p>
+<p><img src="https://image.mwish.me/blog-image/8F2FC8D4-E2D1-494C-814E-7DC971EE6C7F.png" alt="8F2FC8D4-E2D1-494C-814E-7DC971EE6C7F"></p>
+<h4 id="Leveraging-System-Transactions"><a href="#Leveraging-System-Transactions" class="headerlink" title="Leveraging System Transactions"></a>Leveraging System Transactions</h4><p>这里还是同样的问题，全丢 SLog 本身太占内存了。这里把 Page 分配/释放丢给了原来的 ARIES 系统来做处理。</p>
+<h3 id="Redo-Locking-Optimization"><a href="#Redo-Locking-Optimization" class="headerlink" title="Redo Locking Optimization"></a>Redo Locking Optimization</h3><p>原先的 SQL Server 为啥要 Lock 呢？因为它希望只对 要 Undo 的地方 Lock。那新的 CTR 协议里， RW 节点的恢复中，我这 SLog 处理完就没事了，那为啥还要 Lock 呢？这里做的非常工程化：如果是分布式的 RO节点，Replay Log，那它也不知道这个事务后来咋样了，所以还是要的。还有一些分布式事务的场景，也是需要 Lock 的。</p>
+<p>这里引入了一些细粒度的锁，让这种场景下事务完成—通知变得高效，同时让这个锁是 Multi-Version 的，不影响一些不阻塞的读。</p>
+<h3 id="Aggressive-Log-Truncation"><a href="#Aggressive-Log-Truncation" class="headerlink" title="Aggressive Log Truncation"></a>Aggressive Log Truncation</h3><p>TBD</p>
+<h3 id="Background-Cleanup"><a href="#Background-Cleanup" class="headerlink" title="Background Cleanup"></a>Background Cleanup</h3><p>TBD</p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B9%8B%E5%89%8D%E7%9A%84%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%9E%8B"><span class="toc-number">1.</span> <span class="toc-text">之前的设计模型</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Constant-Time-Recovery"><span class="toc-number">2.</span> <span class="toc-text">Constant Time Recovery</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Data-Modifications"><span class="toc-number">2.0.1.</span> <span class="toc-text">Data Modifications</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#System-Operations"><span class="toc-number">2.0.2.</span> <span class="toc-text">System Operations</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Logical-and-Other-Non-versioned-Operations"><span class="toc-number">2.0.3.</span> <span class="toc-text">Logical and Other Non-versioned Operations</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Persistent-Version-Storage"><span class="toc-number">2.1.</span> <span class="toc-text">Persistent Version Storage</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Logical-Revert"><span class="toc-number">2.2.</span> <span class="toc-text">Logical Revert</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Transaction-State-Management"><span class="toc-number">2.2.1.</span> <span class="toc-text">Transaction State Management</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Short-Transaction-Optimization"><span class="toc-number">2.2.2.</span> <span class="toc-text">Short Transaction Optimization</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Non-versioned-Operations"><span class="toc-number">2.3.</span> <span class="toc-text">Non-versioned Operations</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#SLog-A-Secondary-Log-Stream"><span class="toc-number">2.3.1.</span> <span class="toc-text">SLog: A Secondary Log Stream</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Leveraging-System-Transactions"><span class="toc-number">2.3.2.</span> <span class="toc-text">Leveraging System Transactions</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Redo-Locking-Optimization"><span class="toc-number">2.4.</span> <span class="toc-text">Redo Locking Optimization</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Aggressive-Log-Truncation"><span class="toc-number">2.5.</span> <span class="toc-text">Aggressive Log Truncation</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Background-Cleanup"><span class="toc-number">2.6.</span> <span class="toc-text">Background Cleanup</span></a></li></ol></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2022/05/28/Constant-Time-Recovery-in-Azure-SQL-Database/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2022/05/28/Constant-Time-Recovery-in-Azure-SQL-Database/&text=Constant Time Recovery in Azure SQL Database"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2022/05/28/Constant-Time-Recovery-in-Azure-SQL-Database/&title=Constant Time Recovery in Azure SQL Database"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2022/05/28/Constant-Time-Recovery-in-Azure-SQL-Database/&is_video=false&description=Constant Time Recovery in Azure SQL Database"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Constant Time Recovery in Azure SQL Database&body=Check out this article: http://blog.mwish.me/2022/05/28/Constant-Time-Recovery-in-Azure-SQL-Database/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2022/05/28/Constant-Time-Recovery-in-Azure-SQL-Database/&title=Constant Time Recovery in Azure SQL Database"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2022/05/28/Constant-Time-Recovery-in-Azure-SQL-Database/&title=Constant Time Recovery in Azure SQL Database"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2022/05/28/Constant-Time-Recovery-in-Azure-SQL-Database/&title=Constant Time Recovery in Azure SQL Database"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2022/05/28/Constant-Time-Recovery-in-Azure-SQL-Database/&title=Constant Time Recovery in Azure SQL Database"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2022/05/28/Constant-Time-Recovery-in-Azure-SQL-Database/&name=Constant Time Recovery in Azure SQL Database&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2022/05/28/Constant-Time-Recovery-in-Azure-SQL-Database/&t=Constant Time Recovery in Azure SQL Database"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

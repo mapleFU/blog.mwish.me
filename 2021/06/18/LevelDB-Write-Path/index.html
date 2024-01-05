@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="LevelDB WriteBatch这篇文章意料之内的写得很乱。感觉不太适合刚看代码的来读，看代码有困惑的地方可以来这里互相印证一下。 最简单的写路径: 写 Memtablehttps:&#x2F;&#x2F;zhuanlan.zhihu.com&#x2F;p&#x2F;143309915 可以参考上面这篇 blog. LevelDB 会尝试写入 memtable. 这里比较重要的链路是：  DBImpl::Put &#x2F; DBImpl::">
+<meta property="og:type" content="article">
+<meta property="og:title" content="LevelDB: Write Path">
+<meta property="og:url" content="http://blog.mwish.me/2021/06/18/LevelDB-Write-Path/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="LevelDB WriteBatch这篇文章意料之内的写得很乱。感觉不太适合刚看代码的来读，看代码有困惑的地方可以来这里互相印证一下。 最简单的写路径: 写 Memtablehttps:&#x2F;&#x2F;zhuanlan.zhihu.com&#x2F;p&#x2F;143309915 可以参考上面这篇 blog. LevelDB 会尝试写入 memtable. 这里比较重要的链路是：  DBImpl::Put &#x2F; DBImpl::">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2021-06-18T14:11:47.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.560Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>LevelDB: Write Path</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2021/07/02/C-Store-A-Column-oriented-DBMS/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2021/05/24/Note-on-System-Design-Interview-Part2/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2021/06/18/LevelDB-Write-Path/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2021/06/18/LevelDB-Write-Path/&text=LevelDB: Write Path"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2021/06/18/LevelDB-Write-Path/&title=LevelDB: Write Path"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2021/06/18/LevelDB-Write-Path/&is_video=false&description=LevelDB: Write Path"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=LevelDB: Write Path&body=Check out this article: http://blog.mwish.me/2021/06/18/LevelDB-Write-Path/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2021/06/18/LevelDB-Write-Path/&title=LevelDB: Write Path"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2021/06/18/LevelDB-Write-Path/&title=LevelDB: Write Path"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2021/06/18/LevelDB-Write-Path/&title=LevelDB: Write Path"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2021/06/18/LevelDB-Write-Path/&title=LevelDB: Write Path"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2021/06/18/LevelDB-Write-Path/&name=LevelDB: Write Path&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2021/06/18/LevelDB-Write-Path/&t=LevelDB: Write Path"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#LevelDB-WriteBatch"><span class="toc-number">1.</span> <span class="toc-text">LevelDB WriteBatch</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9C%80%E7%AE%80%E5%8D%95%E7%9A%84%E5%86%99%E8%B7%AF%E5%BE%84-%E5%86%99-Memtable"><span class="toc-number">1.1.</span> <span class="toc-text">最简单的写路径: 写 Memtable</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%86%85%E5%AD%98%E6%93%8D%E4%BD%9C%EF%BC%9A%E5%92%8C%E8%AF%BB%E5%8F%96%E7%9A%84%E5%85%B3%E7%B3%BB"><span class="toc-number">1.1.1.</span> <span class="toc-text">内存操作：和读取的关系</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Memtable-Compaction"><span class="toc-number">1.2.</span> <span class="toc-text">Memtable Compaction</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Memtable-Compaction-1"><span class="toc-number">1.2.1.</span> <span class="toc-text">Memtable Compaction</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Compaction"><span class="toc-number">1.2.2.</span> <span class="toc-text">Compaction</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Compaction-%E5%92%8C%E8%AF%BB"><span class="toc-number">1.2.3.</span> <span class="toc-text">Compaction 和读</span></a></li></ol></li></ol></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        LevelDB: Write Path
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2021-06-18T14:11:47.000Z" itemprop="datePublished">2021-06-18</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <h1 id="LevelDB-WriteBatch"><a href="#LevelDB-WriteBatch" class="headerlink" title="LevelDB WriteBatch"></a>LevelDB WriteBatch</h1><p>这篇文章意料之内的写得很乱。感觉不太适合刚看代码的来读，看代码有困惑的地方可以来这里互相印证一下。</p>
+<h2 id="最简单的写路径-写-Memtable"><a href="#最简单的写路径-写-Memtable" class="headerlink" title="最简单的写路径: 写 Memtable"></a>最简单的写路径: 写 Memtable</h2><p><a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/143309915">https://zhuanlan.zhihu.com/p/143309915</a></p>
+<p>可以参考上面这篇 blog. LevelDB 会尝试写入 memtable. 这里比较重要的链路是：</p>
+<ol>
+<li><code>DBImpl::Put</code> / <code>DBImpl::Delete</code> 实现了 <code>DB</code> 对外的接口, 它们会把请求整理到一个 <code>leveldb::WriteBatch</code> 对象中. <code>batch</code> 可以 <code>Put</code>, <code>Delete</code>, 操作会被放到 <code>batch</code> 中的一个 <code>std::string</code> 中.  WriteBatch 开头是一个 <code>kHeader</code> 长度的 header, 包含 8-byte 的 seq-number 和 4-byte 的 count. 随后是记录列表, 每条记录包含一个 <code>char</code> 和 <code>length</code> + <code>content</code> 的内容。</li>
+<li><code>DBImpl::Write</code>  的时候, 会确定一下是不是 <code>sync</code> 写。一个 batch 内全是 sync, 这个 batch 会选出一个 leader 来写入数据。<ol>
+<li>写入数据是单线程写的，一般链路上会拿到 <code>DBImpl::mutex_</code> . </li>
+<li>调用 <code>MakeRoomForWrite</code>, 确保写入空间是充足的。<ol>
+<li>如果 L0 文件超过 8 个文件，到达了 soft limit, 它会释放 mutex_ 并 sleep 1ms. 等待 Compaction 成功</li>
+<li>在可能的 sleep 后，如果 <code>mem_</code> 内存充足 (判定的方式是 Arena 的内存占用小于某个阈值)，它会直接返回，开启后续流程。</li>
+<li><code>imm_</code> 不是 null 的，基本上就说明后台有 compaction，需要等待 <code>imm_</code> 被压缩</li>
+<li>看看是否是 L0 文件到达上限，到达了就停止写</li>
+<li>走到这里说明，imm<em> is nullptr, 文件可能大于 soft_limit, 一定小于 hard limit，同时, mem</em> 内存是不够的，需要切新的文件，然后把旧的文件放到 <code>imm_</code> 中。这里操作比较细，需要：<ol>
+<li><code>Versions::NextNewFileId</code> 拿到系统的下一个文件 id, 作为 log 文件的 id, 让系统创建一个新的文件作为新的 log 文件.</li>
+<li><code>imm_</code> 指向 <code>mem_</code>, 这里不会更新 <code>ref_count</code>.</li>
+<li>创建一个新 <code>mem_</code>, 并把日志指向新创建的文件，对他 <code>Ref()</code> 一下，增加 ref count</li>
+<li>调度 <code>MaybeScheduleCompaction</code> , 正常情况会在 2.2.2 里面成功退出.</li>
+</ol>
+</li>
+</ol>
+</li>
+<li>拿到 <code>Versions::LastSequence</code> ，作为这次的 log_id. 因为写 log 的线程只有一个，所以这个是写入安全的。这里会放锁然后尝试顺序写 log.</li>
+<li>写入成功后，插入 mem. 这里没有带 <code>mutex_</code>, 但是只有单个线程去插入。<code>!w.done</code> 的时候，写者会 <code>Wait</code>，所以不会有别的线程来写入，但是这里可以插入到写入的队列中。写完之后放锁。</li>
+<li>写完之后 notify waiting 的记录。</li>
+</ol>
+</li>
+</ol>
+<p>写入就这样轻松快乐的完成了。</p>
+<h3 id="内存操作：和读取的关系"><a href="#内存操作：和读取的关系" class="headerlink" title="内存操作：和读取的关系"></a>内存操作：和读取的关系</h3><p>我们之前说了 <code>LastSequence</code> ，读取的时候，如果没有快照，会 grab lock，然后拿到 <code>VersionSet::LastSequence</code>. 这个时候，只有写日志会推高这个 Sequence, 用这个来读取是安全的，不会读到新写入的数据。</p>
+<p>同时，这个地方读会给 <code>mem_</code> 和 <code>imm_</code> 来做 <code>Ref</code>, 这个时候，内存是最后一个读者带着 <code>mutex_</code> 来释放的。</p>
+<h2 id="Memtable-Compaction"><a href="#Memtable-Compaction" class="headerlink" title="Memtable Compaction"></a>Memtable Compaction</h2><p><code>DBImpl::MaybeScheduleCompaction</code> 是可能调度 Compaction 的函数，在必要的时候，处理 Compaction.</p>
+<p>调用它的地方有：</p>
+<ol>
+<li>手动 <code>CompactRange</code> 的时候，在 <code>TEST_CompactRange</code></li>
+<li><code>Get</code> / ReadSample 的时候，看看有没有触发 Seek Compaction</li>
+<li>写入产生 <code>imm_</code> 的时候</li>
+<li>每次 Compaction 完后，再次尝试看看有没有 Compaction</li>
+</ol>
+<p>Compaction 的条件有：</p>
+<ol>
+<li><code>imm_</code> 不为 nullptr</li>
+<li>有 ManualCompaction</li>
+<li><code>VersionSet::NeedsCompaction</code></li>
+</ol>
+<p>Compaction 有下面几种类型和优先级:</p>
+<ol>
+<li>CompactMemTable: 优先级最高</li>
+<li>ManualCompaction: 优先级次高</li>
+<li>Size Compaction: 优先级比 SeekCompaction 高</li>
+<li>SeekCompaction</li>
+</ol>
+<p>我们简单介绍一下 Compaction 的大概的逻辑：</p>
+<h3 id="Memtable-Compaction-1"><a href="#Memtable-Compaction-1" class="headerlink" title="Memtable Compaction"></a>Memtable Compaction</h3><ol>
+<li><code>DBImpl::MaybeScheduleCompaction</code>: <code>env_-&gt;Schedule(&amp;DBImpl::BGWork, this);</code> , 触发 Compaction</li>
+<li><code>BackgroundCall()</code> , 持有 <code>mutex_</code></li>
+</ol>
+<p>以 <code>CompactMemTable</code> 为例，讲一下基本的 Compaction 流程：</p>
+<ol>
+<li>拿到 <code>VersionSet::current</code>, 作为 Compaction 的 base. 在 Compaction 期间，不会有别的 Compaction 进来。然后 <code>Ref()</code> 它一下（我感觉其实没啥意思…）</li>
+<li>进入 <code>DBImpl::WriteLevel0Table</code> 创建一个 <code>FileMeta</code> 然后 <code>VersionSet::NewFileNumber()</code>, 拿到新 SST 的文件 id, 把它放到 <code>pending_outputs_</code> 里面。<ol>
+<li>释放锁</li>
+<li>创建 <code>TableBuilder</code>，然后从 iterator 中读取数据</li>
+<li>如果成功，Sync 并关闭文件，否则，删除 SST 然后返回</li>
+<li>把新文件丢到 table cache 中。</li>
+<li>重新持有锁</li>
+</ol>
+</li>
+<li><code>pending_outputs_</code> 移除新 SST</li>
+<li>调用 <code>Version::PickLevelForMemTableOutput</code> 获得文件写入的层数。这里注意，memtable compaction 不一定会直接下到 L0 层，可能直接第二层了。</li>
+<li>VersionEdit 记录新创建文件的信息，包括 key 范围和在哪层。</li>
+<li>Unref base (我一下没看出有啥用)</li>
+<li>edit 再记录一下 log file number, 这里注意，只有 memory compaction 会推高它，原因后面介绍。</li>
+<li>准备写元数据，注意<code>VersionSet::Finalize</code> 的时候，这里会更新 compaction score, 用来处理可能的 size compaction.</li>
+<li>LogAndApply 会更新一些别的信息，然后写 MANIFEST, 更新 Version 和元信息。这里还会处理 Version 链表里 Ref 之类的东西</li>
+<li>Compaction 完后，Unref <code>imm_</code> (还记得不，前面写内存的时候，我们提到了，Compaction 的时候，<code>mem_</code> 会被 <code>Ref</code> 一下，<code>mem_</code> 变 <code>imm_</code> 的时候没有 <code>Unref</code>, 这个时候 <code>Unref</code> 啦)。</li>
+<li>调用 <code>RemoveObsoleteFiles</code>, 这个函数 在 db 初始化和文件打开的时候调用，清楚掉旧的文件。<ol>
+<li>日志文件: prev_log_number 是一个废弃的字段. log_number 会被内存 compaction 推高，大于它才会被回收.</li>
+<li>SST(.sst, .ldb) 文件: 不是 pending<em>outputs</em> 且不存在于 VersionSet 所有版本引用的文件中的文件。. (还记得我们的 <code>pending_outputs_</code> 吗，刚刚几行提到的)</li>
+</ol>
+</li>
+<li>都写完就结束啦</li>
+</ol>
+<h3 id="Compaction"><a href="#Compaction" class="headerlink" title="Compaction"></a>Compaction</h3><p>Memtable Compaction 应该是最简单的 Compaction 了。下面讲讲剩下的。这些 Compaction 往往涉及从某层的某个 memtable 开始，然后扩大范围，最后 Compaction.</p>
+<p>再回到 <code>DBImpl::BackgroundCompaction</code>:</p>
+<ol>
+<li><code>VersionSet::PickCompaction</code> 来挑选 Compaction，它会选出对应的 Seek Compaction 和 Range Compaction. 还记得我们在上面 <code>8</code> 提到的 Compaction Score 吗？Size Compaction 就是靠这个 Score 来选出 Compaction 的 <strong>level</strong> 和 <strong>起点 SST</strong> 的。<ol>
+<li>Compaction 会计算出一个 Compaction Score, score 最大的是下一个 size compaction 的目标。</li>
+<li>这里还有个 <code>compaction_pointer_</code> 这个是轮转的。上次这一层 Compaction 到哪，下次就从这个 <code>pointer</code> 开始了</li>
+</ol>
+</li>
+<li>如果是 Level0 到下层的 Compaction，这里需要把 L0 中，key 重复的一起 Compaction 掉。<ol>
+<li>这里调用了 <code>Version::GetOverlappingInputs</code>, 这个函数做的很粗糙，对 L0 就不停扩大 L0 范围。感觉很不优雅</li>
+</ol>
+</li>
+<li><code>VersionSet::SetupOtherInputs</code> 处理本层和下一层的其余输入 SST：<ol>
+<li><code>AddBoundaryInputs</code> 再次添加<strong>来源层</strong>的 inputs。这是说，对于 SST (实际上 L0 层应该不会出现这个问题），写入比 <strong>起点 SST</strong> 早的文件捞出来一起 Compaction 掉，否则就会出现同一个 key，上层比下层新的 case.</li>
+<li>根据目标层的所有 SST，拿到它最小的、最大的 <code>InternalKey</code>. 然后再调用 <code>Version::GetOverlappingInputs</code> 去 <strong>下一层</strong> (可能不是目标层哦)，找到范围对应的 SST。然后再和 3.1 一样走一次 <code>AddBoundaryInputs</code>.</li>
+<li>现在，<strong>来源层</strong> 和 <strong>来源层 + 1</strong> 的 SST 文件数量没有超过 <code>ExpandedCompactionByteSizeLimit(options_)</code> 的话，还可以从来源层再捞一把和下层的边界有交集的数据…</li>
+<li>把 <strong>来源层 + 2</strong> 范围重合的文件也计算一遍。</li>
+<li>给 <strong>来源层</strong> 和 <strong>来源层 + 1</strong> 设置 Compaction Pointer （记得 1.2 不）</li>
+</ol>
+</li>
+<li>如果来源层 + 1 没有重叠，来源层只有一个文件，可以 <code>Compaction::IsTrivialMove</code> 看出来, 然后直接推到下层。</li>
+<li>(4) 不成功的情况下，调用 <code>DBImpl::DoCompactionWork</code> 来 Compaction. 他可能输出多个 SST，所以搞了个 <code>DBImpl::CompactionState</code> 来维护状态。<ol>
+<li>找到 <code>DBImpl::snapshots_</code>, 拿到最老读者的 seq id. 这个 seq id 之前的记录是不能删除的。</li>
+<li>如果有 <code>imm_</code> ，放锁，然后优先 Compact Memtable. 这是为了不影响正常写入</li>
+<li>如果这次写的 SST 太大了，先输出，然后换个 SST 写</li>
+<li>下面是正式写数据的流程，这里要决定数据是不是要保留。大致逻辑是，需要不影响 Compaction 的正确性。总的来说，这个删除的策略感觉是非常保守的。</li>
+</ol>
+</li>
+</ol>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// Handle key/value, add to state, etc.</span></span><br><span class="line"><span class="comment">//</span></span><br><span class="line"><span class="comment">// 每次保留一个 current_user_key. 遇到第二次</span></span><br><span class="line"><span class="type">bool</span> drop = <span class="literal">false</span>;</span><br><span class="line"><span class="keyword">if</span> (!<span class="built_in">ParseInternalKey</span>(key, &amp;ikey)) &#123;</span><br><span class="line">  <span class="comment">// Do not hide error keys</span></span><br><span class="line">  current_user_key.<span class="built_in">clear</span>();</span><br><span class="line">  has_current_user_key = <span class="literal">false</span>;</span><br><span class="line">  last_sequence_for_key = kMaxSequenceNumber;</span><br><span class="line">&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">  <span class="keyword">if</span> (!has_current_user_key ||</span><br><span class="line">      <span class="built_in">user_comparator</span>()-&gt;<span class="built_in">Compare</span>(ikey.user_key, <span class="built_in">Slice</span>(current_user_key)) !=</span><br><span class="line">          <span class="number">0</span>) &#123;</span><br><span class="line">    <span class="comment">// First occurrence of this user key</span></span><br><span class="line">    current_user_key.<span class="built_in">assign</span>(ikey.user_key.<span class="built_in">data</span>(), ikey.user_key.<span class="built_in">size</span>());</span><br><span class="line">    has_current_user_key = <span class="literal">true</span>;</span><br><span class="line">    last_sequence_for_key = kMaxSequenceNumber;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// key 保留情况处理.</span></span><br><span class="line">  <span class="keyword">if</span> (last_sequence_for_key &lt;= compact-&gt;smallest_snapshot) &#123;</span><br><span class="line">    <span class="comment">// Hidden by an newer entry for same user key</span></span><br><span class="line">    drop = <span class="literal">true</span>;  <span class="comment">// (A)</span></span><br><span class="line">  &#125; <span class="keyword">else</span> <span class="keyword">if</span> (ikey.type == kTypeDeletion &amp;&amp;</span><br><span class="line">             ikey.sequence &lt;= compact-&gt;smallest_snapshot &amp;&amp;</span><br><span class="line">             compact-&gt;compaction-&gt;<span class="built_in">IsBaseLevelForKey</span>(ikey.user_key)) &#123;</span><br><span class="line">    <span class="comment">// Note(mwish): `IsBaseLevelForKey` 这个函数也太讨巧了，感觉不太好用...</span></span><br><span class="line">    <span class="comment">// 终于知道为什么要 Seek Compaction 了.</span></span><br><span class="line">    <span class="comment">//</span></span><br><span class="line">    <span class="comment">// For this user key:</span></span><br><span class="line">    <span class="comment">// (1) there is no data in higher levels</span></span><br><span class="line">    <span class="comment">// (2) data in lower levels will have larger sequence numbers</span></span><br><span class="line">    <span class="comment">// (3) data in layers that are being compacted here and have</span></span><br><span class="line">    <span class="comment">//     smaller sequence numbers will be dropped in the next</span></span><br><span class="line">    <span class="comment">//     few iterations of this loop (by rule (A) above).</span></span><br><span class="line">    <span class="comment">// Therefore this deletion marker is obsolete and can be dropped.</span></span><br><span class="line">    drop = <span class="literal">true</span>;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  last_sequence_for_key = ikey.sequence;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="Compaction-和读"><a href="#Compaction-和读" class="headerlink" title="Compaction 和读"></a>Compaction 和读</h3><p>读取的逻辑在：<a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/372152739">https://zhuanlan.zhihu.com/p/372152739</a> 这里介绍过一些。</p>
+<p>Memtable 和 LogSequence 已经介绍过了，这里介绍 SST 相关的。Compaction 不会直接删除文件，但是会 <code>RemoveObsoleteFiles</code>。对于读而言，如果哪个 snapshot 和 version 正在被读取，是不会被删掉的。</p>
+<p>那我们考虑一个问题。有一个巨早拿到的 Snapshot, 过了很久之后被读取。这个时候拿到的 <code>Version</code> 是 <code>current</code>. 这个地方，怎么保证被删掉的文件数据还能读呢？这个是靠 Compaction 的时候，读到的 log_id 保证的。假如我们有一个很早的 snapshot, 它的 SST 会被删除，但是相关的记录是不会被删除的。</p>
+<hr>
+<ul>
+<li>LevelDB Log: WAL of LSMTree C0  <a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/145178907">https://zhuanlan.zhihu.com/p/145178907</a></li>
+<li>LevelDB Put: How it Batch <a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/143309915">https://zhuanlan.zhihu.com/p/143309915</a></li>
+<li>LevelDB Memtable <a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/145403978">https://zhuanlan.zhihu.com/p/145403978</a></li>
+</ul>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#LevelDB-WriteBatch"><span class="toc-number">1.</span> <span class="toc-text">LevelDB WriteBatch</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9C%80%E7%AE%80%E5%8D%95%E7%9A%84%E5%86%99%E8%B7%AF%E5%BE%84-%E5%86%99-Memtable"><span class="toc-number">1.1.</span> <span class="toc-text">最简单的写路径: 写 Memtable</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%86%85%E5%AD%98%E6%93%8D%E4%BD%9C%EF%BC%9A%E5%92%8C%E8%AF%BB%E5%8F%96%E7%9A%84%E5%85%B3%E7%B3%BB"><span class="toc-number">1.1.1.</span> <span class="toc-text">内存操作：和读取的关系</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Memtable-Compaction"><span class="toc-number">1.2.</span> <span class="toc-text">Memtable Compaction</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Memtable-Compaction-1"><span class="toc-number">1.2.1.</span> <span class="toc-text">Memtable Compaction</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Compaction"><span class="toc-number">1.2.2.</span> <span class="toc-text">Compaction</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Compaction-%E5%92%8C%E8%AF%BB"><span class="toc-number">1.2.3.</span> <span class="toc-text">Compaction 和读</span></a></li></ol></li></ol></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2021/06/18/LevelDB-Write-Path/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2021/06/18/LevelDB-Write-Path/&text=LevelDB: Write Path"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2021/06/18/LevelDB-Write-Path/&title=LevelDB: Write Path"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2021/06/18/LevelDB-Write-Path/&is_video=false&description=LevelDB: Write Path"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=LevelDB: Write Path&body=Check out this article: http://blog.mwish.me/2021/06/18/LevelDB-Write-Path/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2021/06/18/LevelDB-Write-Path/&title=LevelDB: Write Path"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2021/06/18/LevelDB-Write-Path/&title=LevelDB: Write Path"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2021/06/18/LevelDB-Write-Path/&title=LevelDB: Write Path"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2021/06/18/LevelDB-Write-Path/&title=LevelDB: Write Path"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2021/06/18/LevelDB-Write-Path/&name=LevelDB: Write Path&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2021/06/18/LevelDB-Write-Path/&t=LevelDB: Write Path"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="VLDB’17 Fast Scans on Key-Value Stores尽管 KV 模型中，Scan 是一个非常常见的需求，但是大部分时候，Scan 其实效率是很不尽人意的。以 LevelDB 为例，它的 Scan 需要构建 Iterator, 然后把 Memtable, L0 层，其余层的 overlap 都可能读到对应的内容，并且可能需要合并相同 User Key 的数据。此外可能还需要">
+<meta property="og:type" content="article">
+<meta property="og:title" content="VLDB&#39;17 Fast Scans on Key-Value Stores">
+<meta property="og:url" content="http://blog.mwish.me/2021/07/27/VLDB-17-Fast-Scans-on-Key-Value-Stores/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="VLDB’17 Fast Scans on Key-Value Stores尽管 KV 模型中，Scan 是一个非常常见的需求，但是大部分时候，Scan 其实效率是很不尽人意的。以 LevelDB 为例，它的 Scan 需要构建 Iterator, 然后把 Memtable, L0 层，其余层的 overlap 都可能读到对应的内容，并且可能需要合并相同 User Key 的数据。此外可能还需要">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/F62997F2-3FF4-4582-A60F-FA4E9FA71F30.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/B78A7731-9C01-4BF1-9851-CBDE2029BD65.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/14B27788-9A82-4099-A238-1AA2A9335142.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/115FA5B8-DCEF-4B74-AF70-1C505FC509F5.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/3E9D1EB8-CA83-41BD-898F-9F85B2B7F58F.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/2F352388-C65C-42EE-8BD6-669142A4BE62.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/368DD607-56BB-4AE3-B48D-2D37DA3F87D5.png">
+<meta property="article:published_time" content="2021-07-26T18:22:22.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.570Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/F62997F2-3FF4-4582-A60F-FA4E9FA71F30.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>VLDB&#39;17 Fast Scans on Key-Value Stores</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2021/08/01/FAST-16-WiscKey/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2021/07/05/MonetDB-X100-Hyper-Pipelining-Query-Execution/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2021/07/27/VLDB-17-Fast-Scans-on-Key-Value-Stores/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2021/07/27/VLDB-17-Fast-Scans-on-Key-Value-Stores/&text=VLDB&#39;17 Fast Scans on Key-Value Stores"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2021/07/27/VLDB-17-Fast-Scans-on-Key-Value-Stores/&title=VLDB&#39;17 Fast Scans on Key-Value Stores"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2021/07/27/VLDB-17-Fast-Scans-on-Key-Value-Stores/&is_video=false&description=VLDB&#39;17 Fast Scans on Key-Value Stores"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=VLDB&#39;17 Fast Scans on Key-Value Stores&body=Check out this article: http://blog.mwish.me/2021/07/27/VLDB-17-Fast-Scans-on-Key-Value-Stores/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2021/07/27/VLDB-17-Fast-Scans-on-Key-Value-Stores/&title=VLDB&#39;17 Fast Scans on Key-Value Stores"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2021/07/27/VLDB-17-Fast-Scans-on-Key-Value-Stores/&title=VLDB&#39;17 Fast Scans on Key-Value Stores"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2021/07/27/VLDB-17-Fast-Scans-on-Key-Value-Stores/&title=VLDB&#39;17 Fast Scans on Key-Value Stores"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2021/07/27/VLDB-17-Fast-Scans-on-Key-Value-Stores/&title=VLDB&#39;17 Fast Scans on Key-Value Stores"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2021/07/27/VLDB-17-Fast-Scans-on-Key-Value-Stores/&name=VLDB&#39;17 Fast Scans on Key-Value Stores&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2021/07/27/VLDB-17-Fast-Scans-on-Key-Value-Stores/&t=VLDB&#39;17 Fast Scans on Key-Value Stores"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#VLDB%E2%80%9917-Fast-Scans-on-Key-Value-Stores"><span class="toc-number">1.</span> <span class="toc-text">VLDB’17 Fast Scans on Key-Value Stores</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#Abstract-and-Introduction"><span class="toc-number">1.1.</span> <span class="toc-text">Abstract and Introduction</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Architecture"><span class="toc-number">1.2.</span> <span class="toc-text">Architecture</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Design-Space"><span class="toc-number">1.3.</span> <span class="toc-text">Design Space</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Where-to-Put-Updates"><span class="toc-number">1.3.1.</span> <span class="toc-text">Where to Put Updates?</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#How-to-arrange-records"><span class="toc-number">1.3.2.</span> <span class="toc-text">How to arrange records?</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#How-to-handle-versions"><span class="toc-number">1.3.3.</span> <span class="toc-text">How to handle versions?</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#When-to-do-Garbage-Collection"><span class="toc-number">1.3.4.</span> <span class="toc-text">When to do Garbage Collection?</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Summary"><span class="toc-number">1.3.5.</span> <span class="toc-text">Summary</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#TellStore-Log"><span class="toc-number">1.4.</span> <span class="toc-text">TellStore-Log</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Where-to-Put-Updates-1"><span class="toc-number">1.4.1.</span> <span class="toc-text">Where to Put Updates?</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#How-to-Arrange-Records"><span class="toc-number">1.4.2.</span> <span class="toc-text">How to Arrange Records?</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#How-to-Handle-Versions"><span class="toc-number">1.4.3.</span> <span class="toc-text">How to Handle Versions?</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#When-to-do-Garbage-Collection-1"><span class="toc-number">1.4.4.</span> <span class="toc-text">When to do Garbage Collection?</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#TellStore-Col"><span class="toc-number">1.5.</span> <span class="toc-text">TellStore-Col</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Where-to-Put-Updates-2"><span class="toc-number">1.5.1.</span> <span class="toc-text">Where to Put Updates?</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#How-to-Arrange-Records-1"><span class="toc-number">1.5.2.</span> <span class="toc-text">How to Arrange Records?</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#How-to-Handle-Versions-1"><span class="toc-number">1.5.3.</span> <span class="toc-text">How to Handle Versions?</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#When-to-do-Garbage-Collection-2"><span class="toc-number">1.5.4.</span> <span class="toc-text">When to do Garbage Collection?</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Implemention"><span class="toc-number">1.6.</span> <span class="toc-text">Implemention</span></a></li></ol></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        VLDB&#39;17 Fast Scans on Key-Value Stores
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2021-07-26T18:22:22.000Z" itemprop="datePublished">2021-07-27</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <h1 id="VLDB’17-Fast-Scans-on-Key-Value-Stores"><a href="#VLDB’17-Fast-Scans-on-Key-Value-Stores" class="headerlink" title="VLDB’17 Fast Scans on Key-Value Stores"></a>VLDB’17 Fast Scans on Key-Value Stores</h1><p>尽管 KV 模型中，Scan 是一个非常常见的需求，但是大部分时候，Scan 其实效率是很不尽人意的。以 LevelDB 为例，它的 Scan 需要构建 <code>Iterator</code>, 然后把 Memtable, L0 层，其余层的 overlap 都可能读到对应的内容，并且可能需要合并相同 User Key 的数据。此外可能还需要 Manual Compaction 来维护 Scan 的效率。</p>
+<p><em>Fast Scans on Key-Value Stores</em> 论文介绍了一个 kv-server 的模型, 它在尽量少降低 get/put 的效率的情况下，支持了高效的 Scan 查询。论文比较清晰地介绍了一下 kv-engine 的各种设计取舍，推导出了文章介绍的 TellStore 的系统实现。需要注意的是，这里 <code>Scan</code> 经常是一个全表扫的模型，而上层通过 range partition 来限制 scan 的范围。</p>
+<h2 id="Abstract-and-Introduction"><a href="#Abstract-and-Introduction" class="headerlink" title="Abstract and Introduction"></a>Abstract and Introduction</h2><p>KV 模型和 KV-Server （下简称 KVS） 在今天市场正在扩散，原因归功于简单的模型和在这种模型下面不俗的性能：大部分时候，Get/Put 的性能是可预测且高效的，可以在常数时间内完成。但是大部分时候，KVS 的 Scan要么 没有对应接口，要么性能不佳：</p>
+<p><img src="https://image.mwish.me/blog-image/F62997F2-3FF4-4582-A60F-FA4E9FA71F30.png" alt="F62997F2-3FF4-4582-A60F-FA4E9FA71F30"></p>
+<p>论文实现了 TellStore, 即 benchmark 看上去很牛的那些。</p>
+<p>论文认为，本质上，Scan 的高性能和 Get/Put 操作的高性能是冲突的，Scan 需要扫一定部分的数据：</p>
+<ol>
+<li>Scan 如果需要比较好的性能，需要很高的 spatial locality</li>
+<li>Get/Put 如果需要很高的性能，需要 sparse index 来定位。</li>
+<li>Version / GC 可能影响效率。而多 Version 的处理可能也会对 Scan 或者 Get/Put 性能造成影响。</li>
+</ol>
+<p>论文提出了 SQL-over-NoSQL 的架构，并且说明了这种架构下，如何高效同时支持 Get/Put/Scan。最后，论文介绍了它们实现的 TellStore。</p>
+<h2 id="Architecture"><a href="#Architecture" class="headerlink" title="Architecture"></a>Architecture</h2><p><img src="https://image.mwish.me/blog-image/B78A7731-9C01-4BF1-9851-CBDE2029BD65.png" alt="B78A7731-9C01-4BF1-9851-CBDE2029BD65"></p>
+<p>论文提供了一个 SQL-over-NoSQL 的架构，然后分为了几层，作者认为，这样的架构是弹性的，每一层可以单独的去扩展：</p>
+<ol>
+<li>Storage Layer: 存放分布式的 KV Store，这篇论文的重点</li>
+<li>Processing Layer: 负责处理负载。这里处理事务和查询。同时实现了 MVCC 和 SI 的隔离级别。事务相关的内容由 Commit Manager 层处理。</li>
+<li>Commit Manager: 维护 SI/MVCC。这里它只要给事务 Txn Timestamp, 并且管理事务的状态(active/committed/aborted), 作者认为，因为它功能比较简单，所以很少成为系统的瓶颈。</li>
+</ol>
+<p>而为了支持 SQL，Storage Layer 需要提供下列的语义：</p>
+<ol>
+<li>Scans: 数据可能会以 KV 的形式被组织在 Storage Layer 上。SQL 请求通常会批量 Scan 一个范围的 KV 来完成查询。同时 Storage Layer 也要能下推一些 Selections/Projections/Aggregate 之类的请求，来减少网络带宽开销和网络请求延时。</li>
+<li>Versioning: 本身上层是 MVCC 的，这里需要 Storage Layer 支持多版本。不需要的版本需要被 GC 掉。</li>
+<li>Batching &amp; Asynchronous Communication: 感觉这个就是很工程上和并发设计的问题了。OLTP 的简单查询应该被 Batch 发送到 Storage Layer。<em>这样来均摊多个并发事务的通信开销。</em> 同时，这些请求需要能够被异步处理，以不阻塞下个 Batch 的请求。</li>
+</ol>
+<p>下面需要介绍 KV 设计的 trade-off:</p>
+<ol>
+<li>format: 很多的分析型系统使用 columnar storage 来存储内容。Scan 如果形式上是 <code>sum(a)</code> 之类的请求，会在这上面大大受益。但是对于 Get/Put 而言，这样会导致 <code>Get(key)</code> 需要 materialize, <code>Set(key)</code> 则会写放大</li>
+<li>versioning: 一堆版本，Scan 起来，如果它们贴一起，就得跳过一些不需要的版本的数据了，不贴一起就更麻烦了。</li>
+<li>batching: 这个问题就很工程化了，是一个负载相关的问题。Scan 通常 CPU 开销比较重，而 Put/Get 属于比较轻的操作。放在一起并不明智。</li>
+</ol>
+<h2 id="Design-Space"><a href="#Design-Space" class="headerlink" title="Design Space"></a>Design Space</h2><h3 id="Where-to-Put-Updates"><a href="#Where-to-Put-Updates" class="headerlink" title="Where to Put Updates?"></a>Where to Put Updates?</h3><p>论文把更新的地方分成了三种： Update-in-place ，log-structure，delta-main.</p>
+<ul>
+<li>Update-in-place 即 就地更新，这个可以想到我们脑海中比较原始的 B-Tree. 这样的结构对定长的数据有着很好的性能，但是对变长/多版本数据而言通常意味着相对复杂一些的处理方法，同时，这里还有一定的并发问题，例如 B-Tree 的并发控制。</li>
+<li>Log-structure Storage. 比较极端的，这里用 append log 来当作写数据。这个时候能够保证高效和没有空间上的碎片。纯日志结构的 put 是非常高效的，考虑类似 Bitcask 的 case, <code>Get</code> 的性能也可以做到很好，但是  <code>Scan</code> 可能相当复杂。LSM-Tree 是一种很好的常见妥协方案。</li>
+<li>Delta-main: 数据写入的时候被组织在一个写优化的结构中，定期被合入一个读优化的结构。论文认为，这是就地更新和日志更新的 trade-off: 能尽量保证两者的优点。（我个人感觉这个应该会面临比较大的写放大？）</li>
+</ul>
+<h3 id="How-to-arrange-records"><a href="#How-to-arrange-records" class="headerlink" title="How to arrange records?"></a>How to arrange records?</h3><p>这就是经典的行存列存的问题了。简单来说方案大概有：</p>
+<ol>
+<li>Row-major: Get/Set 能够相对来说直接的完成目标，Scan 部分负载会有较差的局部性。</li>
+<li>Column-major: Get/Set 可能需要物化/写放大，但是 Scan 可能受益。</li>
+<li>PAX 类的行列混存: 试图在 1/2 中 trade-off。</li>
+</ol>
+<h3 id="How-to-handle-versions"><a href="#How-to-handle-versions" class="headerlink" title="How to handle versions?"></a>How to handle versions?</h3><p>MVCC 无论如何多版本，不同版本肯定是要物理存储的：</p>
+<ol>
+<li>不同版本物理上簇聚在一起。通常和就地更新一起用。</li>
+<li>不同版本物理上不在一起，以链式来寻找版本。通常和 log-structure 一起用。它的局部性不好，但是这能简化 GC</li>
+</ol>
+<h3 id="When-to-do-Garbage-Collection"><a href="#When-to-do-Garbage-Collection" class="headerlink" title="When to do Garbage Collection?"></a>When to do Garbage Collection?</h3><ol>
+<li>有线程/进程定期触发 GC</li>
+<li>Scan 的时候，触发 GC</li>
+</ol>
+<p>2可能会增加 Scan 的时间，但是可能被 Scan 比较多的地方更容易被 GC。同时，它在 Scan 的时候 GC，也避免了 GC 之后，可能会出现额外的 cache miss.</p>
+<h3 id="Summary"><a href="#Summary" class="headerlink" title="Summary"></a>Summary</h3><p>作者推出了以下的图：</p>
+<p><img src="https://image.mwish.me/blog-image/14B27788-9A82-4099-A238-1AA2A9335142.png" alt="14B27788-9A82-4099-A238-1AA2A9335142"></p>
+<p><img src="https://image.mwish.me/blog-image/115FA5B8-DCEF-4B74-AF70-1C505FC509F5.png" alt="115FA5B8-DCEF-4B74-AF70-1C505FC509F5"></p>
+<p>以上就是上面这几个维度的 KV 设计方案了，但是实际上可选的方案没有那么多，比方说 update-in-place 通常和 row-major 在一起，有很多方案实际上想想就不太合理。所以文章作者直接跳到结果了：</p>
+<blockquote>
+<p>The two most extreme variants are the variant based on log- structured with chained-versions in a row-major format and the variant using a delta-main structure with clustered-versions in a column-major format. The next two sections describe our imple- mentation of these variants in TellStore, called TellStore-Log and TellStore-Col. Section 6 gives implementation details of TellStore that are important for all TellStore variants.</p>
+</blockquote>
+<p>嗯，很合理…</p>
+<p>下面将介绍 TellStore 的结构，这里介绍每个结构的时候，将会回答上面所有的问题。</p>
+<h2 id="TellStore-Log"><a href="#TellStore-Log" class="headerlink" title="TellStore-Log"></a>TellStore-Log</h2><p><img src="https://image.mwish.me/blog-image/3E9D1EB8-CA83-41BD-898F-9F85B2B7F58F.png" alt="3E9D1EB8-CA83-41BD-898F-9F85B2B7F58F"></p>
+<h3 id="Where-to-Put-Updates-1"><a href="#Where-to-Put-Updates-1" class="headerlink" title="Where to Put Updates?"></a>Where to Put Updates?</h3><p>这里为了写入快速，显然要写到 log buffer 里面，这里写入大致逻辑如下：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">1. 拿到记录，写 log buffer</span><br><span class="line">2. 写 hash table</span><br><span class="line">3. 如果成功，当作写入成功，更新 log buffer header. 否则写入失败. 这回影响其中的 valid</span><br></pre></td></tr></table></figure>
+<p>一旦上述 3 成功，日志就是 immutable 的。这使得 copy 和 recover 相对来说没有那么复杂。这里 1 可以是并发的，而 2 用来同步：对于冲突的写，写 hashtable 成功的数据.</p>
+<p>同时，这里 hash table 实现是预先分配固定大小内存的。同时使用了开放寻址 + 线性探测的方式，以利用系统的局部性。</p>
+<p>存储的 value 这里希望尽可能小，所以论文说就 24bytes: </p>
+<blockquote>
+<p>To keep memory usage small while allowing for a sufficiently sized table, the hash buckets only store the table ID, record key and pointer to the record (24 bytes).</p>
+</blockquote>
+<p>(所以这用的是 gcc4 的 cow string 吗，还是自己写了，囧…)</p>
+<h3 id="How-to-Arrange-Records"><a href="#How-to-Arrange-Records" class="headerlink" title="How to Arrange Records?"></a>How to Arrange Records?</h3><p>行/列？显然是行存。</p>
+<p>此外，作者不希望 Scan 的时候还需要查 hashtable, 所以数据自己能说明自己是否是 valid 的。此外，这里为每个 table 分配了一个 log 结构，这里加快了对 table scan 的效率。（可是没有所以结构咋查啊…）</p>
+<h3 id="How-to-Handle-Versions"><a href="#How-to-Handle-Versions" class="headerlink" title="How to Handle Versions?"></a>How to Handle Versions?</h3><p>这里的版本如上图所示，采取链式方法串起来。新纪录需要指向旧纪录，同时 <code>validFrom</code> <code>validTo</code> 提供了对给定时间戳，允许的读范围。那么我们可以在更新一下 update</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">1. 拿到记录，写 log buffer</span><br><span class="line">2. 写 hash table</span><br><span class="line">3.1 如果写入失败. 这回影响其中的 valid = false</span><br><span class="line">3.2 成功，当作写入成功，更新 log buffer header. 如果有上一条记录，更新 validFrom 和上个记录的 validTo</span><br></pre></td></tr></table></figure>
+<h3 id="When-to-do-Garbage-Collection-1"><a href="#When-to-do-Garbage-Collection-1" class="headerlink" title="When to do Garbage Collection?"></a>When to do Garbage Collection?</h3><p>这里每个 table 一个 log 结构的话，Scan 的时候， <code>validTo</code> 小于系统最小可能访问的 ts，就说明这条记录可以被 GC. 在 Scan 的时候，如果发现某个 Page (这里我想了下，感觉 log 可能是在 Page 里面存储的，有点类似 InnoDB?) 的可以被 GC 的 record 比例超过一定阈值，Page 就可以被标记为可 GC 的。这里需要把 Page 内 GC，然后调整 MVCC 关系的指针，这个操作代价很高，且 cache locality 很低。</p>
+<h2 id="TellStore-Col"><a href="#TellStore-Col" class="headerlink" title="TellStore-Col"></a>TellStore-Col</h2><p>TellStore-Log 是一个高性能更新的结构。而论文实际上希望设计一个 Delta-main 结构，将 TellStore-Log 定期合并到一个高效 Scan 的结构中。</p>
+<p><img src="https://image.mwish.me/blog-image/2F352388-C65C-42EE-8BD6-669142A4BE62.png" alt="2F352388-C65C-42EE-8BD6-669142A4BE62"></p>
+<p>这里的逻辑大概是：</p>
+<ol>
+<li>一系列的 Main Page 作为系统的 main 存储</li>
+<li>两个逻辑上的 log list 作为系统的 delta, 分别为 insert log 和 update log</li>
+</ol>
+<h3 id="Where-to-Put-Updates-2"><a href="#Where-to-Put-Updates-2" class="headerlink" title="Where to Put Updates?"></a>Where to Put Updates?</h3><ol>
+<li>如果这个 key 不存在，那么丢到 insert-log 里面</li>
+<li>如果这个 key 存在（在 insert-log 或者 main 中），丢到 update-log 里面。</li>
+</ol>
+<p>此外，还有个 <code>newest</code> 字段：</p>
+<blockquote>
+<p>Records in the main and insert-log both contain a mutable <em>newest</em> field containing a pointer to the most-recently written element with the same key. </p>
+</blockquote>
+<p>写入的时候，类似 TellStore-Log 的 newest 会作为同步处来处理。</p>
+<h3 id="How-to-Arrange-Records-1"><a href="#How-to-Arrange-Records-1" class="headerlink" title="How to Arrange Records?"></a>How to Arrange Records?</h3><p>两个 delta 日志肯定行存，main 日志既可以行存也可以列存。TellStore-Col 是一个列存实现，然后用类似 PAX 的结构 <code>ColumnMap</code> 来存储信息：</p>
+<p><img src="https://image.mwish.me/blog-image/368DD607-56BB-4AE3-B48D-2D37DA3F87D5.png" alt="368DD607-56BB-4AE3-B48D-2D37DA3F87D5"></p>
+<ol>
+<li>Meta Data 存储了一些必要的元信息</li>
+<li>Fixed-Size Columns 可能根据 MetaData 确定有哪些内容，这里知道第一列在哪就可以很快定位“哪一个元素在哪”（似乎这里没有压缩逻辑？）</li>
+<li>Var-size heap 和 var-size + meta columns 是提供给变长字段，例如 <code>string</code>  <code>BLOB</code> 的。“This heap is indexed by fixed-size metadata storing the 4-byte offset into the heap and its 4-byte prefix.”</li>
+</ol>
+<h3 id="How-to-Handle-Versions-1"><a href="#How-to-Handle-Versions-1" class="headerlink" title="How to Handle Versions?"></a>How to Handle Versions?</h3><p>main page 中的版本簇聚形式存储，从 lastest 到最旧的版本。这样，假设带着一个时间戳来读，那就需要一个找到对应的时间。不过因为是靠在一起的，所以局部性好一些。同时，它也有 <code>previous</code> 指针，指向 Update-Log 中的数据。</p>
+<h3 id="When-to-do-Garbage-Collection-2"><a href="#When-to-do-Garbage-Collection-2" class="headerlink" title="When to do Garbage Collection?"></a>When to do Garbage Collection?</h3><p>这里 GC 功能要复杂些：它需要把 update-log 和 insert-log 合并到 main 里面（可能是以行存 —&gt; 列存的形式）。同时，这里形式类似 cow, 不会在 main page 原地更新，而是产生新的 page / reuse page.</p>
+<p>这里 GC 由单独的线程处理（为什么不在 Scan 的时候处理呢？论文解释是这个工作量较大。TellStore-Log Scan 的时候需要扫全部记录，然后把没用的放前面即可。TellStore-Col 需要搞新 page + 合并 + 行转列，负载比较大）。</p>
+<p>GC 发现某个记录需要被清除的时候会被触发。对于 main page 中的 key, 不同的版本可以从自己的临近数据和 update-log 中找到。然后可以从 insert-log 中找到新插入的数据，扫 update-log 拿到这些新的版本。<code>validTo</code> 过小的记录会被 discard 掉。完成后，log 记录、被 gc 的 main page 可以放入空闲 page 列表。</p>
+<p>这里重申了一下为什么要 update-log:</p>
+<ol>
+<li>只要 scan insert-log, 就可以找到不在 main 中的数据。</li>
+<li>同时这可能降低了 locality: 原本 scan 的时候，insert-update 一起，可能找到一个记录，就可以发现它是最新的。而新的 case 下 update 这里可能要回溯到 insert 上进行 random access. 这要求 update-log 被 GC/合并到 main 是非常频繁、能够保证 update-log 足够短。</li>
+</ol>
+<h2 id="Implemention"><a href="#Implemention" class="headerlink" title="Implemention"></a>Implemention</h2><p>这部分主要就是工程实现了。</p>
+<p>网络上，这里实现采取了 boost.asio 的异步策略。同时，对 get/put 和 scan 的线程池做了切分：这里应该觉得 Scan 相对重一些，不能影响较轻的 Get/Put 查询。同时，还有线程负责 GC。</p>
+<p>Scan 这里写的有点 hack, 有一个 scan thread 作为 coordinator，它会搜集所有 scan request，然后绑定到一个 shared scan 上，然后由一些线程去分 part 扫。感觉这里 Scan Request 多一些性能会比较好。</p>
+<p>这里还用类似 Chord 的形式实现了个 DHT 。同时如果希望支持 Range，<code>Tell</code> 论文中提到了 Lock-Free Btree，它是在 processing layer 实现的，感觉到 storage layer 都是傻傻的全部 scan 然后 shared scan.</p>
+<p>此外，这里因为 scan 的特性，还做了 codegen，这块我不是很了解，没细看。</p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#VLDB%E2%80%9917-Fast-Scans-on-Key-Value-Stores"><span class="toc-number">1.</span> <span class="toc-text">VLDB’17 Fast Scans on Key-Value Stores</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#Abstract-and-Introduction"><span class="toc-number">1.1.</span> <span class="toc-text">Abstract and Introduction</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Architecture"><span class="toc-number">1.2.</span> <span class="toc-text">Architecture</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Design-Space"><span class="toc-number">1.3.</span> <span class="toc-text">Design Space</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Where-to-Put-Updates"><span class="toc-number">1.3.1.</span> <span class="toc-text">Where to Put Updates?</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#How-to-arrange-records"><span class="toc-number">1.3.2.</span> <span class="toc-text">How to arrange records?</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#How-to-handle-versions"><span class="toc-number">1.3.3.</span> <span class="toc-text">How to handle versions?</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#When-to-do-Garbage-Collection"><span class="toc-number">1.3.4.</span> <span class="toc-text">When to do Garbage Collection?</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Summary"><span class="toc-number">1.3.5.</span> <span class="toc-text">Summary</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#TellStore-Log"><span class="toc-number">1.4.</span> <span class="toc-text">TellStore-Log</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Where-to-Put-Updates-1"><span class="toc-number">1.4.1.</span> <span class="toc-text">Where to Put Updates?</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#How-to-Arrange-Records"><span class="toc-number">1.4.2.</span> <span class="toc-text">How to Arrange Records?</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#How-to-Handle-Versions"><span class="toc-number">1.4.3.</span> <span class="toc-text">How to Handle Versions?</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#When-to-do-Garbage-Collection-1"><span class="toc-number">1.4.4.</span> <span class="toc-text">When to do Garbage Collection?</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#TellStore-Col"><span class="toc-number">1.5.</span> <span class="toc-text">TellStore-Col</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Where-to-Put-Updates-2"><span class="toc-number">1.5.1.</span> <span class="toc-text">Where to Put Updates?</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#How-to-Arrange-Records-1"><span class="toc-number">1.5.2.</span> <span class="toc-text">How to Arrange Records?</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#How-to-Handle-Versions-1"><span class="toc-number">1.5.3.</span> <span class="toc-text">How to Handle Versions?</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#When-to-do-Garbage-Collection-2"><span class="toc-number">1.5.4.</span> <span class="toc-text">When to do Garbage Collection?</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Implemention"><span class="toc-number">1.6.</span> <span class="toc-text">Implemention</span></a></li></ol></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2021/07/27/VLDB-17-Fast-Scans-on-Key-Value-Stores/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2021/07/27/VLDB-17-Fast-Scans-on-Key-Value-Stores/&text=VLDB&#39;17 Fast Scans on Key-Value Stores"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2021/07/27/VLDB-17-Fast-Scans-on-Key-Value-Stores/&title=VLDB&#39;17 Fast Scans on Key-Value Stores"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2021/07/27/VLDB-17-Fast-Scans-on-Key-Value-Stores/&is_video=false&description=VLDB&#39;17 Fast Scans on Key-Value Stores"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=VLDB&#39;17 Fast Scans on Key-Value Stores&body=Check out this article: http://blog.mwish.me/2021/07/27/VLDB-17-Fast-Scans-on-Key-Value-Stores/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2021/07/27/VLDB-17-Fast-Scans-on-Key-Value-Stores/&title=VLDB&#39;17 Fast Scans on Key-Value Stores"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2021/07/27/VLDB-17-Fast-Scans-on-Key-Value-Stores/&title=VLDB&#39;17 Fast Scans on Key-Value Stores"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2021/07/27/VLDB-17-Fast-Scans-on-Key-Value-Stores/&title=VLDB&#39;17 Fast Scans on Key-Value Stores"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2021/07/27/VLDB-17-Fast-Scans-on-Key-Value-Stores/&title=VLDB&#39;17 Fast Scans on Key-Value Stores"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2021/07/27/VLDB-17-Fast-Scans-on-Key-Value-Stores/&name=VLDB&#39;17 Fast Scans on Key-Value Stores&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2021/07/27/VLDB-17-Fast-Scans-on-Key-Value-Stores/&t=VLDB&#39;17 Fast Scans on Key-Value Stores"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

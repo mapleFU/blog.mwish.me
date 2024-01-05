@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="Notes on CRAQ 这篇文章介绍了 CRAQ，链式复制的改进。 本人主要阅读了 1-3 章，第三章的 scaling 和 5.3 的 membership changes 没有完全理解它的思路，4.1 的 mini-transaction 没有读的很细，以后可能会回头来改。 也欢迎懂的朋友留言或者给 anmmscs_maple@qq.com 邮件。 RecallGFSGFS 分为 Mast">
+<meta property="og:type" content="article">
+<meta property="og:title" content="notes on craq">
+<meta property="og:url" content="http://blog.mwish.me/2020/08/06/notes-on-craq/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="Notes on CRAQ 这篇文章介绍了 CRAQ，链式复制的改进。 本人主要阅读了 1-3 章，第三章的 scaling 和 5.3 的 membership changes 没有完全理解它的思路，4.1 的 mini-transaction 没有读的很细，以后可能会回头来改。 也欢迎懂的朋友留言或者给 anmmscs_maple@qq.com 邮件。 RecallGFSGFS 分为 Mast">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/51CB14FC-1504-474F-BA8D-74D2CBFCC14D.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/23269A8F-9449-4BA0-869A-66AD962A75E8.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/F50E8A60-D378-4A03-84C6-A5954F0E1EB1.png">
+<meta property="article:published_time" content="2020-08-05T19:27:37.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.564Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/51CB14FC-1504-474F-BA8D-74D2CBFCC14D.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>notes on craq</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2020/08/12/notes-Skiplist-based-lsm-tree/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2020/07/22/Notes-on-Consistency-Raft-ZooKeeper-and-Potpourri/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/08/06/notes-on-craq/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/08/06/notes-on-craq/&text=notes on craq"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/08/06/notes-on-craq/&title=notes on craq"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/08/06/notes-on-craq/&is_video=false&description=notes on craq"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=notes on craq&body=Check out this article: http://blog.mwish.me/2020/08/06/notes-on-craq/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/08/06/notes-on-craq/&title=notes on craq"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/08/06/notes-on-craq/&title=notes on craq"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/08/06/notes-on-craq/&title=notes on craq"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/08/06/notes-on-craq/&title=notes on craq"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/08/06/notes-on-craq/&name=notes on craq&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/08/06/notes-on-craq/&t=notes on craq"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#Notes-on-CRAQ"><span class="toc-number">1.</span> <span class="toc-text">Notes on CRAQ</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Recall"><span class="toc-number">1.0.1.</span> <span class="toc-text">Recall</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#GFS"><span class="toc-number">1.0.1.1.</span> <span class="toc-text">GFS</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#CRAQ"><span class="toc-number">1.1.</span> <span class="toc-text">CRAQ</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E8%A6%81-CRAQ"><span class="toc-number">1.1.1.</span> <span class="toc-text">为什么要 CRAQ</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#CR-%E7%9A%84%E4%B8%80%E8%87%B4%E6%80%A7%E8%AE%A8%E8%AE%BA"><span class="toc-number">1.1.2.</span> <span class="toc-text">CR 的一致性讨论</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#CRAQ-1"><span class="toc-number">1.1.3.</span> <span class="toc-text">CRAQ</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#recovery-amp-membership-changes"><span class="toc-number">1.1.4.</span> <span class="toc-text">recovery &amp; membership changes</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Scale"><span class="toc-number">1.1.5.</span> <span class="toc-text">Scale</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-Extensions"><span class="toc-number">1.1.6.</span> <span class="toc-text">4. Extensions</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#4-1-Mini-Transactions"><span class="toc-number">1.1.6.1.</span> <span class="toc-text">4.1 Mini Transactions</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#4-2-Lowering-Write-Latency-with-Multicast"><span class="toc-number">1.1.6.2.</span> <span class="toc-text">4.2 Lowering Write Latency with Multicast</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-Management-and-Implementation"><span class="toc-number">1.1.7.</span> <span class="toc-text">5 Management and Implementation</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#5-3-Handling-Memberships-Changes"><span class="toc-number">1.1.7.1.</span> <span class="toc-text">5.3 Handling Memberships Changes</span></a></li></ol></li></ol></li></ol></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        notes on craq
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2020-08-05T19:27:37.000Z" itemprop="datePublished">2020-08-06</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <h1 id="Notes-on-CRAQ"><a href="#Notes-on-CRAQ" class="headerlink" title="Notes on CRAQ"></a>Notes on CRAQ</h1><p><img src="https://image.mwish.me/blog-image/51CB14FC-1504-474F-BA8D-74D2CBFCC14D.png" alt="51CB14FC-1504-474F-BA8D-74D2CBFCC14D"></p>
+<p>这篇文章介绍了 CRAQ，链式复制的改进。</p>
+<p>本人主要阅读了 1-3 章，第三章的 scaling 和 5.3 的 membership changes 没有完全理解它的思路，4.1 的 mini-transaction 没有读的很细，以后可能会回头来改。</p>
+<p>也欢迎懂的朋友留言或者给 anmmscs_maple@qq.com 邮件。</p>
+<h3 id="Recall"><a href="#Recall" class="headerlink" title="Recall"></a>Recall</h3><h4 id="GFS"><a href="#GFS" class="headerlink" title="GFS"></a>GFS</h4><p>GFS 分为 Master 和 Chunk Server, Master 有 Chunk 的 metadata，负责文件映射的信息、Chunk信息，也负责管理 lease、回收 Chunk、Chunk 迁移。Master 节点使用心跳信息周期地和每个 Chunk 服务器通讯，发送指令到各个 Chunk 服务器并接收 Chunk 服务器的状态信息。</p>
+<p>ChunkServer 维护自己的逻辑，运行在 Linux File System 上。Chunk 类似系统的 block 这种概念，默认 64MB。它的大小会影响内部碎片和通信效率/空间效率：Chunk 越大，内部碎片肯定越小，但是 metadata 空间效率也会变大，请求次数也会变更。不过这样也不利于存储小文件。</p>
+<p>ChunkServer 会有备份的模型。当写入的时候，我们需要保证多个 replica 写入顺序上是一致的。Master 会给 Chunk 分配 lease，这个 chunk 会给出写入的操作序列，被称为 primary chunk。</p>
+<p><img src="https://image.mwish.me/blog-image/23269A8F-9449-4BA0-869A-66AD962A75E8.png" alt="23269A8F-9449-4BA0-869A-66AD962A75E8"></p>
+<p>GFS 的数据流和控制流是分开的，写入的时候，client 会拿到某个 chunk 的元数据并做缓存，然后想上图3一样：</p>
+<blockquote>
+<p>数据沿着一个 Chunk 服务器链顺序的推送，而不是以其它拓扑形式分散 推送(例如，树型拓扑结构)。线性推送模式下，每台机器所有的出口带宽都用于以最快的速度传输数据，而 不是在多个接受者之间分配带宽。</p>
+<p>为了尽可能的避免出现网络瓶颈和高延迟的链接(eg，inter-switch 最有可能出现类似问题)，每台机器 都尽量的在网络拓扑中选择一台还没有接收到数据的、离自己最近的机器作为目标推送数据。假设客户机把 数据从 Chunk 服务器 S1 推送到 S4。它把数据推送到最近的 Chunk 服务器 S1。S1 把数据推送到 S2，因为 S2 和 S4 中最接近的机器是 S2。同样的，S2 把数据传递给 S3 和 S4 之间更近的机器，依次类推推送下去。我们 的网络拓扑非常简单，通过 IP 地址就可以计算出节点的“距离”。</p>
+</blockquote>
+<p>某种意义上，这也是一种链式复制。</p>
+<h2 id="CRAQ"><a href="#CRAQ" class="headerlink" title="CRAQ"></a>CRAQ</h2><h3 id="为什么要-CRAQ"><a href="#为什么要-CRAQ" class="headerlink" title="为什么要 CRAQ"></a>为什么要 CRAQ</h3><p>这篇论文介绍的就是一种链式复制和优化，论文介绍了 CRAQ 和普通链式复制的区别，以及它是如何在保证性能的情况下提供强一致性和别的loose一点的一致性的的。</p>
+<p>文章还介绍了 geo-replication 相关的实现。</p>
+<blockquote>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">Influential: CRAQ and many others build on CR.</span><br><span class="line">    Ceph, Parameter Server, COPS, FAWN.</span><br></pre></td></tr></table></figure>
+</blockquote>
+<p>上面这些都用了 chain replication(哇我以前都不知道)，它的大致思路如下：</p>
+<ul>
+<li>A-&gt;B-&gt;C-&gt;D 构成一条链，</li>
+<li>client 在头写，在尾读，A落盘后写 B，B 落盘后写 C，D中落盘即可读</li>
+<li>这种方式比较好 pipeline 化</li>
+<li>节点变多的时候，可能需要 Consistet Hashing 来 sharding。</li>
+</ul>
+<p>上面的缺点是：</p>
+<ul>
+<li>读在尾部，很容易成为潜在的瓶颈</li>
+<li>单个节点 failure 可能会影响系统</li>
+<li>Consistet Hashing 仍然有潜在的热点问题（这个我没研究过），读请求会全部落在热点的尾部。</li>
+</ul>
+<p>MIT 6.824 的 course notes 指出了 CR 的优点</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">Why is CR attractive (vs Raft)?</span><br><span class="line">  Client RPCs split between head and tail, vs Raft&#x27;s leader handles both.</span><br><span class="line">  Head sends each write just once, vs Raft&#x27;s leader sends to all.</span><br><span class="line">  Reads involve just one server, not all as in Raft.</span><br><span class="line">  Situation after failure simpler than in Raft (remember Figure 7).</span><br></pre></td></tr></table></figure>
+<p>而对象存储特点是，不需要所有操作的 total order，需要的是单个对象的order。</p>
+<p>CRAQ 提供：</p>
+<ul>
+<li>CR 一样的强一致性</li>
+<li>CRAQ的设计自然支持读操作之间的最终一致性，以降低写争用期间的延迟读取，以及在临时分区期间降级为只读行为。CRAQ允许应用程序指定读取操作可接受的最大 stale 可能性。（论文里是 <em>Apportioned Queries</em>）</li>
+<li>在读分摊的 load-balance 之外，提供了 geo-replication 的方案，读可以从本地的集群读，同时借助 ZooKeeper 维护 members。</li>
+</ul>
+<h3 id="CR-的一致性讨论"><a href="#CR-的一致性讨论" class="headerlink" title="CR 的一致性讨论"></a>CR 的一致性讨论</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">Intuition for linearizability of CR?</span><br><span class="line">  When no failures, almost as if the tail were the only server.</span><br><span class="line">    Head picks an order for writes, replicas apply in that order,</span><br><span class="line">      so they will stay in sync except for recent (uncommitted) writes.</span><br><span class="line">    Tail exposes only committed writes to readers.</span><br><span class="line">  Failure recovery, briefly.</span><br><span class="line">    Good news: every replica knows of every committed write.</span><br><span class="line">    But need to push partial writes down the chain.</span><br><span class="line">    If head fails, successor takes over as head, no commited writes lost.</span><br><span class="line">    If tail fails, predecessor takes over as tail, no writes lost.</span><br><span class="line">    If intermediate fails, drop from chain, predecessor may need to</span><br><span class="line">      re-send recent writes.</span><br></pre></td></tr></table></figure>
+<ul>
+<li>没有 failure 的时候，显然是 Linearizable 的，毕竟是单点 apply</li>
+<li>failure 的时候，因为 apply 的顺序是一致的，所以没关系。</li>
+</ul>
+<p>（不过我感觉这论文主要重点还是单对象的一致）</p>
+<h3 id="CRAQ-1"><a href="#CRAQ-1" class="headerlink" title="CRAQ"></a>CRAQ</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">The CRAQ paper admits there is at least one other way to skin this cat:</span><br><span class="line">  Split objects over many chains, each server participates in multiple chains.</span><br><span class="line">  C1: S1 S2 S3</span><br><span class="line">  C2: S2 S3 S1</span><br><span class="line">  C3: S3 S1 S2</span><br><span class="line">This works if load is more or less evenly divided among chains.</span><br></pre></td></tr></table></figure>
+<p>在 CRAQ 中：</p>
+<ul>
+<li>每个 node 可以存储多个版本的对象，版本可以是 <em>clean</em> 或者 <em>dirty</em> 的。</li>
+<li>当 node 接收到写入的时候：<ul>
+<li>如果是 tail, 那么接受写入，并 ACK 通知之前的节点，写入成功</li>
+<li>否则把 <code>(key, value)</code> 添加到版本链中，标记为 dirty.</li>
+</ul>
+</li>
+<li>当非 tail 的节点收到 ACK 的时候，把对应版本 dirty 标记为 clean，然后删除之前的版本</li>
+</ul>
+<p>那么，当一个节点收到读请求的时候，如果不要求一致性，可以返回最新的版本，否则：</p>
+<ul>
+<li>如果查询的对象是 clean 的，返回（意味着写入 tail 完成，前面即使有些这个 key, 也是 dirty 的）</li>
+<li>否则，向 tail 进行一个 version query</li>
+</ul>
+<p><img src="https://image.mwish.me/blog-image/F50E8A60-D378-4A03-84C6-A5954F0E1EB1.png" alt="F50E8A60-D378-4A03-84C6-A5954F0E1EB1"></p>
+<p>论文认为，在两种情况下，性能是有提升的</p>
+<ul>
+<li>Read-mostly workloads: 读多的情况下，读会被均摊</li>
+<li>Write-heavily workloads: 对 tail 查询版本比全部落在 tail 轻量，这意味着读请求依然是均摊的。</li>
+</ul>
+<p>这样的情况下，认为任然是 Linearizable 的：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">Intuition for why same as CR (i.e. linearizable) (assuming no failure):</span><br><span class="line">  If replica has only clean, it MUST match tail, since no write has passed it.</span><br><span class="line">  If replica has dirty, it asks tail, in which case it matches tail as well.</span><br></pre></td></tr></table></figure>
+<p>不过，在以上的情况之外， CRAQ 仍然提供别的一致性：</p>
+<ul>
+<li>Eventual Consistency：允许读最新的 seesion 版本，同时，如果读不垮节点，那么系统有单调读一致性</li>
+<li>Eventual Consistency with Maximum-Bounded Inconsistency: 允许返回</li>
+</ul>
+<h3 id="recovery-amp-membership-changes"><a href="#recovery-amp-membership-changes" class="headerlink" title="recovery &amp; membership changes"></a>recovery &amp; membership changes</h3><p>主要在论文第五节</p>
+<blockquote>
+<p>When a head fails, its immediate successor takes over as the new chain head; likewise, the tail’s predecessor takes over when the tail fails. Nodes joining or failing from within the middle of the chain must insert themselves between two nodes, much like a doubly-linked list. The proofs of correct- ness for dealing with system failures are similar to CR; we avoid them here due to space limitations. Section §5 describes the details of failure recovery in CRAQ, as well as the integration of our coordination service. In particular, CRAQ’s choice of allowing a node to join anywhere in a chain (as opposed only to at its tail [47]), as well as properly handling failures during recovery, requires some careful consideration.</p>
+</blockquote>
+<p>然后系统有：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">Equivalently, why can&#x27;t 2nd node take over as head if it can&#x27;t reach the head?</span><br><span class="line">  Partition -- split brain -- the 2nd node must wait patiently.</span><br></pre></td></tr></table></figure>
+<h3 id="Scale"><a href="#Scale" class="headerlink" title="Scale"></a>Scale</h3><blockquote>
+<ul>
+<li>Most or all writes to an object might originate in a single datacenter.</li>
+<li>Some objects may be only relevant to a subset of datacenters.</li>
+<li>Popular objects might need to be heavily replicated while unpopular ones can be scarce.</li>
+</ul>
+</blockquote>
+<p>对象标识符由链标识符和密钥标识符组成。链标识符确定 CRAQ 中的哪些节点将存储该链中的所有 keys，而密钥标识符为每个链提供唯一的命名。论文描述了多种指定应用程序需求的方法：</p>
+<ol>
+<li><code>&#123;num_datacenters, chain_size&#125;</code>  分布在整个数据中心，用 consistency hashing 映射. 固定的数据中心存储固定的 chain。</li>
+<li><code>&#123;chain_size, dc1, dc2, ..., dcN&#125;</code> 每个数据中心使用同样的 chain-size，dc1, dc2 里面 chain 的大小都是 <code>chain_size</code>, 由 consistency hashing 决定 dc 内部的节点。</li>
+<li><code>&#123;*dc*1, *chain*_*size*1, ..., *dc**N*, *chain*_*size**N*&#125;</code> 在每个中心内，chain-size 是提供好的。</li>
+</ol>
+<p>2 3 中，dc1 都可以成为 master 集合，这意味着即使有集群头节点变换，写入也要落到这个数据中心。</p>
+<blockquote>
+<p>Otherwise, if <em>dc</em>1 is disconnected from the rest of the chain, <em>dc</em>2 could become the new head and take over write operations un- til <em>dc</em>1 comes back online. When a master is not defined, writes will only continue in a partition if the partition con- tains a majority of the nodes in the global chain. Otherwise, the partition will become read-only for maximum- bounded inconsistent read operations, as defined in Section 2.4.</p>
+</blockquote>
+<p>在单个数据中心中，sharding 可以靠任意的 consistency hashing, 也可以引入 naming service. 多个数据中心中，读写代价会放大：</p>
+<blockquote>
+<p>Even with an optimized chain, the latency of write operations over wide-area links will increase as more datacenters are added to the chain. Although this in- creased latency could be significant in comparison to a primary/backup approach which disseminates writes in parallel, it allows writes to be pipelined down the chain. This vastly improves write throughput over the primary/backup approach.</p>
+</blockquote>
+<p>同时，如果在多集群中引入 ZooKeeper 这样的协调系统，可以：</p>
+<ul>
+<li>引入某种层次的 zk 的协调</li>
+</ul>
+<blockquote>
+<p>Placing multiple ZooKeeper nodes within a single datacenter improves Zookeeper read scalability within that datacenter, but at the cost of wide-area performance. Since the vanilla implementa- tion has no knowledge of datacenter topology or notion of hierarchy, coordination messages between Zookeeper nodes are transmitted over the wide-area network mul- tiple times. Still, our current implementation ensures that CRAQ nodes always receive notifications from <em>local</em> Zookeeper nodes, and they are further notified only about chains and node lists that are relevant to them. We expand on our coordination through Zookeper in §5.1.</p>
+<p>To remove the redundancy of cross-datacenter ZooKeeper traffic, one could build a hierarchy of Zookeeper instances: Each datacenter could contain its own local ZooKeeper instance (of multiple nodes), as well as having a representative that participates in the global ZooKeeper instance (perhaps selected through leader election among the local instance). Separate functionality could then coordinate the sharing of data between the two. An alternative design would be to modify ZooKeeper itself to make nodes aware of network topology, as CRAQ currently is. We have yet to fully investigate either approach and leave this to future work.</p>
+</blockquote>
+<p>感觉还是很麻烦的。</p>
+<h3 id="4-Extensions"><a href="#4-Extensions" class="headerlink" title="4. Extensions"></a>4. Extensions</h3><h4 id="4-1-Mini-Transactions"><a href="#4-1-Mini-Transactions" class="headerlink" title="4.1 Mini Transactions"></a>4.1 Mini Transactions</h4><p>CRAQ 支持下面的 mini-txn</p>
+<blockquote>
+<ol>
+<li>Prepend/Append: Adds data to the beginning or end of an object’s current value.</li>
+<li>Increment/Decrement: Adds or subtracts to a key’s object, interpreted as an integer value.</li>
+<li>Test-and-Set: Only update a key’s object if its current version number equals the version number spec- ified in the operation.</li>
+</ol>
+</blockquote>
+<p>如果是第一类和第二类，可以直接添加到头/尾然后传播新版本。写入比较多的话可以 batch。</p>
+<p>如果是 test-and-set, 如果本身有 dirty 版本或者未完成的 cache 写就拒绝，否则传播。</p>
+<p>下面来考虑具体的实现(4.1.2)：</p>
+<blockquote>
+<p>A mini-transaction is defined by a compare, read, and write set; Sinfonia exposes a linear address space across many memory nodes. </p>
+</blockquote>
+<p>本质上相当于在前面三类的基础上控制读写集和冲突。</p>
+<p>涉及多个 chain 的事务时候，需要对 chain 之首处理 2PC。</p>
+<h4 id="4-2-Lowering-Write-Latency-with-Multicast"><a href="#4-2-Lowering-Write-Latency-with-Multicast" class="headerlink" title="4.2 Lowering Write Latency with Multicast"></a>4.2 Lowering Write Latency with Multicast</h4><p>Raft 的协议会完成一个 majority 的写。CRAQ 也可以利用 multicast 来 bonus 写性能：</p>
+<blockquote>
+<p>Then, instead of propagating a full write serially down a chain, which adds latency proportional to the chain length, the actual value can be multicast to the entire chain. Then, only a small metadata message needs to be propagated down the chain to ensure that all replicas have received a write before the tail. If a node does not receive the multi- cast for any reason, the node can fetch the object from its predecessor after receiving the write commit message and before further propagating the commit message.</p>
+</blockquote>
+<p>通过广播写入数据，然后从头到尾传播 metadata 而不是全部信息，来保证写入是有效的。</p>
+<p>同时，单个 dc 尾部收到 ACK 或者完成写入的时候，也可以用 multicast 提升性能：</p>
+<blockquote>
+<p>This reduces both the amount of time it takes for a node’s object to re-enter the clean state after a write, as well as the client’s perceived write delay.</p>
+</blockquote>
+<h3 id="5-Management-and-Implementation"><a href="#5-Management-and-Implementation" class="headerlink" title="5 Management and Implementation"></a>5 Management and Implementation</h3><h4 id="5-3-Handling-Memberships-Changes"><a href="#5-3-Handling-Memberships-Changes" class="headerlink" title="5.3 Handling Memberships Changes"></a>5.3 Handling Memberships Changes</h4><p>论文 2.3 提到了一定的要求，即：</p>
+<ul>
+<li>header 出问题了把 header-&gt;next 当新的 header</li>
+<li>tail 出问题了把 tail-prev 当 tail</li>
+<li>在中间加入/删除要通知前后</li>
+</ul>
+<p>以上都是 recover 或者下线的过程，原始的论文似乎不会考虑在任何一个位置 Join，只会在尾部插入。这样的话似乎同步完数据然后就可以加入了。Join 会复杂很多，这篇论文介绍了一种新的方式：back-propagation（注意，不是传播写入完成 ACK），这种方式让任意插入的系统 recover。</p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#Notes-on-CRAQ"><span class="toc-number">1.</span> <span class="toc-text">Notes on CRAQ</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Recall"><span class="toc-number">1.0.1.</span> <span class="toc-text">Recall</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#GFS"><span class="toc-number">1.0.1.1.</span> <span class="toc-text">GFS</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#CRAQ"><span class="toc-number">1.1.</span> <span class="toc-text">CRAQ</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E8%A6%81-CRAQ"><span class="toc-number">1.1.1.</span> <span class="toc-text">为什么要 CRAQ</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#CR-%E7%9A%84%E4%B8%80%E8%87%B4%E6%80%A7%E8%AE%A8%E8%AE%BA"><span class="toc-number">1.1.2.</span> <span class="toc-text">CR 的一致性讨论</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#CRAQ-1"><span class="toc-number">1.1.3.</span> <span class="toc-text">CRAQ</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#recovery-amp-membership-changes"><span class="toc-number">1.1.4.</span> <span class="toc-text">recovery &amp; membership changes</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Scale"><span class="toc-number">1.1.5.</span> <span class="toc-text">Scale</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-Extensions"><span class="toc-number">1.1.6.</span> <span class="toc-text">4. Extensions</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#4-1-Mini-Transactions"><span class="toc-number">1.1.6.1.</span> <span class="toc-text">4.1 Mini Transactions</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#4-2-Lowering-Write-Latency-with-Multicast"><span class="toc-number">1.1.6.2.</span> <span class="toc-text">4.2 Lowering Write Latency with Multicast</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-Management-and-Implementation"><span class="toc-number">1.1.7.</span> <span class="toc-text">5 Management and Implementation</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#5-3-Handling-Memberships-Changes"><span class="toc-number">1.1.7.1.</span> <span class="toc-text">5.3 Handling Memberships Changes</span></a></li></ol></li></ol></li></ol></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/08/06/notes-on-craq/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/08/06/notes-on-craq/&text=notes on craq"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/08/06/notes-on-craq/&title=notes on craq"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/08/06/notes-on-craq/&is_video=false&description=notes on craq"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=notes on craq&body=Check out this article: http://blog.mwish.me/2020/08/06/notes-on-craq/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/08/06/notes-on-craq/&title=notes on craq"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/08/06/notes-on-craq/&title=notes on craq"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/08/06/notes-on-craq/&title=notes on craq"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/08/06/notes-on-craq/&title=notes on craq"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/08/06/notes-on-craq/&name=notes on craq&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/08/06/notes-on-craq/&t=notes on craq"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

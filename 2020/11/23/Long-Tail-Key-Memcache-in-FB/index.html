@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="之前这篇文章大体介绍了一下 memcache 的架构： https:&#x2F;&#x2F;zhuanlan.zhihu.com&#x2F;p&#x2F;194347153 上述一些在这篇文章中会用到的概念有：  Memcache Pool: 按照 key 切分成为不同的 Pool, 适配不同的 key 和 key 不同的读写频率。同时，把冷热-高低代价的数据放在不同的池子里，然后 tunning, 来保证系统效率。 Lease 机制：">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Long Tail Key &amp;&amp; Memcache in FB">
+<meta property="og:url" content="http://blog.mwish.me/2020/11/23/Long-Tail-Key-Memcache-in-FB/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="之前这篇文章大体介绍了一下 memcache 的架构： https:&#x2F;&#x2F;zhuanlan.zhihu.com&#x2F;p&#x2F;194347153 上述一些在这篇文章中会用到的概念有：  Memcache Pool: 按照 key 切分成为不同的 Pool, 适配不同的 key 和 key 不同的读写频率。同时，把冷热-高低代价的数据放在不同的池子里，然后 tunning, 来保证系统效率。 Lease 机制：">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/7EC471A1-D7FF-4F7A-B46E-36AD9005BDD4.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/1A0F8742-DA4A-4553-BD23-4DE00ABE8677.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/9D3D2F2D-714D-4094-9200-C11FB4209073.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/E39FD911-059D-4E34-9557-96EFA756E441.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/639562CE-3D6E-4DF8-BDF5-1106D46DB6A2.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/8BCEF769-8A07-4B65-AF7B-8129D14903AA.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/46485508-C9A4-4DFB-BB25-F2E19D8499BC.png">
+<meta property="article:published_time" content="2020-11-23T15:36:35.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.561Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/7EC471A1-D7FF-4F7A-B46E-36AD9005BDD4.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>Long Tail Key &amp;&amp; Memcache in FB</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2020/12/04/Thrift-IDL/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2020/11/17/MVCC-SI/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/11/23/Long-Tail-Key-Memcache-in-FB/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/11/23/Long-Tail-Key-Memcache-in-FB/&text=Long Tail Key &amp;&amp; Memcache in FB"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/11/23/Long-Tail-Key-Memcache-in-FB/&title=Long Tail Key &amp;&amp; Memcache in FB"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/11/23/Long-Tail-Key-Memcache-in-FB/&is_video=false&description=Long Tail Key &amp;&amp; Memcache in FB"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Long Tail Key &amp;&amp; Memcache in FB&body=Check out this article: http://blog.mwish.me/2020/11/23/Long-Tail-Key-Memcache-in-FB/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/11/23/Long-Tail-Key-Memcache-in-FB/&title=Long Tail Key &amp;&amp; Memcache in FB"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/11/23/Long-Tail-Key-Memcache-in-FB/&title=Long Tail Key &amp;&amp; Memcache in FB"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/11/23/Long-Tail-Key-Memcache-in-FB/&title=Long Tail Key &amp;&amp; Memcache in FB"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/11/23/Long-Tail-Key-Memcache-in-FB/&title=Long Tail Key &amp;&amp; Memcache in FB"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/11/23/Long-Tail-Key-Memcache-in-FB/&name=Long Tail Key &amp;&amp; Memcache in FB&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/11/23/Long-Tail-Key-Memcache-in-FB/&t=Long Tail Key &amp;&amp; Memcache in FB"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Concepts"><span class="toc-number">1.</span> <span class="toc-text">Concepts</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Key-based-Sampling"><span class="toc-number">1.1.</span> <span class="toc-text">Key-based Sampling</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Promotion-Algorithm"><span class="toc-number">1.2.</span> <span class="toc-text">Promotion Algorithm</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A6%82%E7%8E%87%E6%A8%A1%E5%9E%8B"><span class="toc-number">1.3.</span> <span class="toc-text">概率模型</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Redis-HotKey"><span class="toc-number">2.</span> <span class="toc-text">Redis HotKey</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Long Tail Key &amp;&amp; Memcache in FB
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2020-11-23T15:36:35.000Z" itemprop="datePublished">2020-11-23</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>之前这篇文章大体介绍了一下 memcache 的架构： <a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/194347153">https://zhuanlan.zhihu.com/p/194347153</a></p>
+<p>上述一些在这篇文章中会用到的概念有：</p>
+<ul>
+<li>Memcache Pool: 按照 key 切分成为不同的 Pool, 适配不同的 key 和 key 不同的读写频率。同时，把冷热-高低代价的数据放在不同的池子里，然后 tunning, 来保证系统效率。</li>
+<li>Lease 机制：用 Lease 来控制一致性</li>
+<li>In a Region: Replication<ul>
+<li><code>frontend cluster</code> 即一组 服务器和memcached。多组 frontend cluster 存储到底层的 storage 上。</li>
+<li>在 Region 层面，也有 Region Pool, 这是一种资源共享。Region 中 frontend 请求不一，但对应存储层是一样的。对于某类数据：即数量少访问贵的，可以被移到一个共享的池子中。</li>
+</ul>
+</li>
+</ul>
+<p>阅读 FB 分割的时候最好理解上述文章的对应内容。同时，这篇文章建模的时候大量使用了 <code>user</code> 这个词，可能某种程度上，fb 资源是以 user 做某些方式 sharding 的，不过文章也解释了，对资源的请求有和用户火热程度相似的分布。</p>
+<p>了解了架构之后，实际上数据会有上面说的，分布的问题：</p>
+<p><img src="https://image.mwish.me/blog-image/7EC471A1-D7FF-4F7A-B46E-36AD9005BDD4.png" alt="7EC471A1-D7FF-4F7A-B46E-36AD9005BDD4"></p>
+<ul>
+<li>90% 的请求是少于访问32次的，很多人至多有 100 个朋友，并且只和他们发消息/看他们相关的内容。</li>
+<li>部分火热的用户/资源访问频率很高。</li>
+</ul>
+<p>FB 希望：</p>
+<ul>
+<li>一个 region pool 内的热数据能尽量在多个对应 <code>frontend cluster</code> 缓存中</li>
+<li>冷数据全部占用 RAM 的话会是一笔巨大的开销，可以把他们分配在不常访问/访问代价稍高的地方。</li>
+</ul>
+<p>论文把 memcache 集群分为了 frontend cluster 独立的 L1 cache 和共享的 L2 cache，这类似 CPU 的架构，不同于 CPU，由于访问时间/penalty 的增加，可以用一些别的可能复杂一些、更好预测的缓存算法，取代一些可以做到硬件里的 LRU/类LRU 策略，来减小 penalty。</p>
+<p>当然，就我个人感受来看，memcache 应该是 fb 一个通用系统，所以感觉它的算法会做的 common 一些，而不是根据某些业务的请求做一些激进的优化。</p>
+<h2 id="Concepts"><a href="#Concepts" class="headerlink" title="Concepts"></a>Concepts</h2><blockquote>
+<p>Each key-value pair has a key ID, which is a string. A normalized version of key-id is defined as a normalized key. For example, key ID <code>photos:foobar:&#123;12345&#125;:c&#123;1&#125;</code> has <code>photos:foobar:&#123;N&#125;:c&#123;N&#125;</code> as its normalized key where N stands for an integer value. For this particular example, ‘12345’ is a user ID and the second N = 1 is for version number. A key family is a set for all cache key-value pairs which have the same normalized key.</p>
+</blockquote>
+<p>同时，key 被组织称 key family, 来：</p>
+<ul>
+<li>分配给专用的 memcached pool</li>
+<li>添加 TTL</li>
+<li>整个 key family 迁移</li>
+</ul>
+<blockquote>
+<p>The prefix of normalized key is used to detect which pool the key belongs to. For example, all keys starting with prefix ‘photo’ go to the photo tier which has its dedicated Memcached machines.</p>
+</blockquote>
+<p>论文定义了 <em>work set size</em>，指的是在给定的时间窗口内每个单独的 <code>&lt;key, value&gt;</code>  被访问过的 bytes 和。</p>
+<p><img src="https://image.mwish.me/blog-image/1A0F8742-DA4A-4553-BD23-4DE00ABE8677.png" alt="1A0F8742-DA4A-4553-BD23-4DE00ABE8677"></p>
+<p>同时，这里引入了一个计算放大的量，duplicate factor:</p>
+<p><img src="https://image.mwish.me/blog-image/9D3D2F2D-714D-4094-9200-C11FB4209073.png" alt="9D3D2F2D-714D-4094-9200-C11FB4209073"></p>
+<p>对于一个 key family，它可能被分配到一个 region pool，对应到一个到多个 frontend cluster。<code>wss</code> 表示单个 cluster 的访问的 size, duplication factor 反映在整个集群中的放大比例。region 在这一层逻辑中，可以被看作在 L2 的空间内存里。</p>
+<p>这个值在逻辑上与 key family 对应的 user, 即 key family 实际上对应的请求者数量是相关的：</p>
+<blockquote>
+<p>When a key family is shared across more unique users, it has a higher probability of being accessed from more frontend clusters.</p>
+</blockquote>
+<p>现在目标是，对于某个给定的 key family, 能够把热点请求在 frontend 集群中，作为对应的 L1 cache，不那么热的就不要在 frontend 集群，丢在 L2 Cache 甚至数据库里。</p>
+<h3 id="Key-based-Sampling"><a href="#Key-based-Sampling" class="headerlink" title="Key-based Sampling"></a>Key-based Sampling</h3><p>通过控制采样率来控制采样。</p>
+<blockquote>
+<p>Because keys are not sampled by user requests, key-based sampling can capture all cache accesses including ones not associated with user activities. </p>
+</blockquote>
+<p>这里以 key 为单位，通过以下方式完成采样：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">hash(key_id) % sample_rate == 0</span><br></pre></td></tr></table></figure>
+<blockquote>
+<p> Because keys are not sampled by user requests, key-based sampling can capture all cache accesses including ones not associated with user activities. </p>
+</blockquote>
+<p>这里要说明的是，fb 请求逻辑可能会这样，比如加载页面，要一个请求加载几百张图片。这里采取的模式是应用简单的 k-v 抽象。</p>
+<p>它的采样算法很简单，<code>hash(key_id) % sample_rate == 0</code> 就算命中…简单吧！</p>
+<p>（我当时看的时候大骂：就这？LRU不来个？LFU不来个？）</p>
+<h3 id="Promotion-Algorithm"><a href="#Promotion-Algorithm" class="headerlink" title="Promotion Algorithm"></a>Promotion Algorithm</h3><p><img src="https://image.mwish.me/blog-image/E39FD911-059D-4E34-9557-96EFA756E441.png" alt="E39FD911-059D-4E34-9557-96EFA756E441"></p>
+<p><img src="https://image.mwish.me/blog-image/639562CE-3D6E-4DF8-BDF5-1106D46DB6A2.png" alt="639562CE-3D6E-4DF8-BDF5-1106D46DB6A2"></p>
+<p>这就真的如上图所述了…我感觉反而没什么好说的。不过现在要在两层 cache 维护 lease, 感觉上原本是一个 miss 请求发一个 lease, 现在感觉两层分别做 lease 应该也可以？然后 promote 独立进行。不知道是不是。</p>
+<p>这里重点是 <code>5</code> 的采样方法，和第一次 miss 加载到 L2 的不会尝试被 promote 到 L1。</p>
+<h3 id="概率模型"><a href="#概率模型" class="headerlink" title="概率模型"></a>概率模型</h3><p><img src="https://image.mwish.me/blog-image/8BCEF769-8A07-4B65-AF7B-8129D14903AA.png" alt="8BCEF769-8A07-4B65-AF7B-8129D14903AA"></p>
+<p>结论：</p>
+<p><img src="https://image.mwish.me/blog-image/46485508-C9A4-4DFB-BB25-F2E19D8499BC.png" alt="46485508-C9A4-4DFB-BB25-F2E19D8499BC"></p>
+<p>文章 4-5 节介绍了这个算法的优化效果，看上去还是不错的。原理感觉和 CPU Cache 多级原理是一样的（不过冷热分割和 cache 结合起来倒是很有意思）</p>
+<h2 id="Redis-HotKey"><a href="#Redis-HotKey" class="headerlink" title="Redis HotKey"></a>Redis HotKey</h2><p>我们介绍了 FB 的采样方法，现在我们讲讲国内用的多的 Redis。</p>
+<p>阿里云 Redis 实现了 <code>hotkeys</code> ，可以帮我们实现热 key 查找： <a target="_blank" rel="noopener" href="https://www.alibabacloud.com/help/doc-detail/101108.htm">https://www.alibabacloud.com/help/doc-detail/101108.htm</a></p>
+<p>相关的 issue 可以找到：</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://github.com/redis/redis/issues/4473">https://github.com/redis/redis/issues/4473</a></li>
+</ul>
+<p>（还是杭州阿里的大佬做的，orz）</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/* Logarithmically increment a counter. The greater is the current counter value</span></span><br><span class="line"><span class="comment"> * the less likely is that it gets really implemented. Saturate it at 255. */</span></span><br><span class="line"><span class="type">uint8_t</span> <span class="title function_">LFULogIncr</span><span class="params">(<span class="type">uint8_t</span> counter)</span> &#123;</span><br><span class="line">    <span class="keyword">if</span> (counter == <span class="number">255</span>) <span class="keyword">return</span> <span class="number">255</span>;</span><br><span class="line">    <span class="type">double</span> r = (<span class="type">double</span>)rand()/RAND_MAX;</span><br><span class="line">    <span class="type">double</span> baseval = counter - LFU_INIT_VAL;</span><br><span class="line">    <span class="keyword">if</span> (baseval &lt; <span class="number">0</span>) baseval = <span class="number">0</span>;</span><br><span class="line">    <span class="type">double</span> p = <span class="number">1.0</span>/(baseval*server.lfu_log_factor+<span class="number">1</span>);</span><br><span class="line">    <span class="keyword">if</span> (r &lt; p) counter++;</span><br><span class="line">    <span class="keyword">return</span> counter;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>它依赖概率增加 <code>counter</code>, 同时有一个 <code>baseval</code>. 之前使用的是 <code>hash(key_id) % sample_rate == 0</code> 来决定是不是，现在用 <code>double p = 1.0/(baseval*server.lfu_log_factor+1)</code> 来代替<code>sample_rate</code>, 以增加 counter 来增加采样。</p>
+<p>在 issue 里也提到了，因为是一个 counter, 所以要面对 key 之前常访问，现在少访问的情况，所以要有一个 <code>last_access_time</code> 和 counter:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/* If the object decrement time is reached decrement the LFU counter but</span></span><br><span class="line"><span class="comment"> * do not update LFU fields of the object, we update the access time</span></span><br><span class="line"><span class="comment"> * and counter in an explicit way when the object is really accessed.</span></span><br><span class="line"><span class="comment"> * And we will times halve the counter according to the times of</span></span><br><span class="line"><span class="comment"> * elapsed time than server.lfu_decay_time.</span></span><br><span class="line"><span class="comment"> * Return the object frequency counter.</span></span><br><span class="line"><span class="comment"> *</span></span><br><span class="line"><span class="comment"> * This function is used in order to scan the dataset for the best object</span></span><br><span class="line"><span class="comment"> * to fit: as we check for the candidate, we incrementally decrement the</span></span><br><span class="line"><span class="comment"> * counter of the scanned objects if needed. */</span></span><br><span class="line"><span class="type">unsigned</span> <span class="type">long</span> <span class="title function_">LFUDecrAndReturn</span><span class="params">(robj *o)</span> &#123;</span><br><span class="line">    <span class="type">unsigned</span> <span class="type">long</span> ldt = o-&gt;lru &gt;&gt; <span class="number">8</span>;</span><br><span class="line">    <span class="type">unsigned</span> <span class="type">long</span> counter = o-&gt;lru &amp; <span class="number">255</span>;</span><br><span class="line">    <span class="type">unsigned</span> <span class="type">long</span> num_periods = server.lfu_decay_time ? LFUTimeElapsed(ldt) / server.lfu_decay_time : <span class="number">0</span>;</span><br><span class="line">    <span class="keyword">if</span> (num_periods)</span><br><span class="line">        counter = (num_periods &gt; counter) ? <span class="number">0</span> : counter - num_periods;</span><br><span class="line">    <span class="keyword">return</span> counter;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Concepts"><span class="toc-number">1.</span> <span class="toc-text">Concepts</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Key-based-Sampling"><span class="toc-number">1.1.</span> <span class="toc-text">Key-based Sampling</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Promotion-Algorithm"><span class="toc-number">1.2.</span> <span class="toc-text">Promotion Algorithm</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A6%82%E7%8E%87%E6%A8%A1%E5%9E%8B"><span class="toc-number">1.3.</span> <span class="toc-text">概率模型</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Redis-HotKey"><span class="toc-number">2.</span> <span class="toc-text">Redis HotKey</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/11/23/Long-Tail-Key-Memcache-in-FB/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/11/23/Long-Tail-Key-Memcache-in-FB/&text=Long Tail Key &amp;&amp; Memcache in FB"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/11/23/Long-Tail-Key-Memcache-in-FB/&title=Long Tail Key &amp;&amp; Memcache in FB"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/11/23/Long-Tail-Key-Memcache-in-FB/&is_video=false&description=Long Tail Key &amp;&amp; Memcache in FB"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Long Tail Key &amp;&amp; Memcache in FB&body=Check out this article: http://blog.mwish.me/2020/11/23/Long-Tail-Key-Memcache-in-FB/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/11/23/Long-Tail-Key-Memcache-in-FB/&title=Long Tail Key &amp;&amp; Memcache in FB"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/11/23/Long-Tail-Key-Memcache-in-FB/&title=Long Tail Key &amp;&amp; Memcache in FB"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/11/23/Long-Tail-Key-Memcache-in-FB/&title=Long Tail Key &amp;&amp; Memcache in FB"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/11/23/Long-Tail-Key-Memcache-in-FB/&title=Long Tail Key &amp;&amp; Memcache in FB"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/11/23/Long-Tail-Key-Memcache-in-FB/&name=Long Tail Key &amp;&amp; Memcache in FB&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/11/23/Long-Tail-Key-Memcache-in-FB/&t=Long Tail Key &amp;&amp; Memcache in FB"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

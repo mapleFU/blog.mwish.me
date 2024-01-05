@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="Analyzing and Comparing Lakehouse Storage Systems 发布于 CIDR’23。作者包括了 UCB, Stanford，还有著名的 Mesos &#x2F; Spark 的作者 Matei 和他的导师 Ion Stoica。本文分析了 DataBricks、Hudi、Iceberg 几大系统的存储，并且划分了下面的几个问题：  Coordinator transa">
+<meta property="og:type" content="article">
+<meta property="og:title" content="CIDR&#39;23: Analyzing and Comparing Lakehouse Storage Systems">
+<meta property="og:url" content="http://blog.mwish.me/2023/11/05/CIDR-23-Analyzing-and-Comparing-Lakehouse-Storage-Systems/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="Analyzing and Comparing Lakehouse Storage Systems 发布于 CIDR’23。作者包括了 UCB, Stanford，还有著名的 Mesos &#x2F; Spark 的作者 Matei 和他的导师 Ion Stoica。本文分析了 DataBricks、Hudi、Iceberg 几大系统的存储，并且划分了下面的几个问题：  Coordinator transa">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/9015916313194020933.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/8009400306733372816.png">
+<meta property="article:published_time" content="2023-11-05T12:59:08.000Z">
+<meta property="article:modified_time" content="2023-11-05T12:59:50.444Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/9015916313194020933.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>CIDR&#39;23: Analyzing and Comparing Lakehouse Storage Systems</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2023/11/15/Fast-Scalar-Code-and-Compiler/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2023/11/03/SIGMOD-14-Morsel-Driven-Parallelism/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2023/11/05/CIDR-23-Analyzing-and-Comparing-Lakehouse-Storage-Systems/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2023/11/05/CIDR-23-Analyzing-and-Comparing-Lakehouse-Storage-Systems/&text=CIDR&#39;23: Analyzing and Comparing Lakehouse Storage Systems"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2023/11/05/CIDR-23-Analyzing-and-Comparing-Lakehouse-Storage-Systems/&title=CIDR&#39;23: Analyzing and Comparing Lakehouse Storage Systems"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2023/11/05/CIDR-23-Analyzing-and-Comparing-Lakehouse-Storage-Systems/&is_video=false&description=CIDR&#39;23: Analyzing and Comparing Lakehouse Storage Systems"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=CIDR&#39;23: Analyzing and Comparing Lakehouse Storage Systems&body=Check out this article: http://blog.mwish.me/2023/11/05/CIDR-23-Analyzing-and-Comparing-Lakehouse-Storage-Systems/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2023/11/05/CIDR-23-Analyzing-and-Comparing-Lakehouse-Storage-Systems/&title=CIDR&#39;23: Analyzing and Comparing Lakehouse Storage Systems"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2023/11/05/CIDR-23-Analyzing-and-Comparing-Lakehouse-Storage-Systems/&title=CIDR&#39;23: Analyzing and Comparing Lakehouse Storage Systems"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2023/11/05/CIDR-23-Analyzing-and-Comparing-Lakehouse-Storage-Systems/&title=CIDR&#39;23: Analyzing and Comparing Lakehouse Storage Systems"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2023/11/05/CIDR-23-Analyzing-and-Comparing-Lakehouse-Storage-Systems/&title=CIDR&#39;23: Analyzing and Comparing Lakehouse Storage Systems"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2023/11/05/CIDR-23-Analyzing-and-Comparing-Lakehouse-Storage-Systems/&name=CIDR&#39;23: Analyzing and Comparing Lakehouse Storage Systems&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2023/11/05/CIDR-23-Analyzing-and-Comparing-Lakehouse-Storage-Systems/&t=CIDR&#39;23: Analyzing and Comparing Lakehouse Storage Systems"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Transaction-Coordination"><span class="toc-number">1.</span> <span class="toc-text">Transaction Coordination</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Metadata-Management"><span class="toc-number">2.</span> <span class="toc-text">Metadata Management</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Data-Update-Strategies"><span class="toc-number">3.</span> <span class="toc-text">Data Update Strategies</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Reference"><span class="toc-number">4.</span> <span class="toc-text">Reference</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        CIDR&#39;23: Analyzing and Comparing Lakehouse Storage Systems
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2023-11-05T12:59:08.000Z" itemprop="datePublished">2023-11-05</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>Analyzing and Comparing Lakehouse Storage Systems 发布于 CIDR’23。作者包括了 UCB, Stanford，还有著名的 Mesos / Spark 的作者 Matei 和他的导师 Ion Stoica。本文分析了 DataBricks、Hudi、Iceberg 几大系统的存储，并且划分了下面的几个问题：</p>
+<ol>
+<li>Coordinator transaction</li>
+<li>Store metadata</li>
+<li>Query Metadata</li>
+<li>Handle Update (CoW, MoR. etc…)</li>
+</ol>
+<p>每个问题的选择都会带来一定的 trade-off，本文也用 LHBench ( <a target="_blank" rel="noopener" href="https://github.com/lhbench/lhbench">https://github.com/lhbench/lhbench</a> ) 来对比了这些 Lakehouse。</p>
+<p>我们之前的博客可以见：</p>
+<ol>
+<li><a href="https://blog.mwish.me/2023/03/19/Apache-Iceberg-and-changes-above-Hive/">https://blog.mwish.me/2023/03/19/Apache-Iceberg-and-changes-above-Hive/</a></li>
+<li><a href="https://blog.mwish.me/2022/05/01/Delta-Lake-Lakehouse/">https://blog.mwish.me/2022/05/01/Delta-Lake-Lakehouse/</a></li>
+</ol>
+<p>根据我们自己的理解和论文的理解，Lakehouse 虽然产品定义是一个商业概念，但是技术上，它总的来说是一个 Meta 层 — Storage 层的概念，Raynold Xin 有一个 Talk 的 PPT 做的很好，我就直接抠出来了：</p>
+<p><img src="https://image.mwish.me/blog-image/9015916313194020933.png" alt="img"></p>
+<p>这里可以看到，虽然 Lakehouse 是个商业概念，但是这些点还是比较清晰的：</p>
+<ol>
+<li>（对外）依赖 Open Format 和比较定义好的存储（比如 Object Store）<ol>
+<li>Object Store and Lakehouse: High latency</li>
+<li>对外: (weak) Consistency gurantee</li>
+</ol>
+</li>
+<li>一定程度上的数据 / 元数据处理. 支持一些简单的 ACID 语义（这块的 ACID 语义其实没有传统的关系型数据库定义的那么清晰）</li>
+</ol>
+<p>知道这个概念之后我们再来看这篇论文提出的几个点：</p>
+<ol>
+<li>如何协调事务。这里涉及读写 — 写写的关系。<ol>
+<li>上层事务永远下层的（对象）存储：有的地方如果考虑写 S3 或者对象存储当作事务，可能会考虑使用对象存储的 Put-if-absent 语义 （有的不支持的可能额外依赖一个外部系统）</li>
+<li>用额外的存储系统，比如像 Hive MetaStore（或许还包括 FDB？）. 相对来说，这里提交延迟（不考虑 LIST，那又是另一个问题了）会低一些，但本身也会这个系统有一定的影响</li>
+</ol>
+</li>
+<li>如何存储 metadata. (For Pruning, etc.)<ol>
+<li>把数据存到额外的表上（Google Bigmeta?)</li>
+<li>放到 Transaction Log 上</li>
+<li>放到额外的服务去（FDB？）</li>
+</ol>
+</li>
+<li>如何查询 Metadata<ol>
+<li>Delta Lake 和 Hudi 可以用系统的 Parallel Job 来查询 Metadata，在大表的时候并行 Planing，加速，但这个对小表来说可能会增大 latency</li>
+<li>Iceberg 现在是单线程查询</li>
+<li>（但我理解这几个特么的都可以并行吧，标准在那人是活人）</li>
+</ol>
+</li>
+<li>如何高效处理 Record 级别的更新。这里因为 Lakehouse 本身处理大批数据，本身有很多批量加载数据的逻辑，比如 SQL Merge 这种。不同系统可能有 Copy-on-write 或者 Merge-on-read 等方式</li>
+</ol>
+<p>论文里面还提到一些比较好玩的东西，很符合我的直觉</p>
+<blockquote>
+<p>On the one hand, organizations use lakehouse systems to ingest and organize very large datasets—for example, the largest Delta Lake tables span well into the hundreds of petabytes, consist of billions of files, and are updated with hundreds of terabytes of ingested data per day [21]. On the other hand, the data warehouse capabilities of lakehouse systems are encouraging organizations to load and manage smaller datasets in them too, in order to combine these with the latest data from their ingest pipelines and build a single management system for all data. For example, most of the CPU-hours on Databricks are used to process tables smaller than 1 TB, and query durations across all tables range from sub-second to hours.</p>
+</blockquote>
+<p>论文中对 Lakehouse 拆分剖析如下：</p>
+<p><img src="https://image.mwish.me/blog-image/8009400306733372816.png" alt="img"></p>
+<p>文章后面有一些 benchmark，但我觉得没啥意思，就不看了，你妈的这些 benchmark 比较在做过的人眼里完全没任何价值。</p>
+<h2 id="Transaction-Coordination"><a href="#Transaction-Coordination" class="headerlink" title="Transaction Coordination"></a>Transaction Coordination</h2><ul>
+<li>支持单表事务，但是对多标事务支持可能不是特别好，同事事务支持的语义不完全相同（见 Table1 的 Isolation Levels）</li>
+<li>Delta Lake 使用对象存储的事务。对于 S3 这种不支持 conditional-write 的，Delta Lake 使用 Dynamo 来做协调（Lance 和 arrow-rs 的 object-store 也支持同样的语义）。我个人觉得，这套方案的本质是依赖事务性 CAS Logging 和 Lakehouse 本身的低提交频率（或者即使提交数据多，在他们的场景也倾向于是大 SQL作业提交大批量数据，而不是TP的高tps小事务）</li>
+<li>Hudi/Iceberg HMS/Zk/Dynamo 实现的表锁。论文因为有 Delta 的人，还小小的抹黑了一下提到他们有因为这个造成脏写的问题（Hive: Fix concurrent transactions overwriting commits by adding hive lock heartbeats. <a target="_blank" rel="noopener" href="https://github.com/apache/iceberg/pull/5036">https://github.com/apache/iceberg/pull/5036</a> )。但我觉得属于半尬黑了，本质原因还是依赖外部系统做一个存储层的 fencing 是比较难的，退一万步说，我觉得你 Delta 依赖 Dynamo 在 S3 上操作还比人家有优越感了么。当然依赖少确实是有优势的就是了，本质也是 trade-off。</li>
+</ul>
+<p>这几个产品本身都是用 OCC 的协议（insite: 冲突可能会比较小？），但是提供了不同的语义（又要开始吹自己了）：</p>
+<ul>
+<li>Iceberg 和 Hudi 都会保证读的时候来自 start snapshot，提交的时候和已经提交的事务没有写写冲突，所以这块的隔离级别是 SI</li>
+<li>Delta 默认会保证（当然 Iceberg 也有这个能力）更新的时候没有 SI会遇到的 anti-dependency ( <a href="https://blog.mwish.me/2020/11/14/%E4%BA%8B%E5%8A%A1-%E5%8D%8F%E8%AE%AE%E5%92%8C%E9%9A%94%E7%A6%BB/">https://blog.mwish.me/2020/11/14/%E4%BA%8B%E5%8A%A1-%E5%8D%8F%E8%AE%AE%E5%92%8C%E9%9A%94%E7%A6%BB/</a> 比如只剩一个用户，然后两个事务都是 `IF(exist) then -1 and …`` 这种，用这种方式来支持 Serializable（当然这块读可能不完全按照定义，一个读仍然可能读到不满足时序的数据）。Delta 甚至可以开启读的时候也做检查的限制，来达到 Strict Serializable</li>
+</ul>
+<h2 id="Metadata-Management"><a href="#Metadata-Management" class="headerlink" title="Metadata Management"></a>Metadata Management</h2><p>S3 之类的 LIST 本身限制 1000 个文件，LIST 一个大目录延迟高，可能还要手写循环或者递归，还是比较菜的。为了突破这种限制，几个 Lakehouse 都支持把 Metadata 外存，论文这里把外存分成了 Tabular 和 Hierachical 两种方式：</p>
+<ul>
+<li>Delta Lake 和 Hudi 把元数据存储在 metadata table（Hudi） ， Transaction Log Checkpoint（Delta 存储 JSON / Parquet ）。这两种系统元数据提交是直接写日志然后周期性 Merge-On-Read 合并到表中（本质上有点像 Lakehouse 搞从 CDC 中导入数据的 Pattern？）</li>
+<li>Iceberg 直接存成层次的文件</li>
+</ul>
+<h2 id="Data-Update-Strategies"><a href="#Data-Update-Strategies" class="headerlink" title="Data Update Strategies"></a>Data Update Strategies</h2><p>分为 COW 和 MOR。但是根据我个人的观察，比较困难的其实还是更新 / 宽表更新单列 这类的处理，有的地方可能会写 opLog，有的地方会产生一个 Primary Key 然后覆盖 PK，有的地方会更新宽表的时候 CoW 单列。 </p>
+<h2 id="Reference"><a href="#Reference" class="headerlink" title="Reference"></a>Reference</h2><ol>
+<li><a target="_blank" rel="noopener" href="https://www.montecarlodata.com/impact-2021-the-data-lakehouse/">https://www.montecarlodata.com/impact-2021-the-data-lakehouse/</a> Reynold Xin 在 21 年的 Talk。我觉得先看这个再看 VLDB的 LakeHouse Paper 比较好，毕竟主创自己的意思肯定更清晰一些</li>
+</ol>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Transaction-Coordination"><span class="toc-number">1.</span> <span class="toc-text">Transaction Coordination</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Metadata-Management"><span class="toc-number">2.</span> <span class="toc-text">Metadata Management</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Data-Update-Strategies"><span class="toc-number">3.</span> <span class="toc-text">Data Update Strategies</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Reference"><span class="toc-number">4.</span> <span class="toc-text">Reference</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2023/11/05/CIDR-23-Analyzing-and-Comparing-Lakehouse-Storage-Systems/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2023/11/05/CIDR-23-Analyzing-and-Comparing-Lakehouse-Storage-Systems/&text=CIDR&#39;23: Analyzing and Comparing Lakehouse Storage Systems"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2023/11/05/CIDR-23-Analyzing-and-Comparing-Lakehouse-Storage-Systems/&title=CIDR&#39;23: Analyzing and Comparing Lakehouse Storage Systems"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2023/11/05/CIDR-23-Analyzing-and-Comparing-Lakehouse-Storage-Systems/&is_video=false&description=CIDR&#39;23: Analyzing and Comparing Lakehouse Storage Systems"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=CIDR&#39;23: Analyzing and Comparing Lakehouse Storage Systems&body=Check out this article: http://blog.mwish.me/2023/11/05/CIDR-23-Analyzing-and-Comparing-Lakehouse-Storage-Systems/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2023/11/05/CIDR-23-Analyzing-and-Comparing-Lakehouse-Storage-Systems/&title=CIDR&#39;23: Analyzing and Comparing Lakehouse Storage Systems"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2023/11/05/CIDR-23-Analyzing-and-Comparing-Lakehouse-Storage-Systems/&title=CIDR&#39;23: Analyzing and Comparing Lakehouse Storage Systems"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2023/11/05/CIDR-23-Analyzing-and-Comparing-Lakehouse-Storage-Systems/&title=CIDR&#39;23: Analyzing and Comparing Lakehouse Storage Systems"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2023/11/05/CIDR-23-Analyzing-and-Comparing-Lakehouse-Storage-Systems/&title=CIDR&#39;23: Analyzing and Comparing Lakehouse Storage Systems"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2023/11/05/CIDR-23-Analyzing-and-Comparing-Lakehouse-Storage-Systems/&name=CIDR&#39;23: Analyzing and Comparing Lakehouse Storage Systems&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2023/11/05/CIDR-23-Analyzing-and-Comparing-Lakehouse-Storage-Systems/&t=CIDR&#39;23: Analyzing and Comparing Lakehouse Storage Systems"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="BTree 的实现一直是有范本但工程上很难做的事情，Btree 自上世纪 70 年代被提出后(1972)，已经是一个久经考验的结构了（远比 LSM-Tree 古老），但是 B-Tree 的并发一直是介绍材料不多、工程实现难啃的部分。相对于 2021 年常见的 LSM-Tree 而言，[1] B-Tree 实现大部分不是 immutable 的 。[2] B-Tree 大部分和存储引擎、Recove">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Notes on Btree Implements: InnoDB">
+<meta property="og:url" content="http://blog.mwish.me/2022/07/04/Notes-on-Btree-Implements-InnoDB/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="BTree 的实现一直是有范本但工程上很难做的事情，Btree 自上世纪 70 年代被提出后(1972)，已经是一个久经考验的结构了（远比 LSM-Tree 古老），但是 B-Tree 的并发一直是介绍材料不多、工程实现难啃的部分。相对于 2021 年常见的 LSM-Tree 而言，[1] B-Tree 实现大部分不是 immutable 的 。[2] B-Tree 大部分和存储引擎、Recove">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/mysql_10.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/66E4B75E-076C-4F97-A65A-C9AB3427F6AD.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/215370F3-E7ED-4D14-B00C-23DDDAACED2E.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/D58CA7AD-5362-42E3-9700-4454036DF6C6.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/64C7B2DB-DD5C-40EF-AAE3-AF420AB6A390.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/undo_logical.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/undo_log_disk_structure.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/90D7A363-9443-4B7E-A032-EFF999FFECBD.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/AGN3ghS.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/ye4VVpc.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/btr_page_split_and_insert.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/btr_root_raise_and_insert.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/v2-d99e782c382bb6bab211faf1d8f432ac_r.jpeg">
+<meta property="article:published_time" content="2022-07-04T13:00:00.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.558Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/mysql_10.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>Notes on Btree Implements: InnoDB</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2022/07/09/Notes-on-Btree-Implements-PostgreSQL/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2022/07/03/%E6%AF%95%E4%B8%9A%E4%B8%A4%E5%B9%B4%E8%AE%B0/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2022/07/04/Notes-on-Btree-Implements-InnoDB/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2022/07/04/Notes-on-Btree-Implements-InnoDB/&text=Notes on Btree Implements: InnoDB"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2022/07/04/Notes-on-Btree-Implements-InnoDB/&title=Notes on Btree Implements: InnoDB"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2022/07/04/Notes-on-Btree-Implements-InnoDB/&is_video=false&description=Notes on Btree Implements: InnoDB"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Notes on Btree Implements: InnoDB&body=Check out this article: http://blog.mwish.me/2022/07/04/Notes-on-Btree-Implements-InnoDB/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2022/07/04/Notes-on-Btree-Implements-InnoDB/&title=Notes on Btree Implements: InnoDB"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2022/07/04/Notes-on-Btree-Implements-InnoDB/&title=Notes on Btree Implements: InnoDB"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2022/07/04/Notes-on-Btree-Implements-InnoDB/&title=Notes on Btree Implements: InnoDB"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2022/07/04/Notes-on-Btree-Implements-InnoDB/&title=Notes on Btree Implements: InnoDB"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2022/07/04/Notes-on-Btree-Implements-InnoDB/&name=Notes on Btree Implements: InnoDB&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2022/07/04/Notes-on-Btree-Implements-InnoDB/&t=Notes on Btree Implements: InnoDB"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#MySQL-InnoDB"><span class="toc-number">1.</span> <span class="toc-text">MySQL InnoDB</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Page"><span class="toc-number">1.1.</span> <span class="toc-text">Page</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Tuple"><span class="toc-number">1.2.</span> <span class="toc-text">Tuple</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Leaf-Page-Non-Leaf-Page"><span class="toc-number">1.3.</span> <span class="toc-text">Leaf Page &#x2F; Non Leaf Page</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%AF%B9%E9%A1%B5%E9%9D%A2%E7%9A%84%E6%93%8D%E4%BD%9C"><span class="toc-number">1.3.1.</span> <span class="toc-text">对页面的操作</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Undo"><span class="toc-number">1.4.</span> <span class="toc-text">Undo</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Redo"><span class="toc-number">1.5.</span> <span class="toc-text">Redo</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Transaction-%E5%92%8C-MTR"><span class="toc-number">1.6.</span> <span class="toc-text">Transaction 和 MTR</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#InnoDB-Btree-%E7%9A%84%E6%93%8D%E4%BD%9C"><span class="toc-number">2.</span> <span class="toc-text">InnoDB Btree 的操作</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%8B%E9%99%8D%E5%92%8C-Latch"><span class="toc-number">2.1.</span> <span class="toc-text">下降和 Latch</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Cursor-amp-Persistent-Cursor"><span class="toc-number">2.2.</span> <span class="toc-text">Cursor &amp; Persistent Cursor</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%88%86%E8%A3%82"><span class="toc-number">2.3.</span> <span class="toc-text">分裂</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%A0%B9%E7%BB%93%E7%82%B9%E7%9A%84%E5%88%86%E8%A3%82"><span class="toc-number">2.3.1.</span> <span class="toc-text">根结点的分裂</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Insert-Buffer"><span class="toc-number">2.4.</span> <span class="toc-text">Insert Buffer</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%8A%E5%B1%82%E7%9A%84-ICP-%E5%92%8C-Lock"><span class="toc-number">2.5.</span> <span class="toc-text">上层的 ICP 和 Lock</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8F%82%E8%80%83"><span class="toc-number">3.</span> <span class="toc-text">参考</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Notes on Btree Implements: InnoDB
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2022-07-04T13:00:00.000Z" itemprop="datePublished">2022-07-04</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>BTree 的实现一直是有范本但工程上很难做的事情，Btree 自上世纪 70 年代被提出后(1972)，已经是一个久经考验的结构了（远比 LSM-Tree 古老），但是 B-Tree 的并发一直是介绍材料不多、工程实现难啃的部分。相对于 2021 年常见的 LSM-Tree 而言，[1] B-Tree 实现大部分不是 immutable 的 。[2] B-Tree 大部分和存储引擎、Recover System、事务、Catalog 结合得很紧密，大部分时候不是一个简单的 KV 接口。导致这个常见的数据库结构带上了很多神秘的面纱。</p>
+<p>我们希望介绍 MySQL 的 InnoDB 引擎、PostgreSQL 的 BTree 引擎和 WiredTiger 的 COW BTree 结构。来介绍一下常见数据库真实使用的 BTree 范本。</p>
+<h2 id="MySQL-InnoDB"><a href="#MySQL-InnoDB" class="headerlink" title="MySQL InnoDB"></a>MySQL InnoDB</h2><p>MySQL InnoDB 基于 Jim Gray 的 Transaction Processing 一书实现。这里实现了一个 MVCC 的 BTree，MVCC 数据采用 N2O 的形式链接，主表数据存储在 BTree 上，称为 <strong>Cluster Index</strong>；索引数据；旧版本的数据会放到一个 Delta Space 里面。删除和 MVCC 的形式结合起来，做标记删除。</p>
+<p>一刻 BTree 的 Page 会尽量存放在一起，具体可以参考 InnoDB 的表空间。同一个索引中，non-leaf page 会存储在一个 Segment 中；leaf page 会存储在一个 Segment 中。Segment 会按照 Extent (大小为 1MB，默认为 64 个 Page ) 为单位，向系统申请存储空间。</p>
+<h3 id="Page"><a href="#Page" class="headerlink" title="Page"></a>Page</h3><blockquote>
+<p>数据页包括七个部分，数据页文件头，数据页头，最大最小记录，用户记录，空闲空间，数据目录，数据页尾部。 简单的来说，数据页分两部分，一部分存储数据记录，按照记录的大小通过记录的指针连接起来。另外一部分存储数据页的目录，用来加速查找。</p>
+</blockquote>
+<p>以索引页为例：</p>
+<p><img src="https://image.mwish.me/blog-image/mysql_10.png" alt="mysql_10"></p>
+<p>File Header 部分会标志这里是什么页，而 File Trailer 则有 crc 和页面的 lsn。这一组内容由 <code>fil</code> 有关的文件组提供，代码在：<a target="_blank" rel="noopener" href="https://github.com/CatKang/InnoDB/blob/master/innobase/include/fil0fil.h#L789">https://github.com/CatKang/InnoDB/blob/master/innobase/include/fil0fil.h#L789</a></p>
+<p><code>page</code> 有关的文件基本上是为索引页设计的，<code>page</code> 开头基本上是存储的页面元信息，Page Header 之类的，它的元信息在 <code>page0page</code>  维护，操作主要在：<a target="_blank" rel="noopener" href="https://github.com/CatKang/InnoDB/blob/master/innobase/include/page0cur.h">https://github.com/CatKang/InnoDB/blob/master/innobase/include/page0cur.h</a></p>
+<h3 id="Tuple"><a href="#Tuple" class="headerlink" title="Tuple"></a>Tuple</h3><p><img src="https://image.mwish.me/blog-image/66E4B75E-076C-4F97-A65A-C9AB3427F6AD.png" alt="66E4B75E-076C-4F97-A65A-C9AB3427F6AD"></p>
+<p>这些 Tuple 之间会根据 <code>next_record</code> 构成一个单向链表，指向下一个字段的 header 之后，真实信息之前，<code>transaction_id</code> 是一个顺序增长的 id，用来表示创建这条记录的事务 id，<code>roll_pointer</code> 指向 undo 上的记录。</p>
+<h3 id="Leaf-Page-Non-Leaf-Page"><a href="#Leaf-Page-Non-Leaf-Page" class="headerlink" title="Leaf Page / Non Leaf Page"></a>Leaf Page / Non Leaf Page</h3><p>下面的代码实现在 <code>page0page</code> 相关的系统中。</p>
+<p>InnoDB 的 Page 内容采取双向链表 + 稀疏索引的形式实现，头部还有一些统计信息，下图比较清晰：</p>
+<p><img src="https://image.mwish.me/blog-image/215370F3-E7ED-4D14-B00C-23DDDAACED2E.png" alt="215370F3-E7ED-4D14-B00C-23DDDAACED2E"></p>
+<p>此外，Page 内还有页面的垃圾链表，存放垃圾记录：</p>
+<p><img src="https://image.mwish.me/blog-image/D58CA7AD-5362-42E3-9700-4454036DF6C6.png" alt="D58CA7AD-5362-42E3-9700-4454036DF6C6"></p>
+<p>对 Page 的操作可以看：<a target="_blank" rel="noopener" href="http://mysql.taobao.org/monthly/2018/04/03/">http://mysql.taobao.org/monthly/2018/04/03/</a></p>
+<p>对 Page 的操作会被封装在 <code>mtr</code> 里面，这里日志类似物理逻辑日志。写 Undo Page 也会落 mtr。</p>
+<p>同一高度的 Page 会组织成双向链表，称为 Page List。</p>
+<h4 id="对页面的操作"><a href="#对页面的操作" class="headerlink" title="对页面的操作"></a>对页面的操作</h4><p>结合之前说到过的 Page 内部组织，page 的查找和插入、更新操作都在 <code>page0cur</code> 相关的文件中。需要注意的是，对 Page 的操作不是单个操作，而是一组操作，具体而言，比如说对 Page 的插入，这里会拿到一个对应的 cursor，指向插入的<em>前一条记录</em>，详见代码 <code>page_cur_insert_rec_low</code>:</p>
+<ol>
+<li>找到 Page 的原本的信息，包括一些统计信息</li>
+<li>在 Page 里找到空闲的空间插入记录</li>
+<li>修改统计信息，和上一条记录的 next （还记得它们是单向链表吗）</li>
+</ol>
+<p>所以这里插入实际上不是单条操作，而是一组合起来的操作。</p>
+<p>删除的话，可能直接标记 <code>delete_mark</code>，然后更新一些统计信息即可。</p>
+<h3 id="Undo"><a href="#Undo" class="headerlink" title="Undo"></a>Undo</h3><p>InnoDB 的 MVCC 实现是 Main-Delta。逻辑如下所示：</p>
+<p><img src="https://image.mwish.me/blog-image/64C7B2DB-DD5C-40EF-AAE3-AF420AB6A390.png" alt="64C7B2DB-DD5C-40EF-AAE3-AF420AB6A390"></p>
+<p>具体而言，对于 InnoDB，如果有表 <code>(a: PrimaryKey, b)</code>, 然后 b 被两个事务更新两次，可能会有：</p>
+<ol>
+<li>Cluster Index: <code>(a: a, b: b2), update by txn2, roll_pointer-&gt;u2</code></li>
+<li>Undo:<ol>
+<li><code>u2: &lt;Undo Update, txn1, (a: a, b: b1), roll_pointer-&gt;u1&gt;</code></li>
+<li><code>u1: &lt;Undo Update, txn1, (a: a, b: b0), roll_pointer-&gt;NULL&gt;</code></li>
+</ol>
+</li>
+</ol>
+<p>在逻辑上如下图表示：</p>
+<p><img src="https://image.mwish.me/blog-image/undo_logical.png" alt="undo_logical"></p>
+<p>Undo 实际上承担的功能类似：</p>
+<ol>
+<li>回滚数据库未完成的事务（教科书上的 undo，不过这样其实是<strong>最多只需要一个版本</strong>的），对应接口在 <strong>row_undo</strong>，<strong>trx_roll_pop_top_rec_of_trx</strong> 这条链路</li>
+<li>MVCC 回溯版本链，作为 Undo 的数据，对应接口在在函数<strong>row_search_mvcc</strong>中，关注<strong>trx_undo_prev_version_build</strong> 和 <strong>row_upd_rec_in_place</strong></li>
+</ol>
+<p>物理空间上，Undo 也是由 Page 组织的。一个事务主要记录会保留在一个 Undo Page 上（多余一个的会存在一个 Page 上，但是不讨论），事务的记录会被一个双向链表 history list 串起来，然后按照全局的最低活跃事务和这个 history list 来做多版本数据的 GC。</p>
+<p><img src="https://image.mwish.me/blog-image/undo_log_disk_structure.png" alt="undo_log_disk_structure"></p>
+<p>此外，虽然 btr 我们后面才会介绍，但是 InnoDB Undo 不会涉及 secondary indexes，这点在官方文档也有提及：<a target="_blank" rel="noopener" href="https://dev.mysql.com/doc/refman/8.0/en/innodb-multi-versioning.html">https://dev.mysql.com/doc/refman/8.0/en/innodb-multi-versioning.html</a></p>
+<h3 id="Redo"><a href="#Redo" class="headerlink" title="Redo"></a>Redo</h3><p>InnoDB 的 Redo 感觉就和教科书的 Redo 很接近了。这里有一些分类：</p>
+<ol>
+<li>Page 内操作的物理逻辑日志，比如 <code>MLOG_REC_INSERT</code>, <code>MLOG_REC_UPDATE_IN_PLACE</code>, <code>MLOG_REC_DELETE</code>，它们会有一些操作标注修改的页面。</li>
+<li><code>MLOG_FILE_CREATE</code> 等空间状态的日志</li>
+<li><code>MLOG_MULTI_REC_END</code> 等表示一组操作的日志。比如页面分裂的时候，会有一组表示拷贝记录的日志，需要用这样的日志结尾。</li>
+</ol>
+<h3 id="Transaction-和-MTR"><a href="#Transaction-和-MTR" class="headerlink" title="Transaction 和 MTR"></a>Transaction 和 MTR</h3><p>最后介绍一下事务子系统，希望能把上面的 Btree 和 Undo 内容连起来：</p>
+<p>mtr 完成的是 atomic, durable 的多页面操作，它会封装对<strong>单个</strong>索引（包括 Cluster Index）和 Undo 。mtr recover 的时候，只有 redo，没有 rollback。rollback 都是上层事务的 rollback。</p>
+<p><img src="https://image.mwish.me/blog-image/90D7A363-9443-4B7E-A032-EFF999FFECBD.png" alt="90D7A363-9443-4B7E-A032-EFF999FFECBD"></p>
+<p>对事务的操作都会丢到 mtr 的 buffer 里面，提交完后原子提交到 redo 中。同时，读取可能也有 mtr。</p>
+<p>事务层会有 多个 mtr: 包括索引的 mtr, undo 的 mtr，事务是 mtr 上层的概念。它从 Btree 读取 mtr 中读到数据，然后在这一层上锁。</p>
+<h2 id="InnoDB-Btree-的操作"><a href="#InnoDB-Btree-的操作" class="headerlink" title="InnoDB Btree 的操作"></a>InnoDB Btree 的操作</h2><h3 id="下降和-Latch"><a href="#下降和-Latch" class="headerlink" title="下降和 Latch"></a>下降和 Latch</h3><p>BTree 访问遵照 Latching Protocol。具体代码在 <code>btr0btr</code> 和 <code>btr0cur</code> 中. <code>btr_cur_t</code> 是 btr 的 cursor，从 <code>btr_cu r_search_to_nth_level</code> 中拿到对应的 cursor。然后这里 <code>btr_cur_t</code> 插入和删除。同时，我们还可以和 <code>page0cur</code> 中的 <code>page_cur_t</code> 结合起来。btree 访问有几种 flag:</p>
+<blockquote>
+<p>在B+ tree上共有三种操作：</p>
+<ul>
+<li>读（<strong>BTR_SEARCH_LEAF</strong> / <strong>BTR_SEARCH_LEAF</strong>）：分为点查询和范围查询</li>
+<li>乐观写（<strong>BTR_MODIFY_LEAF</strong>）：仅影响到一个索引页的增删改</li>
+<li>悲观写（<strong>BTR_MODIFY_TREE</strong>）：影响到超过一个索引页的增删改（e.g. DELETE SQL导致了页合并）</li>
+</ul>
+</blockquote>
+<p>同时， BTree 有 Latch 的概念，btree 操作很多都有参数 <code>dict_index_t::lock</code>，表示 btree 的锁。Page 的 latch 在 <code>buf</code> 层实现，外部可以在调用传入 <code>buf_page_get_gen</code> 传入参数。叶子结点访问有 <code>btr_cur_latch_leaves</code></p>
+<p><code>btr_cur_search_to_nth_level</code> 有一千多行代码，逻辑比较复杂，在 8.0 版本中，读取实现逻辑如下：</p>
+<ol>
+<li>获取 index 的 S 锁: <code>mtr_s_lock(..)</code></li>
+<li>然后沿着搜索 btree 路径, 遇到的 non-leaf node page 都加 S LOCK</li>
+<li>然后直到找到 leaf node 以后, 对 leaf node page 也是 S LOCK ( <code>btr_cur_latch_leaves</code> )</li>
+<li>然后把index-&gt; lock 放开, 释放掉别的 latch ( <code>mtr_release_s_latch_at_savepoint</code> )</li>
+</ol>
+<p><img src="https://image.mwish.me/blog-image/AGN3ghS.png" alt="AGN3ghS"></p>
+<p>对于修改请求，这里有 <strong>乐观</strong> 和 <strong>悲观</strong> 两种：</p>
+<ol>
+<li>乐观：<code>btr_cur_optimistic_insert</code>：假设没有 SMO，进行插入</li>
+<li>悲观：<code>btr_cur_pessimistic_insert</code>：乐观插入发现叶子会分裂，进行插入</li>
+</ol>
+<p>上面内容不会出现在 <code>btr_cur_search_to_nth_level</code>，不过会影响 <code>btr_cur_search_to_nth_level</code> 的参数 <code>btr_latch_mode</code>. 他们插入内容如下图：</p>
+<ul>
+<li>乐观插入类似查找，也是 S 拿到 index 锁，拿到叶子结点的 X 锁（为了与 S 锁互斥）</li>
+<li>悲观插入假设自己会引发 SMO ，首先，它会拿到 SX 锁。SX 锁能够与 SX 锁互斥（即与悲观的插入/删除互斥），但不阻塞读和无关的写。然后，下降的时候，因为已经给btree 加上 SX 锁, 那么搜索路径上的btree 的page 都不需要加锁, 但是需要把搜索过程中的page 保存下来, 最后阶段给搜索路径上有可能发生结构变化的page 加x lock。此外，这里叶子需要 X锁，且需要<strong>左右兄弟的锁</strong>。</li>
+</ul>
+<p><img src="https://image.mwish.me/blog-image/ye4VVpc.png" alt="ye4VVpc"></p>
+<h3 id="Cursor-amp-Persistent-Cursor"><a href="#Cursor-amp-Persistent-Cursor" class="headerlink" title="Cursor &amp; Persistent Cursor"></a>Cursor &amp; Persistent Cursor</h3><p>对于下降函数，这里可能会下降很多次，最终到达叶子结点，但对于一个 Scan，肯定不能每次下降一次。这里要根据 page 上的 cursor 来做一些操作，包括 scan 的 next 什么的，这里有一些优化：</p>
+<ol>
+<li><strong>record buffer</strong>：对于连续的记录扫描，在满足比较严格的条件时采用 record buffer，预读几条数据</li>
+<li><strong>persistent cursor</strong>（持久化游标，简称 pcur）：当进入 InnoDB 层获得记录后，返回 SQL 层前，当前在 B-tree 上的 cursor 会被暂时存储到 <code>row_prebuilt_t::pcur</code> 中，当再次从 InnoDB 层拿数据时，如果对应的 buf_block_t 没有发生任何修改，则可以继续沿用之前存储的 cursor（optimistic restore cursor）。否则需要重新定位（pessimistic restore cursor）。如果没有 persistent cursor 则每次都需要重新定位</li>
+</ol>
+<p>persistent cursor 代码在 <code>btr_pcur_t</code>，文件在 <code>btr0pcur</code>。<code>btr_pcur_move_to_next_page</code> 描述了它读下一个页面的流程（本页面都扫描完了），这里会获取下一页面，再释放本页面的锁。<code>restore_position</code> 描述了 <code>pcur</code> 回到本页面的逻辑。</p>
+<p>上面都比较简单，因为移动到下一页相对比较轻，但是比较复杂的情况是逆序扫描，这里代码在 <code>move_backward_from_page</code>，这里如果搜索了前一个 Page 的话，那么会有问题：先锁右 - 再锁左边会违背 latching protocol，这里会：</p>
+<ol>
+<li>释放之前的 latch</li>
+<li>在树上从新搜索之前的值的前一个值, <code>btr_search_to_nth_level</code> + <code>BTR_SEARCH_PREV</code></li>
+</ol>
+<h3 id="分裂"><a href="#分裂" class="headerlink" title="分裂"></a>分裂</h3><p>我们之前介绍了 下降 + 插入的情况。分裂/合并都是 SMO 操作，他们是由悲观的插入来提供的。</p>
+<p>Btree 分裂在 <code>btr_page_split_and_insert</code>, 在插入 Page 的时候，会有一些元信息来表示顺序插入的次数，如果插入都是顺序插入或者满足一定条件，那么 Page 会向右分裂；否则会按照 bytes 空间的 50% 来进行分裂。</p>
+<p><img src="https://image.mwish.me/blog-image/btr_page_split_and_insert.png" alt="btr_page_split_and_insert"></p>
+<h4 id="根结点的分裂"><a href="#根结点的分裂" class="headerlink" title="根结点的分裂"></a>根结点的分裂</h4><p>在 InnoDB 中，BTree 的 Root Page 是不会更改的。如果是 RootPage 从叶子结点分裂到根结点，具体逻辑如下：</p>
+<ol>
+<li>产生一个叶子结点</li>
+<li>把根结点数据拷贝上去，根结点指向它</li>
+<li>这个叶子结点执行分裂</li>
+</ol>
+<p><img src="https://image.mwish.me/blog-image/btr_root_raise_and_insert.png" alt="btr_root_raise_and_insert"></p>
+<h3 id="Insert-Buffer"><a href="#Insert-Buffer" class="headerlink" title="Insert Buffer"></a>Insert Buffer</h3><p>insert buffer 对于 non-unique 的  secondary index 才有用，在写索引的时候，无法加载到内存中的时候，插入 insert buffer 作为缓存。</p>
+<p>这块代码其实比较 hack 而且散在各处，比如读取的时候还要查一下有没有 insert buffer 里面的写，然后把数据倒腾进去。</p>
+<h3 id="上层的-ICP-和-Lock"><a href="#上层的-ICP-和-Lock" class="headerlink" title="上层的 ICP 和 Lock"></a>上层的 ICP 和 Lock</h3><p>对 Btree 的访问本身是没有锁的，锁是在上层拿到的。对于一个查询 + 更新而言，大概逻辑如下：</p>
+<ol>
+<li>从 btr 查询需要的行</li>
+<li>给记录加锁</li>
+<li>申请 undo, 写 undo</li>
+<li>更新对应的行，这个和 undo 其实是不同的 mtr</li>
+<li>commit</li>
+</ol>
+<p>ICP 是查询的时候带有对应的谓词，大概逻辑如下：<br><img src="https://image.mwish.me/blog-image/v2-d99e782c382bb6bab211faf1d8f432ac_r.jpeg" alt="v2-d99e782c382bb6bab211faf1d8f432ac_r"></p>
+<h2 id="参考"><a href="#参考" class="headerlink" title="参考"></a>参考</h2><ol>
+<li><a target="_blank" rel="noopener" href="https://catkang.github.io/2020/02/27/mysql-redo.html">https://catkang.github.io/2020/02/27/mysql-redo.html</a></li>
+<li><a target="_blank" rel="noopener" href="https://catkang.github.io/2020/02/27/mysql-redo.html">https://catkang.github.io/2020/02/27/mysql-redo.html</a></li>
+<li>InnoDB：B-tree index（1） - Skywalker的文章 - 知乎 <a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/164705538">https://zhuanlan.zhihu.com/p/164705538</a></li>
+<li>InnoDB：B-tree index（2） - Skywalker的文章 - 知乎 <a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/164728032">https://zhuanlan.zhihu.com/p/164728032</a></li>
+<li>InnoDB——Btree与MTR的牵扯: <a target="_blank" rel="noopener" href="http://liuyangming.tech/05-2019/InnoDB-Mtr.html">http://liuyangming.tech/05-2019/InnoDB-Mtr.html</a></li>
+<li>MySQL · 源码分析 · btr_cur_search_to_nth_level 函数分析: <a target="_blank" rel="noopener" href="http://mysql.taobao.org/monthly/2021/07/02/">http://mysql.taobao.org/monthly/2021/07/02/</a></li>
+<li>MySQL · 内核特性 · InnoDB btree latch 优化历程: <a target="_blank" rel="noopener" href="http://mysql.taobao.org/monthly/2020/06/02/">http://mysql.taobao.org/monthly/2020/06/02/</a></li>
+<li><a target="_blank" rel="noopener" href="https://mariadb.org/wp-content/uploads/2018/02/Deep-Dive_-InnoDB-Transactions-and-Write-Paths.pdf">https://mariadb.org/wp-content/uploads/2018/02/Deep-Dive_-InnoDB-Transactions-and-Write-Paths.pdf</a></li>
+</ol>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#MySQL-InnoDB"><span class="toc-number">1.</span> <span class="toc-text">MySQL InnoDB</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Page"><span class="toc-number">1.1.</span> <span class="toc-text">Page</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Tuple"><span class="toc-number">1.2.</span> <span class="toc-text">Tuple</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Leaf-Page-Non-Leaf-Page"><span class="toc-number">1.3.</span> <span class="toc-text">Leaf Page &#x2F; Non Leaf Page</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%AF%B9%E9%A1%B5%E9%9D%A2%E7%9A%84%E6%93%8D%E4%BD%9C"><span class="toc-number">1.3.1.</span> <span class="toc-text">对页面的操作</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Undo"><span class="toc-number">1.4.</span> <span class="toc-text">Undo</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Redo"><span class="toc-number">1.5.</span> <span class="toc-text">Redo</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Transaction-%E5%92%8C-MTR"><span class="toc-number">1.6.</span> <span class="toc-text">Transaction 和 MTR</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#InnoDB-Btree-%E7%9A%84%E6%93%8D%E4%BD%9C"><span class="toc-number">2.</span> <span class="toc-text">InnoDB Btree 的操作</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%8B%E9%99%8D%E5%92%8C-Latch"><span class="toc-number">2.1.</span> <span class="toc-text">下降和 Latch</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Cursor-amp-Persistent-Cursor"><span class="toc-number">2.2.</span> <span class="toc-text">Cursor &amp; Persistent Cursor</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%88%86%E8%A3%82"><span class="toc-number">2.3.</span> <span class="toc-text">分裂</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%A0%B9%E7%BB%93%E7%82%B9%E7%9A%84%E5%88%86%E8%A3%82"><span class="toc-number">2.3.1.</span> <span class="toc-text">根结点的分裂</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Insert-Buffer"><span class="toc-number">2.4.</span> <span class="toc-text">Insert Buffer</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%8A%E5%B1%82%E7%9A%84-ICP-%E5%92%8C-Lock"><span class="toc-number">2.5.</span> <span class="toc-text">上层的 ICP 和 Lock</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8F%82%E8%80%83"><span class="toc-number">3.</span> <span class="toc-text">参考</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2022/07/04/Notes-on-Btree-Implements-InnoDB/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2022/07/04/Notes-on-Btree-Implements-InnoDB/&text=Notes on Btree Implements: InnoDB"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2022/07/04/Notes-on-Btree-Implements-InnoDB/&title=Notes on Btree Implements: InnoDB"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2022/07/04/Notes-on-Btree-Implements-InnoDB/&is_video=false&description=Notes on Btree Implements: InnoDB"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Notes on Btree Implements: InnoDB&body=Check out this article: http://blog.mwish.me/2022/07/04/Notes-on-Btree-Implements-InnoDB/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2022/07/04/Notes-on-Btree-Implements-InnoDB/&title=Notes on Btree Implements: InnoDB"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2022/07/04/Notes-on-Btree-Implements-InnoDB/&title=Notes on Btree Implements: InnoDB"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2022/07/04/Notes-on-Btree-Implements-InnoDB/&title=Notes on Btree Implements: InnoDB"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2022/07/04/Notes-on-Btree-Implements-InnoDB/&title=Notes on Btree Implements: InnoDB"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2022/07/04/Notes-on-Btree-Implements-InnoDB/&name=Notes on Btree Implements: InnoDB&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2022/07/04/Notes-on-Btree-Implements-InnoDB/&t=Notes on Btree Implements: InnoDB"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="ToyDB 提供了手动解析的 Parser 和自己写的 Catalog 和 Planner，Catalog. 它有一个很奇怪的特点就是，大家都叫一个名字，然后从 modules 来区分。我不知道这算不算好的实践，反正给我整的有点麻。 这里我折腾了一个简单的可以玩 query 的场景：https:&#x2F;&#x2F;github.com&#x2F;mapleFU&#x2F;toydb ，见这个项目里的 test_basic_sql。">
+<meta property="og:type" content="article">
+<meta property="og:title" content="ToyDB Query Parsing">
+<meta property="og:url" content="http://blog.mwish.me/2023/06/07/ToyDB-Query-Parsing/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="ToyDB 提供了手动解析的 Parser 和自己写的 Catalog 和 Planner，Catalog. 它有一个很奇怪的特点就是，大家都叫一个名字，然后从 modules 来区分。我不知道这算不算好的实践，反正给我整的有点麻。 这里我折腾了一个简单的可以玩 query 的场景：https:&#x2F;&#x2F;github.com&#x2F;mapleFU&#x2F;toydb ，见这个项目里的 test_basic_sql。">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2023-06-07T06:30:00.000Z">
+<meta property="article:modified_time" content="2023-06-07T09:43:53.852Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>ToyDB Query Parsing</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2023/06/14/Parallel-Data-Processing-with-MapReduce-A-Survey/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2023/06/07/Why-do-we-need-ReadView/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2023/06/07/ToyDB-Query-Parsing/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2023/06/07/ToyDB-Query-Parsing/&text=ToyDB Query Parsing"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2023/06/07/ToyDB-Query-Parsing/&title=ToyDB Query Parsing"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2023/06/07/ToyDB-Query-Parsing/&is_video=false&description=ToyDB Query Parsing"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=ToyDB Query Parsing&body=Check out this article: http://blog.mwish.me/2023/06/07/ToyDB-Query-Parsing/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2023/06/07/ToyDB-Query-Parsing/&title=ToyDB Query Parsing"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2023/06/07/ToyDB-Query-Parsing/&title=ToyDB Query Parsing"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2023/06/07/ToyDB-Query-Parsing/&title=ToyDB Query Parsing"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2023/06/07/ToyDB-Query-Parsing/&title=ToyDB Query Parsing"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2023/06/07/ToyDB-Query-Parsing/&name=ToyDB Query Parsing&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2023/06/07/ToyDB-Query-Parsing/&t=ToyDB Query Parsing"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Catalog"><span class="toc-number">1.</span> <span class="toc-text">Catalog</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Parsing"><span class="toc-number">2.</span> <span class="toc-text">Parsing</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Planner"><span class="toc-number">3.</span> <span class="toc-text">Planner</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Plan-Select"><span class="toc-number">3.1.</span> <span class="toc-text">Plan Select</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Scope"><span class="toc-number">3.1.1.</span> <span class="toc-text">Scope</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Expression"><span class="toc-number">3.2.</span> <span class="toc-text">Expression</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#FromTable-TableRef-%E6%9E%84%E5%BB%BA"><span class="toc-number">3.3.</span> <span class="toc-text">FromTable ( TableRef ) 构建</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Where-%E6%9E%84%E5%BB%BA"><span class="toc-number">3.4.</span> <span class="toc-text">Where 构建</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Selection-List-%E5%A4%84%E7%90%86"><span class="toc-number">3.5.</span> <span class="toc-text">Selection-List 处理</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#inject-hidden"><span class="toc-number">3.5.1.</span> <span class="toc-text">inject_hidden</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Plan-Agg"><span class="toc-number">3.5.2.</span> <span class="toc-text">Plan Agg</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%89%A9%E4%BD%99"><span class="toc-number">3.6.</span> <span class="toc-text">剩余</span></a></li></ol></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        ToyDB Query Parsing
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2023-06-07T06:30:00.000Z" itemprop="datePublished">2023-06-07</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>ToyDB 提供了手动解析的 Parser 和自己写的 Catalog 和 Planner，Catalog. 它有一个很奇怪的特点就是，大家都叫一个名字，然后从 modules 来区分。我不知道这算不算好的实践，反正给我整的有点麻。</p>
+<p>这里我折腾了一个简单的可以玩 query 的场景：<a target="_blank" rel="noopener" href="https://github.com/mapleFU/toydb">https://github.com/mapleFU/toydb</a> ，见这个项目里的 <code>test_basic_sql</code>。</p>
+<h2 id="Catalog"><a href="#Catalog" class="headerlink" title="Catalog"></a>Catalog</h2><p>ToyDB 的 Catalog 和 Transaction 是半绑定的，Catalog 和 Transaction 都以一个 Trait 的形式提供。ToyDB 的 Catalog 只支持单个 database，不支持 DDL。系统会存储在一个 Raft Key-Value 的事务引擎上，存储内容如下：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// Encodes SQL keys, using an order-preserving encoding - see kv::encoding for details. Options can</span></span><br><span class="line"><span class="comment">/// be None to get a keyspace prefix. We use table and column names directly as identifiers, to</span></span><br><span class="line"><span class="comment">/// avoid additional indirection and associated overhead. It is not possible to change names, so</span></span><br><span class="line"><span class="comment">/// this is ok. Uses Cows since we want to borrow when encoding but return owned when decoding.</span></span><br><span class="line"><span class="comment">///</span></span><br><span class="line"><span class="comment">/// 最后一项可能由 Option 构成, Option 为空的时候, 可以拿到这个 key</span></span><br><span class="line"><span class="comment">/// 编码: 这里会把对应的对象整理成一个 Key, Table / Index / Row 存放在不同的 keyspace (类似 ns).</span></span><br><span class="line"><span class="comment">///</span></span><br><span class="line"><span class="comment">/// 这个基本上套了一层 foundation db 的编码系统。</span></span><br><span class="line"><span class="keyword">enum</span> <span class="title class_">Key</span>&lt;<span class="symbol">&#x27;a</span>&gt; &#123;</span><br><span class="line">    <span class="comment">/// A table schema key for the given table name</span></span><br><span class="line">    <span class="comment">/// tableName.</span></span><br><span class="line">    <span class="comment">/// 这个的 prefix 为 0x01</span></span><br><span class="line">    <span class="title function_ invoke__">Table</span>(<span class="type">Option</span>&lt;Cow&lt;<span class="symbol">&#x27;a</span>, <span class="type">str</span>&gt;&gt;),</span><br><span class="line">    <span class="comment">/// A key for an index entry</span></span><br><span class="line">    <span class="comment">///</span></span><br><span class="line">    <span class="comment">/// (tableName, columnName, value).</span></span><br><span class="line">    <span class="title function_ invoke__">Index</span>(Cow&lt;<span class="symbol">&#x27;a</span>, <span class="type">str</span>&gt;, Cow&lt;<span class="symbol">&#x27;a</span>, <span class="type">str</span>&gt;, <span class="type">Option</span>&lt;Cow&lt;<span class="symbol">&#x27;a</span>, Value&gt;&gt;),</span><br><span class="line">    <span class="comment">/// A key for a row identified by table name and row primary key</span></span><br><span class="line">    <span class="comment">///</span></span><br><span class="line">    <span class="comment">/// (tableName, value)</span></span><br><span class="line">    <span class="title function_ invoke__">Row</span>(Cow&lt;<span class="symbol">&#x27;a</span>, <span class="type">str</span>&gt;, <span class="type">Option</span>&lt;Cow&lt;<span class="symbol">&#x27;a</span>, Value&gt;&gt;),</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>对应 Trait 如下：</p>
+<ul>
+<li>Catalog, Schema, Column, Table: <a target="_blank" rel="noopener" href="https://github.com/erikgrinaker/toydb/blob/master/src/sql/schema.rs">https://github.com/erikgrinaker/toydb/blob/master/src/sql/schema.rs</a><ul>
+<li>Column 有基本的 <code>(name, type)</code> 支持 default, pk, nullable, unique, foreign key 甚至 index，支持上层去 validate 对应的 value，这个检查。（虽然有的地方我感觉不应该在 Column 里面支持）</li>
+<li>Table 即 <code>&lt;name: String, columns: [Column]&gt;</code>，在单个 Table 内，只有单个 key 是主键，不支持联合主键。Index 也只支持单值的 Index，不支持联合索引</li>
+<li>Schema 这里会访问物理层，来拿到对应的内容。</li>
+<li>它的 Catalog 这个地方支持的是访问 Table 的接口</li>
+<li>讨论：在 Column 支持 pk, default, unique, fk 应该不是一个合理的方案。</li>
+</ul>
+</li>
+</ul>
+<h2 id="Parsing"><a href="#Parsing" class="headerlink" title="Parsing"></a>Parsing</h2><p>这里的 Lexer 不太教科书，而是手工编写的一个识别器，我感觉用 flex 写一个没准还舒服些。</p>
+<p>语法分析则是一个递归下降的 Parsing，语法结构如下：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// Parses an SQL statement</span></span><br><span class="line"><span class="keyword">fn</span> <span class="title function_">parse_statement</span>(&amp;<span class="keyword">mut</span> <span class="keyword">self</span>) <span class="punctuation">-&gt;</span> <span class="type">Result</span>&lt;ast::Statement&gt; &#123;</span><br><span class="line">    <span class="keyword">match</span> <span class="keyword">self</span>.<span class="title function_ invoke__">peek</span>()? &#123;</span><br><span class="line">        <span class="title function_ invoke__">Some</span>(Token::<span class="title function_ invoke__">Keyword</span>(Keyword::Begin)) =&gt; <span class="keyword">self</span>.<span class="title function_ invoke__">parse_transaction</span>(),</span><br><span class="line">        <span class="title function_ invoke__">Some</span>(Token::<span class="title function_ invoke__">Keyword</span>(Keyword::Commit)) =&gt; <span class="keyword">self</span>.<span class="title function_ invoke__">parse_transaction</span>(),</span><br><span class="line">        <span class="title function_ invoke__">Some</span>(Token::<span class="title function_ invoke__">Keyword</span>(Keyword::Rollback)) =&gt; <span class="keyword">self</span>.<span class="title function_ invoke__">parse_transaction</span>(),</span><br><span class="line"></span><br><span class="line">        <span class="title function_ invoke__">Some</span>(Token::<span class="title function_ invoke__">Keyword</span>(Keyword::Create)) =&gt; <span class="keyword">self</span>.<span class="title function_ invoke__">parse_ddl</span>(),</span><br><span class="line">        <span class="title function_ invoke__">Some</span>(Token::<span class="title function_ invoke__">Keyword</span>(Keyword::<span class="built_in">Drop</span>)) =&gt; <span class="keyword">self</span>.<span class="title function_ invoke__">parse_ddl</span>(),</span><br><span class="line"></span><br><span class="line">        <span class="title function_ invoke__">Some</span>(Token::<span class="title function_ invoke__">Keyword</span>(Keyword::Delete)) =&gt; <span class="keyword">self</span>.<span class="title function_ invoke__">parse_statement_delete</span>(),</span><br><span class="line">        <span class="title function_ invoke__">Some</span>(Token::<span class="title function_ invoke__">Keyword</span>(Keyword::Insert)) =&gt; <span class="keyword">self</span>.<span class="title function_ invoke__">parse_statement_insert</span>(),</span><br><span class="line">        <span class="title function_ invoke__">Some</span>(Token::<span class="title function_ invoke__">Keyword</span>(Keyword::Select)) =&gt; <span class="keyword">self</span>.<span class="title function_ invoke__">parse_statement_select</span>(),</span><br><span class="line">        <span class="title function_ invoke__">Some</span>(Token::<span class="title function_ invoke__">Keyword</span>(Keyword::Update)) =&gt; <span class="keyword">self</span>.<span class="title function_ invoke__">parse_statement_update</span>(),</span><br><span class="line"></span><br><span class="line">        <span class="title function_ invoke__">Some</span>(Token::<span class="title function_ invoke__">Keyword</span>(Keyword::Explain)) =&gt; <span class="keyword">self</span>.<span class="title function_ invoke__">parse_statement_explain</span>(),</span><br><span class="line"></span><br><span class="line">        <span class="title function_ invoke__">Some</span>(token) =&gt; <span class="title function_ invoke__">Err</span>(Error::<span class="title function_ invoke__">Parse</span>(<span class="built_in">format!</span>(<span class="string">&quot;Unexpected token &#123;&#125;&quot;</span>, token))),</span><br><span class="line">        <span class="literal">None</span> =&gt; <span class="title function_ invoke__">Err</span>(Error::<span class="title function_ invoke__">Parse</span>(<span class="string">&quot;Unexpected end of input&quot;</span>.<span class="title function_ invoke__">into</span>())),</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>可以从这个来推断出它的结构，这段应该是按照 standard 写的，还算有参考价值。对外产生最终的结构在目录 <code>ast</code> 下头，具体是一个 <code>ast::Statement</code>.</p>
+<p>特殊的，如果是 <code>SELECT *</code></p>
+<h2 id="Planner"><a href="#Planner" class="headerlink" title="Planner"></a>Planner</h2><p>Planner 负责将 <code>ast::Statement</code> 转为 <code>Plan</code>. 这部分 Plan / PlanNode 本身就是可以运行的了，通过走一个可选的 Optimizer 来进行优化。</p>
+<p>这个地方没有一个 （单独的）Binder 阶段来 resolve name，</p>
+<h3 id="Plan-Select"><a href="#Plan-Select" class="headerlink" title="Plan Select"></a>Plan Select</h3><h4 id="Scope"><a href="#Scope" class="headerlink" title="Scope"></a>Scope</h4><figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// Manages names available to expressions and executors, and maps them onto columns/fields.</span></span><br><span class="line"><span class="comment">///</span></span><br><span class="line"><span class="comment">/// Scope 包含一组有序的 columns. 同时包含限定符, 表示这些东西的归属.</span></span><br><span class="line"><span class="meta">#[derive(Clone, Debug)]</span></span><br><span class="line"><span class="keyword">pub</span> <span class="keyword">struct</span> <span class="title class_">Scope</span> &#123;</span><br><span class="line">    <span class="comment">// If true, the scope is constant and cannot contain any variables.</span></span><br><span class="line">    constant: <span class="type">bool</span>,</span><br><span class="line">    <span class="comment">// Currently visible tables, by query name (i.e. alias or actual name).</span></span><br><span class="line">    <span class="comment">//</span></span><br><span class="line">    <span class="comment">// Table 的名称集合, 构建了 alias / table_name -&gt; Table 的映射</span></span><br><span class="line">    <span class="comment">// TODO(maple): 这个 Table 是怎么构建出来的? 具体 binding 吗?</span></span><br><span class="line">    tables: HashMap&lt;<span class="type">String</span>, Table&gt;,</span><br><span class="line">    <span class="comment">// Column labels, if any (qualified by table name when available)</span></span><br><span class="line">    <span class="comment">//</span></span><br><span class="line">    <span class="comment">// columns 是表的 source-of-truth, 下面三个 hash 都是根据这玩意造出来的.</span></span><br><span class="line">    columns: <span class="type">Vec</span>&lt;(<span class="type">Option</span>&lt;<span class="type">String</span>&gt;, <span class="type">Option</span>&lt;<span class="type">String</span>&gt;)&gt;,</span><br><span class="line">    <span class="comment">// Qualified names to column indexes.</span></span><br><span class="line">    <span class="comment">//</span></span><br><span class="line">    <span class="comment">// qualified: 有 table-name 和 field-name 的, 这个地方 field-name 可能是一个 label.</span></span><br><span class="line">    qualified: HashMap&lt;(<span class="type">String</span>, <span class="type">String</span>), <span class="type">usize</span>&gt;,</span><br><span class="line">    <span class="comment">// Unqualified names to column indexes, if unique.</span></span><br><span class="line">    unqualified: HashMap&lt;<span class="type">String</span>, <span class="type">usize</span>&gt;,</span><br><span class="line">    <span class="comment">// Unqualified ambiguous names.</span></span><br><span class="line">    <span class="comment">// TODO(maple): ambiguous 的 name 是怎么 solving 的?</span></span><br><span class="line">    ambiguous: HashSet&lt;<span class="type">String</span>&gt;,</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="Expression"><a href="#Expression" class="headerlink" title="Expression"></a>Expression</h3><p>Expression 的 solving 通常不需要变更类型，字面量是什么类型使用的就是什么类型，这里支持的类型有：</p>
+<ul>
+<li>INTEGER: 1, 2, 3</li>
+<li>FLOAT: 1.2</li>
+<li>NULL</li>
+<li>Boolean: true, false</li>
+<li>String: <code>&#39;&#39;</code></li>
+</ul>
+<p>常量解析的时候，一般就用上面这些类型，然后在表达式 eval 阶段判断类型。</p>
+<p>表达式会从 <code>Scope</code> 中捞到名字，从 <code>ast::Expression</code> 构建一个 <code>Expression</code> 它会构建：</p>
+<ul>
+<li>Literal: 返回 <em><code>Constant</code></em></li>
+<li>Field: 带有来源的 fieldId 和 table.name 的名字，返回 <code>Field</code></li>
+<li>Function：<em>很遗憾，它没有实现任何 function</em><ul>
+<li>搜了下，function 处理中，可以参考这两个。toydb 类型处理感觉是比较简单的，function 和 ast::function 一一对应<ul>
+<li><a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/current/sql-expressions.html">https://www.postgresql.org/docs/current/sql-expressions.html</a></li>
+<li><a target="_blank" rel="noopener" href="https://duckdb.org/docs/sql/functions/date">https://duckdb.org/docs/sql/functions/date</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><strong>Column: 这个比较重要，放后面说，这个在它的 SQL 语法不存在，属于内部生成的</strong></li>
+<li>Operation: 从 AND OR 到加减法等等</li>
+</ul>
+<p>总之，这里会构建一份 Expression</p>
+<h3 id="FromTable-TableRef-构建"><a href="#FromTable-TableRef-构建" class="headerlink" title="FromTable ( TableRef ) 构建"></a>FromTable ( TableRef ) 构建</h3><ul>
+<li>采用</li>
+</ul>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">build_from_clause:</span><br><span class="line">- copy 一份 root Scope</span><br><span class="line">- (对每个子成员) (使用 root Scope) build_from_item</span><br><span class="line">  - (递归基) 去 catalog 查询有没有这个名字的表, 然后走 `scope::add_table`, 返回一个 Node::Scan</span><br><span class="line">  - (Join) 去 build_from_item 左表, 然后用同一个 scope 去 build_from_item 右表</span><br><span class="line">    再用这个 scope 去 `build_expression`, 构建出 `ON ..` 的条件</span><br><span class="line">    构成一个 Node::NextLoopJoin 节点. (这里有一些关于 right join 的 hack 操作，暂不讨论)</span><br><span class="line">- 对上述的成员，构成一个 Node::NestLoopJoin 的左深树, 并递归的去 merge 这些 scope</span><br></pre></td></tr></table></figure>
+<p>这个地方用到了 <code>build_expression</code> 来处理 <code>ON</code> 的情况，对外返回了一个新的 Scope.</p>
+<h3 id="Where-构建"><a href="#Where-构建" class="headerlink" title="Where 构建"></a>Where 构建</h3><p>用到了 <code>build_expression</code> 来处理 <code>WHERE</code> 子表达式。同 Expression 一节</p>
+<p>注意这里没有 subquery，所以内容应该很简单</p>
+<h3 id="Selection-List-处理"><a href="#Selection-List-处理" class="headerlink" title="Selection-List 处理"></a>Selection-List 处理</h3><p><code>select-list</code> 如果是 empty，作者认为是全部输出（即 <code>SELECT *</code>），不懂 SQL 语法，这是真的吗？</p>
+<h4 id="inject-hidden"><a href="#inject-hidden" class="headerlink" title="inject_hidden"></a>inject_hidden</h4><p>这里会先尝试给 select 去 <code>inject_hidden</code>，插入一些需要结果的 ast::Expr 或者 ast::Field，最后再通过 Projection 把这些字段给 Prune 掉。这个时候会利用之前说的 <code>Column</code> 字段。</p>
+<p>这里会尝试：</p>
+<ul>
+<li>插入 HAVING 的内容</li>
+<li>插入 ORDER BY 的内容</li>
+</ul>
+<p><code>inject_hidden</code> 插入的时候，会有两个 <code>ast::Expr</code>:</p>
+<ul>
+<li>Selection 的 expr 组</li>
+<li>需要插入的 expr</li>
+</ul>
+<p>这个时候，大致逻辑如下：</p>
+<ul>
+<li>扫描 selection ，和需要插入的 expr 对比<ul>
+<li>如果某项成员正好相等 (<code>SELECT x .. ORDER BY x</code>)，那么就标记为 <code>ast::expr::Column</code></li>
+<li>否则，访问 expr 树，找到对应的 Column Ref，然后替换成对应的上下文，比如 <code>SELECT a .. HAVING a = 10</code> , <code>a</code> 替换为 <code>Column(0)</code></li>
+</ul>
+</li>
+<li>对于没有找到相似的，全部加入 <code>selection</code>, 然后表达式替换为 <code>Column( 在 selection 中的位置)</code></li>
+</ul>
+<h4 id="Plan-Agg"><a href="#Plan-Agg" class="headerlink" title="Plan Agg"></a>Plan Agg</h4><p>Plan Agg 是代码里面我看的最蛋疼的一部分，这个部分结果大概是：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">Aggregation aggregates</span><br><span class="line">- Projection aggregators, group-bys</span><br></pre></td></tr></table></figure>
+<p>Eg:</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">└─Aggregation: sum</span><br><span class="line">   └─ Projection: a, b + <span class="number">2</span></span><br><span class="line">       └─ Filter: a &gt; <span class="number">0</span></span><br></pre></td></tr></table></figure>
+<p>Aggregation 前 aggregates 项是对应的，后面来自 GROUP-BY 子句</p>
+<p>Group-BY 表达式的处理分成好几个阶段：</p>
+<ul>
+<li>从 Selection-List 中抽取 Aggregation<ul>
+<li>把 Selection 中的表达式替换为对 Aggregation 的 Column-Ref, 这里相当于从 Select 里面抽出 expr. <code>exprs</code> 都是裸的 ast::expr. <code>SELECT max(a) ...</code> 抽成 ColumnRef(0) + MAX</li>
+<li>能抽成 Field-Ref 的尽量抽取成 Field-Ref，表达形式为 <code>Column(idx)</code></li>
+</ul>
+</li>
+<li>抽取 GROUP BY<ul>
+<li>把 Selection 中的表达式替换为对 Group By 的 Column-Ref</li>
+</ul>
+</li>
+<li>构建 Aggregator<ul>
+<li>插入上面的表达式。这里会对 <code>Scope</code> 做一个 Projection，有点 hack，我还得消化一下</li>
+</ul>
+</li>
+<li>再构建一个 Projection，拿到 Selection-List</li>
+</ul>
+<h3 id="剩余"><a href="#剩余" class="headerlink" title="剩余"></a>剩余</h3><ul>
+<li>Build Having</li>
+<li>Build Order</li>
+<li>Build Offset</li>
+<li>Build Limit</li>
+<li>把 <code>inject_hidden</code> 插入的隐藏列 Projection 掉</li>
+</ul>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Catalog"><span class="toc-number">1.</span> <span class="toc-text">Catalog</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Parsing"><span class="toc-number">2.</span> <span class="toc-text">Parsing</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Planner"><span class="toc-number">3.</span> <span class="toc-text">Planner</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Plan-Select"><span class="toc-number">3.1.</span> <span class="toc-text">Plan Select</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Scope"><span class="toc-number">3.1.1.</span> <span class="toc-text">Scope</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Expression"><span class="toc-number">3.2.</span> <span class="toc-text">Expression</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#FromTable-TableRef-%E6%9E%84%E5%BB%BA"><span class="toc-number">3.3.</span> <span class="toc-text">FromTable ( TableRef ) 构建</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Where-%E6%9E%84%E5%BB%BA"><span class="toc-number">3.4.</span> <span class="toc-text">Where 构建</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Selection-List-%E5%A4%84%E7%90%86"><span class="toc-number">3.5.</span> <span class="toc-text">Selection-List 处理</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#inject-hidden"><span class="toc-number">3.5.1.</span> <span class="toc-text">inject_hidden</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Plan-Agg"><span class="toc-number">3.5.2.</span> <span class="toc-text">Plan Agg</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%89%A9%E4%BD%99"><span class="toc-number">3.6.</span> <span class="toc-text">剩余</span></a></li></ol></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2023/06/07/ToyDB-Query-Parsing/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2023/06/07/ToyDB-Query-Parsing/&text=ToyDB Query Parsing"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2023/06/07/ToyDB-Query-Parsing/&title=ToyDB Query Parsing"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2023/06/07/ToyDB-Query-Parsing/&is_video=false&description=ToyDB Query Parsing"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=ToyDB Query Parsing&body=Check out this article: http://blog.mwish.me/2023/06/07/ToyDB-Query-Parsing/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2023/06/07/ToyDB-Query-Parsing/&title=ToyDB Query Parsing"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2023/06/07/ToyDB-Query-Parsing/&title=ToyDB Query Parsing"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2023/06/07/ToyDB-Query-Parsing/&title=ToyDB Query Parsing"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2023/06/07/ToyDB-Query-Parsing/&title=ToyDB Query Parsing"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2023/06/07/ToyDB-Query-Parsing/&name=ToyDB Query Parsing&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2023/06/07/ToyDB-Query-Parsing/&t=ToyDB Query Parsing"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

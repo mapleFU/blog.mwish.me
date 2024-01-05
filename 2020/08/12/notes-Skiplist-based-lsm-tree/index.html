@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="The Skiplist-Based LSM Tree读这篇论文是因为原始 SkipList 那个 Btree 读的脑阔疼，我又不是很了解 Btree。这篇文章又和使用最广的 RocksDB&#x2F;LevelDB 比较接近。 LSM Tree 提供了层级的数据来提供写优化的数据系统。原始的论文中，作者在每个层次中使用的都是类似 B-Tree 的结构，在 sLSM 中，Buffer 结构都是一系列的 Sk">
+<meta property="og:type" content="article">
+<meta property="og:title" content="notes: Skiplist-based lsm-tree">
+<meta property="og:url" content="http://blog.mwish.me/2020/08/12/notes-Skiplist-based-lsm-tree/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="The Skiplist-Based LSM Tree读这篇论文是因为原始 SkipList 那个 Btree 读的脑阔疼，我又不是很了解 Btree。这篇文章又和使用最广的 RocksDB&#x2F;LevelDB 比较接近。 LSM Tree 提供了层级的数据来提供写优化的数据系统。原始的论文中，作者在每个层次中使用的都是类似 B-Tree 的结构，在 sLSM 中，Buffer 结构都是一系列的 Sk">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/An-illustration-of-the-implementation-of-the-Fence-Pointers.jpg">
+<meta property="og:image" content="https://image.mwish.me/blog-image/4104B498-0C10-4479-A53E-A1A55A0B0181.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/07BA999F-C722-4C4B-B91F-174E677E4D0C.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/3D826C1F-830A-4255-B7D2-F32294459FD4.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/07BA999F-C722-4C4B-B91F-174E677E4D0C.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/69D6C0BB-39D4-4E80-B21F-6C9E6A6E1BCA.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/B441272A-7A46-4382-9AEB-CAD3BC6CAA53.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/2FF5FFBA-4142-44FF-B842-570DC70ABA69.png">
+<meta property="article:published_time" content="2020-08-12T12:24:19.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.549Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/An-illustration-of-the-implementation-of-the-Fence-Pointers.jpg">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>notes: Skiplist-based lsm-tree</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2020/08/16/notes-Aurora/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2020/08/06/notes-on-craq/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/08/12/notes-Skiplist-based-lsm-tree/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/08/12/notes-Skiplist-based-lsm-tree/&text=notes: Skiplist-based lsm-tree"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/08/12/notes-Skiplist-based-lsm-tree/&title=notes: Skiplist-based lsm-tree"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/08/12/notes-Skiplist-based-lsm-tree/&is_video=false&description=notes: Skiplist-based lsm-tree"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=notes: Skiplist-based lsm-tree&body=Check out this article: http://blog.mwish.me/2020/08/12/notes-Skiplist-based-lsm-tree/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/08/12/notes-Skiplist-based-lsm-tree/&title=notes: Skiplist-based lsm-tree"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/08/12/notes-Skiplist-based-lsm-tree/&title=notes: Skiplist-based lsm-tree"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/08/12/notes-Skiplist-based-lsm-tree/&title=notes: Skiplist-based lsm-tree"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/08/12/notes-Skiplist-based-lsm-tree/&title=notes: Skiplist-based lsm-tree"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/08/12/notes-Skiplist-based-lsm-tree/&name=notes: Skiplist-based lsm-tree&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/08/12/notes-Skiplist-based-lsm-tree/&t=notes: Skiplist-based lsm-tree"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#The-Skiplist-Based-LSM-Tree"><span class="toc-number">1.</span> <span class="toc-text">The Skiplist-Based LSM Tree</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#SLSM-%E8%AE%BE%E8%AE%A1"><span class="toc-number">1.1.</span> <span class="toc-text">SLSM 设计</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#SkipList"><span class="toc-number">1.1.0.1.</span> <span class="toc-text">SkipList</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Disk-Based-Storage"><span class="toc-number">1.1.1.</span> <span class="toc-text">Disk-Based Storage</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Merging"><span class="toc-number">1.1.2.</span> <span class="toc-text">Merging</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Range"><span class="toc-number">1.1.3.</span> <span class="toc-text">Range</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Perf"><span class="toc-number">1.2.</span> <span class="toc-text">Perf</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#R"><span class="toc-number">1.2.0.1.</span> <span class="toc-text">R</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Rn"><span class="toc-number">1.2.0.2.</span> <span class="toc-text">Rn</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Disk-and-Merge-Parameters"><span class="toc-number">1.2.0.3.</span> <span class="toc-text">Disk and Merge Parameters</span></a></li></ol></li></ol></li></ol></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        notes: Skiplist-based lsm-tree
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2020-08-12T12:24:19.000Z" itemprop="datePublished">2020-08-12</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <h1 id="The-Skiplist-Based-LSM-Tree"><a href="#The-Skiplist-Based-LSM-Tree" class="headerlink" title="The Skiplist-Based LSM Tree"></a>The Skiplist-Based LSM Tree</h1><p>读这篇论文是因为原始 SkipList 那个 Btree 读的脑阔疼，我又不是很了解 Btree。这篇文章又和使用最广的 RocksDB/LevelDB 比较接近。</p>
+<p>LSM Tree 提供了层级的数据来提供写优化的数据系统。原始的论文中，作者在每个层次中使用的都是类似 B-Tree 的结构，在 sLSM 中，Buffer 结构都是一系列的 Skiplist.</p>
+<p>LSMTree Paper 有一套冷热数据计算的式子。把新插入的 hot 数据放在内存中，冷的下层数据放在 secondary storage 中，来让写被均摊。同时，原论文介绍了 two-component （即可视作只有内存和 disk）的 LSM 之后，也介绍了 multi-component 的 LSM Tree, 通过多层次来均摊 Compaction 的开销。这个在这有一些简洁的答案：</p>
+<p><a target="_blank" rel="noopener" href="https://www.zhihu.com/question/396452321">https://www.zhihu.com/question/396452321</a></p>
+<p>同时，LSM Tree 可以用 Bloom Filter（这个用的应该很多）、fence pointer（我记得是 FD-Tree 里的？）</p>
+<blockquote>
+<p>The remainder of this paper will proceed as follows: Section 2 will detail the design of the Skiplist-Based LSM (sLSM), including the in-memory component, the on-disk component, indexing structures, key algorithms, theoretical guarantees, and the range of design knobs; Section 3 will provide extensive experimental results, including parameter tuning and performance analysis; and Section 4 will discuss and conclude.</p>
+</blockquote>
+<p>阅读这篇文章也是因为，这个 LSMTree 相对来说和 LevelDB/RocksDB 有一定相似之处。</p>
+<h2 id="SLSM-设计"><a href="#SLSM-设计" class="headerlink" title="SLSM 设计"></a>SLSM 设计</h2><ul>
+<li>内存中有 R 个 SkipList, 只有一个是 active 的。</li>
+<li>如果 Insert 出现，现有的 SkipList 达到了大小的上限（好奇这个上限是怎么设置的）后，会尝试把现在的 SkipList 变成只读的，然后尝试在新的 SkipList 写。如果内存满了：<ul>
+<li>按比例把 m 个现有的 SkipList 与 Secondary Storage 进行 merge</li>
+</ul>
+</li>
+</ul>
+<p>读取的话会按照 SkipList 的新旧读，再访问磁盘。</p>
+<h4 id="SkipList"><a href="#SkipList" class="headerlink" title="SkipList"></a>SkipList</h4><p>这篇文章介绍了 SkipList 的两个优化：</p>
+<ol>
+<li>Fast Random Levels：利用 random bits 生成 random Level</li>
+<li>Vertical Arrays, Horizontal Pointers</li>
+</ol>
+<blockquote>
+<p>While the differential densities of the levels precludes an array-based structure in the horizontal direction, it is wasteful to include links from nodes of value k to another node of value k on the next level. Instead, in our implementation a skiplist node includes one key, one value, and an array of pointers to other skiplist nodes. This array can be thought of as a vertical column of level pointers, where pointers above the node’s level are null and each pointer below points to the next node on that particular level. In this way, skipping down a level is a matter of reading a value that was already loaded into the cache, rather than chasing a pointer somewhere random in memory. Because we implemented the skiplist in this way from the beginning we do not report differential performance between this cache-conscious and the alternative, naive way.</p>
+</blockquote>
+<p>其实感觉说的比较像 LevelDB 的了：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">struct</span> <span class="title class_">SkipList</span>&lt;Key, Comparator&gt;::Node &#123;</span><br><span class="line">  <span class="function"><span class="keyword">explicit</span> <span class="title">Node</span><span class="params">(<span class="type">const</span> Key&amp; k)</span> : key(k) &#123;</span>&#125;</span><br><span class="line"></span><br><span class="line">  Key <span class="type">const</span> key;</span><br><span class="line"> <span class="keyword">private</span>:</span><br><span class="line">  <span class="comment">// Array of length equal to the node height.  next_[0] is lowest level link.</span></span><br><span class="line">  std::atomic&lt;Node*&gt; next_[<span class="number">1</span>];</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<h3 id="Disk-Based-Storage"><a href="#Disk-Based-Storage" class="headerlink" title="Disk-Based Storage"></a>Disk-Based Storage</h3><blockquote>
+<p>“is only touched by merges from the memory buffer”</p>
+<p>There are L disk levels, each with D runs on each level. A run is an immutable sequence of sorted key-value pairs, and is captured within one memory-mapped file on disk. </p>
+<p>Each disk run is indexed similarly to the in-memory run, with max/min keys and Bloom filters. </p>
+</blockquote>
+<p>除此之外之外这里还引入了 fence pointer, FD-Tree 也有 fence pointer, 这是带层次的查找优化：</p>
+<blockquote>
+<p>These are fixed-width indices that store the key of elements in increments of some logical page size in memory. </p>
+</blockquote>
+<p><img src="https://image.mwish.me/blog-image/An-illustration-of-the-implementation-of-the-Fence-Pointers.jpg" alt="An-illustration-of-the-implementation-of-the-Fence-Pointers"></p>
+<h3 id="Merging"><a href="#Merging" class="headerlink" title="Merging"></a>Merging</h3><p>LSMTree 的 Merge 还是很复杂的：</p>
+<ul>
+<li>merge 是把某一层按比例 m 和下层合并，用写来减小读放大</li>
+<li><code>the number of elements at level k is O((mD)^k).</code></li>
+<li>可能会有 cascading 的 merge</li>
+</ul>
+<blockquote>
+<p>We propose a heap-based merging algorithm that runs in O(n log(mD)) time and O(mD) space, where n is the number of elements being merged.</p>
+</blockquote>
+<p><img src="https://image.mwish.me/blog-image/4104B498-0C10-4479-A53E-A1A55A0B0181.png" alt="4104B498-0C10-4479-A53E-A1A55A0B0181"></p>
+<p>具体来说，每个 list 都是 sorted 的，LSMTree 会对它们 heap sort .</p>
+<p>实现的时候，这里采取了多线程的方式：</p>
+<blockquote>
+<p>In our implementation, we also use multithreaded merging to decrease our latency. When an insertion triggers a merge, a dedicated merge thread takes ownership of the runs to merge and executes the merge in parallel, allowing the main thread to rebuild the buffer and continue to answer queries. If a lookup request comes while the merge thread is executing the merge, the main thread searches the memory buffer for the requested key, and if unsuccessful, waits for the merge to complete before querying the disk levels.</p>
+</blockquote>
+<p>下面是 param table 和读的性能分析：</p>
+<p><img src="https://image.mwish.me/blog-image/07BA999F-C722-4C4B-B91F-174E677E4D0C.png" alt="07BA999F-C722-4C4B-B91F-174E677E4D0C"></p>
+<p><img src="https://image.mwish.me/blog-image/3D826C1F-830A-4255-B7D2-F32294459FD4.png" alt="3D826C1F-830A-4255-B7D2-F32294459FD4"></p>
+<h3 id="Range"><a href="#Range" class="headerlink" title="Range"></a>Range</h3><p>Range 是一个比较复杂但是很需要的操作，我们可能会：</p>
+<ul>
+<li>拿到 Snapshot 或者迭代器，然后在这上面 iter</li>
+</ul>
+<p>这种操作和 PointGet 不一样，是需要知道所有的 table 情景然后查询的。</p>
+<p>这里操作是：首先按range和值过滤，然后从新到旧遍历，并构建一个 hashtable 来 O(1) 的去重。</p>
+<blockquote>
+<p>Because collecting elements in the range in both skiplists and disk runs is a linear-time operation, and because hashing is an amortized constant-time operation, a range query over n keys is expected to take O(n) time.</p>
+</blockquote>
+<p>这个 <code>O(n)</code> 是 n keys, 我不太清楚这个放大是什么情况，总觉得不太清楚</p>
+<h2 id="Perf"><a href="#Perf" class="headerlink" title="Perf"></a>Perf</h2><blockquote>
+<p>We tested the sLSM on a DigitalOcean Droplet Server running 64-bit Ubuntu 4.4.0 with 32 Intel Xeon E5-2650L v3 @ 1.80GHz CPUs, a 500 GB SSD, 224GB main memory, and 30MB L3 cache.</p>
+</blockquote>
+<p>(我也想有这么好的机器)</p>
+<p>再次贴一下参数表：</p>
+<p><img src="https://image.mwish.me/blog-image/07BA999F-C722-4C4B-B91F-174E677E4D0C.png" alt="07BA999F-C722-4C4B-B91F-174E677E4D0C"></p>
+<h4 id="R"><a href="#R" class="headerlink" title="R"></a>R</h4><blockquote>
+<p>In determining the optimal R, we found that the smaller R is, the smaller the memory buffer is, and the more frequent merges will be. Thus, lower R leads to lower insertion throughput. However, with few runs to search, lookups are very quick with small R. Analogously, higher R is linked to faster insertion but slower lookup, since more runs need to be searched. With Bloom filters, it is possible to set R high enough to achieve extremely fast insertion while enjoying significant speedup on lookups due to the filters. More formally, R does not enter the amortized insertion time function, and there are significant constant factors hidden in that equation that correspond to the speed and frequency of merges. However, lookups depend linearly upon R, as proven above. The graph in Fig. 2 details the tradeoff between insertion time and lookup time for a number of values of R. As such, setting the number of runs intelligently also allows us to tune the performance of the sLSM to the workload at hand- more runs for more writes, and fewer for more lookups.</p>
+</blockquote>
+<p>发原文总觉得没什么诚意，但是这一段说的比我能介绍的精细多了。</p>
+<p><img src="https://image.mwish.me/blog-image/69D6C0BB-39D4-4E80-B21F-6C9E6A6E1BCA.png" alt="69D6C0BB-39D4-4E80-B21F-6C9E6A6E1BCA"></p>
+<ul>
+<li>R 变大，写入受 Compaction 的影响和 Stall 变小</li>
+<li>读取效率变低，因为要在内存中寻找多个 skiplist</li>
+</ul>
+<p>读取效率变低我真的没太理解，感觉走到 disk 上肯定会更慢，但是 R*Rn 值固定的时候，感觉上面的就可以理解了，而且这两个参数也会影响 flush 的效率。</p>
+<h4 id="Rn"><a href="#Rn" class="headerlink" title="Rn"></a>Rn</h4><blockquote>
+<p>For each value of R, increasing Rn increases insertion rate while decreasing lookup throughput. This is because a larger Rn allows for fewer merges over the lifetime of the workload due to the larger memory buffer. However, this increase in the size of each run increases the runtime of each lookup, since skiplist queries are logarithmic in their size. </p>
+</blockquote>
+<p>这个应该相对更好理解一些。</p>
+<p><img src="https://image.mwish.me/blog-image/B441272A-7A46-4382-9AEB-CAD3BC6CAA53.png" alt="B441272A-7A46-4382-9AEB-CAD3BC6CAA53"></p>
+<p>也可以参考 RocksDB 的 Flushing Options</p>
+<p><a target="_blank" rel="noopener" href="https://github.com/facebook/rocksdb/wiki/RocksDB-Tuning-Guide#flushing-options">https://github.com/facebook/rocksdb/wiki/RocksDB-Tuning-Guide#flushing-options</a></p>
+<h4 id="Disk-and-Merge-Parameters"><a href="#Disk-and-Merge-Parameters" class="headerlink" title="Disk and Merge Parameters"></a>Disk and Merge Parameters</h4><p>也可以参考 <a target="_blank" rel="noopener" href="https://github.com/facebook/rocksdb/wiki/RocksDB-Tuning-Guide#level-style-compaction">https://github.com/facebook/rocksdb/wiki/RocksDB-Tuning-Guide#level-style-compaction</a></p>
+<ol>
+<li>m is set under 0.5, merges would happen too frequently for sizeable datasets, causing the OS to run out of file descriptors</li>
+</ol>
+<p><img src="https://image.mwish.me/blog-image/2FF5FFBA-4142-44FF-B842-570DC70ABA69.png" alt="2FF5FFBA-4142-44FF-B842-570DC70ABA69"></p>
+<p>D 变大时，写入性能是提升的，但是读会被放大。m 变大时，compaction 变得不那么频繁。</p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#The-Skiplist-Based-LSM-Tree"><span class="toc-number">1.</span> <span class="toc-text">The Skiplist-Based LSM Tree</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#SLSM-%E8%AE%BE%E8%AE%A1"><span class="toc-number">1.1.</span> <span class="toc-text">SLSM 设计</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#SkipList"><span class="toc-number">1.1.0.1.</span> <span class="toc-text">SkipList</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Disk-Based-Storage"><span class="toc-number">1.1.1.</span> <span class="toc-text">Disk-Based Storage</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Merging"><span class="toc-number">1.1.2.</span> <span class="toc-text">Merging</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Range"><span class="toc-number">1.1.3.</span> <span class="toc-text">Range</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Perf"><span class="toc-number">1.2.</span> <span class="toc-text">Perf</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#R"><span class="toc-number">1.2.0.1.</span> <span class="toc-text">R</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Rn"><span class="toc-number">1.2.0.2.</span> <span class="toc-text">Rn</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Disk-and-Merge-Parameters"><span class="toc-number">1.2.0.3.</span> <span class="toc-text">Disk and Merge Parameters</span></a></li></ol></li></ol></li></ol></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/08/12/notes-Skiplist-based-lsm-tree/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/08/12/notes-Skiplist-based-lsm-tree/&text=notes: Skiplist-based lsm-tree"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/08/12/notes-Skiplist-based-lsm-tree/&title=notes: Skiplist-based lsm-tree"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/08/12/notes-Skiplist-based-lsm-tree/&is_video=false&description=notes: Skiplist-based lsm-tree"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=notes: Skiplist-based lsm-tree&body=Check out this article: http://blog.mwish.me/2020/08/12/notes-Skiplist-based-lsm-tree/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/08/12/notes-Skiplist-based-lsm-tree/&title=notes: Skiplist-based lsm-tree"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/08/12/notes-Skiplist-based-lsm-tree/&title=notes: Skiplist-based lsm-tree"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/08/12/notes-Skiplist-based-lsm-tree/&title=notes: Skiplist-based lsm-tree"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/08/12/notes-Skiplist-based-lsm-tree/&title=notes: Skiplist-based lsm-tree"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/08/12/notes-Skiplist-based-lsm-tree/&name=notes: Skiplist-based lsm-tree&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/08/12/notes-Skiplist-based-lsm-tree/&t=notes: Skiplist-based lsm-tree"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="MonetDB&#x2F;X100 是一篇 05 年的论文，也是分析型数据库中引用较多的一篇论文。它给 MonetDB 提供了一个高效的查询层，减小了 MonetDB 之前许多操作的开销。同时，贴合了当时的硬件的发展。目前，这篇论文的 Batch 等思路已经被比较大规模的使用了，同时，文章给出的手工编码代码的 baseline 也给 Hyper 等 Codegen 提供了启发。 同时，即使不了解数据库，学习">
+<meta property="og:type" content="article">
+<meta property="og:title" content="[CIDR 05] MonetDB&#x2F;X100: Hyper-Pipelining Query Execution">
+<meta property="og:url" content="http://blog.mwish.me/2021/07/05/MonetDB-X100-Hyper-Pipelining-Query-Execution/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="MonetDB&#x2F;X100 是一篇 05 年的论文，也是分析型数据库中引用较多的一篇论文。它给 MonetDB 提供了一个高效的查询层，减小了 MonetDB 之前许多操作的开销。同时，贴合了当时的硬件的发展。目前，这篇论文的 Batch 等思路已经被比较大规模的使用了，同时，文章给出的手工编码代码的 baseline 也给 Hyper 等 Codegen 提供了启发。 同时，即使不了解数据库，学习">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/D080EC21-89D4-4AF6-9494-2548832E6843.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/00CB7129-27B1-45E4-BFEC-37320EBCF2DB.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/1C9DB6BB-314C-4831-AD23-0FD34C247A49.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/E7C4ABDA-AFB3-4AD6-A7C6-78688BFFDA66.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/CC55337B-7F22-4CC3-9820-A8B1BF3CC58F.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/92B8BC80-EF8B-45F0-96AA-88E3CE62796C.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/D6A29DE1-7ADF-4C86-B16F-8DB98E4303D1.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/4EA0C11E-0B7A-4A2A-BB98-30757A34F1DD.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/39B4EAF7-A994-4E83-B920-4093A688BEA5.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/E871803A-131F-4472-9F0C-4FB849C33BD6.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/5FA4A79B-BC44-482C-BDEC-662C76EE81DB.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/096228AA-9952-4FCE-A634-A10B3376157A.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/D56A5DFE-98B6-468D-BDB8-9E7C74BA3301.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/EFB64D40-4E1C-44E6-8F06-27F13520317C.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/CB2CEB26-698F-4F7A-95F7-7FD07BFA2069.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/0334E642-F1AD-400F-97ED-BF59F09E1007.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/F409BB1E-BA05-44B0-BBC8-B60C234EC993.png">
+<meta property="article:published_time" content="2021-07-05T10:00:42.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.566Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/D080EC21-89D4-4AF6-9494-2548832E6843.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>[CIDR 05] MonetDB/X100: Hyper-Pipelining Query Execution</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2021/07/27/VLDB-17-Fast-Scans-on-Key-Value-Stores/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2021/07/02/C-Store-A-Column-oriented-DBMS/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2021/07/05/MonetDB-X100-Hyper-Pipelining-Query-Execution/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2021/07/05/MonetDB-X100-Hyper-Pipelining-Query-Execution/&text=[CIDR 05] MonetDB/X100: Hyper-Pipelining Query Execution"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2021/07/05/MonetDB-X100-Hyper-Pipelining-Query-Execution/&title=[CIDR 05] MonetDB/X100: Hyper-Pipelining Query Execution"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2021/07/05/MonetDB-X100-Hyper-Pipelining-Query-Execution/&is_video=false&description=[CIDR 05] MonetDB/X100: Hyper-Pipelining Query Execution"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=[CIDR 05] MonetDB/X100: Hyper-Pipelining Query Execution&body=Check out this article: http://blog.mwish.me/2021/07/05/MonetDB-X100-Hyper-Pipelining-Query-Execution/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2021/07/05/MonetDB-X100-Hyper-Pipelining-Query-Execution/&title=[CIDR 05] MonetDB/X100: Hyper-Pipelining Query Execution"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2021/07/05/MonetDB-X100-Hyper-Pipelining-Query-Execution/&title=[CIDR 05] MonetDB/X100: Hyper-Pipelining Query Execution"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2021/07/05/MonetDB-X100-Hyper-Pipelining-Query-Execution/&title=[CIDR 05] MonetDB/X100: Hyper-Pipelining Query Execution"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2021/07/05/MonetDB-X100-Hyper-Pipelining-Query-Execution/&title=[CIDR 05] MonetDB/X100: Hyper-Pipelining Query Execution"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2021/07/05/MonetDB-X100-Hyper-Pipelining-Query-Execution/&name=[CIDR 05] MonetDB/X100: Hyper-Pipelining Query Execution&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2021/07/05/MonetDB-X100-Hyper-Pipelining-Query-Execution/&t=[CIDR 05] MonetDB/X100: Hyper-Pipelining Query Execution"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#MonetDB"><span class="toc-number">1.</span> <span class="toc-text">MonetDB</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#CPU-amp-amp-DB"><span class="toc-number">2.</span> <span class="toc-text">CPU &amp;&amp; DB</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8F%AF%E4%BB%A5%E6%8F%90%E4%BE%9B%E7%9A%84%E4%BC%98%E5%8C%96"><span class="toc-number">2.1.</span> <span class="toc-text">可以提供的优化</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#TPC-H-%E6%B5%8B%E8%AF%95"><span class="toc-number">2.2.</span> <span class="toc-text">TPC-H 测试</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#TPC-H-%E6%B5%8B%E8%AF%95-MonetDB-MIL"><span class="toc-number">2.2.1.</span> <span class="toc-text">TPC-H 测试 MonetDB&#x2F;MIL</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#X100-A-Vectorized-Query-Processor"><span class="toc-number">3.</span> <span class="toc-text">X100: A Vectorized Query Processor</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Query-Language"><span class="toc-number">3.1.</span> <span class="toc-text">Query Language</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#X100-Algebra"><span class="toc-number">3.2.</span> <span class="toc-text">X100 Algebra</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Vectorized-Primitives"><span class="toc-number">3.3.</span> <span class="toc-text">Vectorized Primitives</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Storage"><span class="toc-number">3.4.</span> <span class="toc-text">Storage</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#TPC-H"><span class="toc-number">4.</span> <span class="toc-text">TPC-H</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Reference"><span class="toc-number">5.</span> <span class="toc-text">Reference</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        [CIDR 05] MonetDB/X100: Hyper-Pipelining Query Execution
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2021-07-05T10:00:42.000Z" itemprop="datePublished">2021-07-05</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>MonetDB/X100 是一篇 05 年的论文，也是分析型数据库中引用较多的一篇论文。它给 MonetDB 提供了一个高效的查询层，减小了 MonetDB 之前许多操作的开销。同时，贴合了当时的硬件的发展。目前，这篇论文的 Batch 等思路已经被比较大规模的使用了，同时，文章给出的手工编码代码的 baseline 也给 Hyper 等 Codegen 提供了启发。</p>
+<p>同时，即使不了解数据库，学习过体系结构的朋友们也可以看看这篇论文的前几章。虽然论文写得比较早，但是对CPU 性能还是提供了一个比较好的视角。</p>
+<p>除开 MonetDB/X100 之外，本笔记在第一段会介绍比较多 MonetDB 在提出 X100 之前的逻辑。</p>
+<h2 id="MonetDB"><a href="#MonetDB" class="headerlink" title="MonetDB"></a>MonetDB</h2><p>MonetDB 最早基于 <em>内存映射文件</em> 来避免使用比较复杂的 buffer pool, 与传统的 RDBMS 不同:</p>
+<ol>
+<li>用 column at-a-time-algebra 取代 volcano 那类的 row at a time</li>
+<li>minimize CPU cache misses rather than IOs</li>
+<li>用类似 database cracking 的技术，来合理的生成 index</li>
+<li>运行时去优化查询</li>
+</ol>
+<p>传统的数据库使用 tuple-at-a-time (比如一次 <code>Next</code> 拉一个 tuple), pull-based (上游有需要就走 <code>Next</code>), iterator 类似的 <code>next()</code> 拿下一条数据的形式。</p>
+<p>MonetDB 最早支持对一批 column 进行同样的操作，通过编译器/手动实现优化，来增加对流水线的友好性，提高代码的 CPI.</p>
+<p>Column-at-at-time 在最初是以 <strong>BAT</strong>(Binary Association Table) Algebra 的形式实现的，BAT 类似 <code>&lt;surrogate,value&gt;</code> ，前一个地址是虚拟的。读出来的数据、运算过程中的数据和结果都是以 BAT 的形式存储的。</p>
+<p>BAT 运算也类似一种 IR，前端会把请求编译成 BAT Algebra, 给 backend，即执行 BAT Algebra 的部分执行。</p>
+<p><img src="https://image.mwish.me/blog-image/D080EC21-89D4-4AF6-9494-2548832E6843.png" alt="D080EC21-89D4-4AF6-9494-2548832E6843"></p>
+<p>BAT algebra 针对一个 column 的所有数据执行简单高效的操作。它的思路是：</p>
+<blockquote>
+<p>by making the algebra simple, the opportunities are created for implementations that execute the common case very fast.</p>
+</blockquote>
+<p>为了处理更新，MonetDB 要给每个 column 准备一个 pending updates set. 读取的时候，要 merge 两边的请求。</p>
+<h2 id="CPU-amp-amp-DB"><a href="#CPU-amp-amp-DB" class="headerlink" title="CPU &amp;&amp; DB"></a>CPU &amp;&amp; DB</h2><p>在 MySQL 等 RDBMS 中，代码的 CPI 比较低。而 05 年的时候，CPU 也在进行着发展，可以看下面两张图：</p>
+<p><img src="https://image.mwish.me/blog-image/00CB7129-27B1-45E4-BFEC-37320EBCF2DB.png" alt="00CB7129-27B1-45E4-BFEC-37320EBCF2DB"></p>
+<p>上面这张图介绍了单核的频率影响</p>
+<p><img src="https://image.mwish.me/blog-image/1C9DB6BB-314C-4831-AD23-0FD34C247A49.png" alt="1C9DB6BB-314C-4831-AD23-0FD34C247A49"></p>
+<p>下面是 CPU 的性能。文章写于 05 年，可以看到当时的趋势。这篇文章聚焦在 Hyper-pipeline CPU 上，我看了下，感觉这个术语类似 superscalar。</p>
+<p>文章认为，AP 型数据产品需要提升查询的性能，避免 CPI 低的情况。MonetDB 一定程度上优化了这一点，但是：</p>
+<blockquote>
+<p>However, its policy of full column materialization causes it to generate large data streams during query execution. </p>
+</blockquote>
+<p>上述内容中，我们还记得每次它扫一列，然后生成一个 BAT, 造成了很多额外开销。</p>
+<p>所以这篇文章主要内容是：</p>
+<blockquote>
+<p>Therefore, we argue to combine the column-wise execution of MonetDB with the incremental materialization offered by Volcano-style pipelining.</p>
+</blockquote>
+<p>它提供了一个 X100 的 Query Engine。提供了 vectorized query processing model.</p>
+<h3 id="可以提供的优化"><a href="#可以提供的优化" class="headerlink" title="可以提供的优化"></a>可以提供的优化</h3><p>现代 CPU 靠 Pipeline 来优化性能，而 Pipeline 可能会有各种 hazard。此外，if-else-then condition 可能会在分支预测上影响性能。2020 年，branch mispredict 大概需要 3ns. 这需要 flush pipeline. 此外，现代 CPU 依靠多级流水线来优化吞吐量。</p>
+<blockquote>
+<p>Translated to database systems, branches that are data-dependent, such as those found in a selection operator on data with a selectivity that is neither very high or very low, are impossible to predict and can significantly slow down query execution</p>
+</blockquote>
+<p>此外，这里还有 hyper-pipeline 等技术，能够使用多个 pipeline, 使 CPU &gt;= 1. 我个人感觉这篇文章的 <em>hyper-pipeline</em> 意思应该和现在 superscalar 差不多。</p>
+<p>编译器一般会把能优化的代码尽量优化，一种有用的技术叫 <em>loop pipelining</em>:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">F(A[0]),G(A[0]), F(A[1]),G(A[1]),.. F(A[n]),G(A[n])</span><br><span class="line">into:</span><br><span class="line">F(A[0]),F(A[1]),F(A[2]), G(A[0]),G(A[1]),G(A[2]), F(A[3]),..</span><br></pre></td></tr></table></figure>
+<p>上述内容可以帮助 CPU 用 OoO 和 SIMD 等方式执行，提高并行度。此外，编译器还能试图优化 branch prediction:</p>
+<p><img src="https://image.mwish.me/blog-image/E7C4ABDA-AFB3-4AD6-A7C6-78688BFFDA66.png" alt="E7C4ABDA-AFB3-4AD6-A7C6-78688BFFDA66"></p>
+<p>还可以看到：<a target="_blank" rel="noopener" href="https://stackoverflow.com/questions/11227809/why-is-processing-a-sorted-array-faster-than-processing-an-unsorted-array">https://stackoverflow.com/questions/11227809/why-is-processing-a-sorted-array-faster-than-processing-an-unsorted-array</a></p>
+<p>最后一点与性能的最好的朋友和最大的敌人 cache 有关:</p>
+<blockquote>
+<p>and can significantly improve if cache-conscious data structures are used, such as cache-aligned B-trees [15, 7] or column-wise data layouts such as PAX [2] and DSM [8] (as in MonetDB).</p>
+</blockquote>
+<h3 id="TPC-H-测试"><a href="#TPC-H-测试" class="headerlink" title="TPC-H 测试"></a>TPC-H 测试</h3><p>在测试中，传统 DMBS 的 CPU IPC 只有 0.7 。而科学计算的 IPC 有 2. 论文选去了 TPC-H Query 1 作为了测试的 case.</p>
+<p>TPC-H 数据基于 1GB 的数据仓库，可以根据 Scaling Factor (SF) 来更新这个大小。</p>
+<p>传统 RDBMS 通常使用火山模型，同时要支持很多 flexible 的查询，这一点会大大影响性能：</p>
+<blockquote>
+<p>For instance, even a simple ScanSelect(R,b,P) only at query-time receives full knowledge of the format of the input relation R (number of columns, their types, and record offsets), the boolean selection expression b (which may be of any form), and a list of projection expressions P (each of arbitrary complexity) that define the output relation. In order to deal with all possible R,b, and P, DBMS implementors must in fact implement an expression interpreter that can handle expressions of arbitrary complexity.</p>
+</blockquote>
+<p><img src="https://image.mwish.me/blog-image/CC55337B-7F22-4CC3-9820-A8B1BF3CC58F.png" alt="CC55337B-7F22-4CC3-9820-A8B1BF3CC58F"></p>
+<p>论文分析了 MySQL:</p>
+<p><img src="https://image.mwish.me/blog-image/92B8BC80-EF8B-45F0-96AA-88E3CE62796C.png" alt="92B8BC80-EF8B-45F0-96AA-88E3CE62796C"></p>
+<p>测试发现，大概很少量的工作在做实际的计算, 大部分 workload 都在 <code>rec_get_nth_field</code> 这种传来传去的东西上，还有 agg 的 hashset.</p>
+<p>另外一项操作是 <code>::val</code> , 这个从具体的内存中捞出需要计算的 <code>int</code> 或者 <code>float</code>, 这个地方相对来说也比较费：</p>
+<p>A simple arithmetic operation <code>+(double src1, double src2) : double</code> in RISC instructions would look like:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">LOAD src1,reg1</span><br><span class="line">LOAD src2,reg2</span><br><span class="line">ADD reg1,reg2,reg3</span><br><span class="line">STOR dst,reg3</span><br></pre></td></tr></table></figure>
+<p>MySQL 这个效率非常低。倒不是执行这几条指令会很痛，而是说，这里是可以更快的：</p>
+<blockquote>
+<p>The limiting factor in this code are the three load/store instructions, thus a MIPS processor can do one *(double,double) per 3 cycles. This is in sharp contrast to the MySQL cost of #ins/Instruction-Per- Cycle (IPC) = 38/0.8 = 49 cycles!</p>
+</blockquote>
+<p>利用上 loop-pipelining, SIMD 等技术，一起处理，能让这块性能大大提高。这一块的结论是：</p>
+<ol>
+<li><code>Item_func_plus::val</code> 应该被 loop-pipelining 的处理，和我们之前说的一样，这里可以利用上 SIMD, 循环展开等优化。</li>
+<li>函数调用的开销应该被均摊。</li>
+</ol>
+<h4 id="TPC-H-测试-MonetDB-MIL"><a href="#TPC-H-测试-MonetDB-MIL" class="headerlink" title="TPC-H 测试 MonetDB/MIL"></a>TPC-H 测试 MonetDB/MIL</h4><p>MIL 就是我们之前提到的 BAT 运算。他提取固定形状的参数，产生固定形状的结果：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">join(BAT[tl,te] A, BAT[te,tr] B) : BAT[tl,tr]</span><br></pre></td></tr></table></figure>
+<p>MIL 的 Join 可能需要 reverse 等操作，这个可以见图：</p>
+<p><img src="https://image.mwish.me/blog-image/D6A29DE1-7ADF-4C86-B16F-8DB98E4303D1.png" alt="D6A29DE1-7ADF-4C86-B16F-8DB98E4303D1"></p>
+<p>需要注意的是，Join 需要的 <code>reverse</code> 不会实际拷贝。（肯定没那么傻）</p>
+<p><img src="https://image.mwish.me/blog-image/4EA0C11E-0B7A-4A2A-BB98-30757A34F1DD.png" alt="4EA0C11E-0B7A-4A2A-BB98-30757A34F1DD"></p>
+<p>MonetDB 之前的计算 CPU 效果很好，但是 memory bandwidth 太大（因为全部一批处理 + 产生中间结果也是 BAT + mmap）。当数据规模很小的时候（SF = 0.001），bandwidth 可以很大，因为数据都可以 fit 在 cache 里。但是数据规模大的时候，Bandwidth 就受限于内存设备了，这会影响查询的效率。</p>
+<p>当然，late materialization 可以一定程度上减少这个问题。用比较节省内存的表现形式，类似 c-store 中的 type 1-4, 只有需要的时候才 deserialize，能够提高这方面的性能。</p>
+<p>此外，这里有很多个 <code>join</code>, 这些 <code>join</code> 是列的 <code>join</code>, 用来组成必要的行，可以看上面 figure 4.1。volcano + 行存，根本不需要执行这些 <code>join</code></p>
+<blockquote>
+<p>While in this paper we concentrate on CPU efficiency in main-memory scenarios, we point out that the “artificially” high bandwidths generated by MonetDB/MIL make it harder to scale the system to disk- based problems efficiently, simply because memory bandwidths tends to be much greater (and cheaper) than I/O bandwidth. </p>
+</blockquote>
+<p>这里提供了一个 硬编码的高效 UDF，作为程序的baseline，这里启发了 codegen 等方法：</p>
+<p><img src="https://image.mwish.me/blog-image/39B4EAF7-A994-4E83-B920-4093A688BEA5.png" alt="39B4EAF7-A994-4E83-B920-4093A688BEA5"></p>
+<h2 id="X100-A-Vectorized-Query-Processor"><a href="#X100-A-Vectorized-Query-Processor" class="headerlink" title="X100: A Vectorized Query Processor"></a>X100: A Vectorized Query Processor</h2><p><img src="https://image.mwish.me/blog-image/E871803A-131F-4472-9F0C-4FB849C33BD6.png" alt="E871803A-131F-4472-9F0C-4FB849C33BD6"></p>
+<p>如上面的层次，X100 的目的是：</p>
+<ol>
+<li>高效 高 IPC 处理大量的数据。</li>
+<li>能够扩展，支持 SQL frontend</li>
+<li>支持更大规模的存储</li>
+</ol>
+<p>下面是相关的几个 part：</p>
+<ol>
+<li>Disk: 加入了 ColumnBM I/O 子系统，提供了一个水平分片的 I O访问接口和轻量的压缩。</li>
+<li>RAM: 这里引入了 memory to cache 等逻辑，在 memory 里面，很多东西都用压缩的格式存储，来节省空间和 bandwidth</li>
+<li>Cache: 这里用 vectorized processing model. 批量的处理数据，尽量能把这些东西丢在 cache 里。X100 会将大块的 BAT 内存切成这些 cache chunk, 在里面即使 random access 相对来说也比较友好。</li>
+<li>X100 试图 batch 处理数据，即使是 agg 这样的算子，也尝试做成 vectorized 的，这里可能依赖简单的 codegen. （agg 困难的地方是输出形状和输入不一样。）</li>
+</ol>
+<p>最后的图可以跟上面的 figure5 看看。</p>
+<h3 id="Query-Language"><a href="#Query-Language" class="headerlink" title="Query Language"></a>Query Language</h3><p>下面来看看具体的查询的执行：</p>
+<p><img src="https://image.mwish.me/blog-image/5FA4A79B-BC44-482C-BDEC-662C76EE81DB.png" alt="5FA4A79B-BC44-482C-BDEC-662C76EE81DB"></p>
+<p>这里会被推到：</p>
+<p><img src="https://image.mwish.me/blog-image/096228AA-9952-4FCE-A634-A10B3376157A.png" alt="096228AA-9952-4FCE-A634-A10B3376157A"></p>
+<ol>
+<li>Scan 每次突出一个 vectorize batch 的数据</li>
+<li>Select 筛选的时候，会产生一个 <em>selection-vector</em>，把过滤成功的填进区</li>
+<li>Project 用来投影。这里不会修改 vectorize 的数据，而是以 <code>map</code> 原语类似的形式，拷到相同的位置中。</li>
+<li>使用 Aggregate，这里因为 <code>(3)</code> 和 <code>(2)</code> 的筛选，<em>selection-vector</em> 也需要传上去。</li>
+</ol>
+<h3 id="X100-Algebra"><a href="#X100-Algebra" class="headerlink" title="X100 Algebra"></a>X100 Algebra</h3><p><img src="https://image.mwish.me/blog-image/D56A5DFE-98B6-468D-BDB8-9E7C74BA3301.png" alt="D56A5DFE-98B6-468D-BDB8-9E7C74BA3301"></p>
+<p>这里 Dataflow 是不断产生 vectorize items 的对象，<code>Scan</code>  <code>Order</code> <code>TopN</code> 会产生一个 Dataflow,Project 会做转型，Aggr 会对 Group By 的对象去重，Array 会根据表达式产生一堆 N-dim array，用来把结果丢给 frontend system。</p>
+<p>Aggr 和 Join 论文中提到了一点，不过有点老生常谈。就是怎么选算子的问题。</p>
+<h3 id="Vectorized-Primitives"><a href="#Vectorized-Primitives" class="headerlink" title="Vectorized Primitives"></a>Vectorized Primitives</h3><p>过去，实现可能会比较 flexible, 比如：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * AbstractExecutor implements the Volcano tuple-at-a-time iterator model.</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">AbstractExecutor</span> &#123;</span><br><span class="line"> <span class="keyword">public</span>:</span><br><span class="line">  <span class="comment">/**</span></span><br><span class="line"><span class="comment">   * Constructs a new AbstractExecutor.</span></span><br><span class="line"><span class="comment">   * @param exec_ctx the executor context that the executor runs with</span></span><br><span class="line"><span class="comment">   */</span></span><br><span class="line">  <span class="function"><span class="keyword">explicit</span> <span class="title">AbstractExecutor</span><span class="params">(ExecutorContext *exec_ctx)</span> : exec_ctx_&#123;</span>exec_ctx&#125; &#123;&#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">/** Virtual destructor. */</span></span><br><span class="line">  <span class="keyword">virtual</span> ~<span class="built_in">AbstractExecutor</span>() = <span class="keyword">default</span>;</span><br><span class="line"></span><br><span class="line">  <span class="comment">/**</span></span><br><span class="line"><span class="comment">   * Initializes this executor.</span></span><br><span class="line"><span class="comment">   * @warning This function must be called before Next() is called!</span></span><br><span class="line"><span class="comment">   */</span></span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> <span class="type">void</span> <span class="title">Init</span><span class="params">()</span> </span>= <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">  <span class="comment">/**</span></span><br><span class="line"><span class="comment">   * Produces the next tuple from this executor.</span></span><br><span class="line"><span class="comment">   * @param[out] tuple the next tuple produced by this executor</span></span><br><span class="line"><span class="comment">   * @param[out] rid the next tuple rid produced by this executor</span></span><br><span class="line"><span class="comment">   * @return true if a tuple was produced, false if there are no more tuples</span></span><br><span class="line"><span class="comment">   */</span></span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> <span class="type">bool</span> <span class="title">Next</span><span class="params">(Tuple *tuple, RID *rid)</span> </span>= <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">  <span class="comment">/** @return the schema of the tuples that this executor produces */</span></span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> <span class="type">const</span> Schema *<span class="title">GetOutputSchema</span><span class="params">()</span> </span>= <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">  <span class="comment">/** @return the executor context in which this executor runs */</span></span><br><span class="line">  <span class="function">ExecutorContext *<span class="title">GetExecutorContext</span><span class="params">()</span> </span>&#123; <span class="keyword">return</span> exec_ctx_; &#125;</span><br><span class="line"></span><br><span class="line"> <span class="keyword">protected</span>:</span><br><span class="line">  ExecutorContext *exec_ctx_;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>这个是从 15-445 lab 抄出来的. 就比较 flexible. MonetDB 相反，使用相对定制的接口：</p>
+<blockquote>
+<p>In a vertically fragmented data model, the execution primitives only know about the columns they operate on without having to know about the overall table layout (e.g. record offsets). When compiling X100, the C compiler sees that the X100 vectorized primitives operate on restricted (independent) arrays of fixed shape. </p>
+</blockquote>
+<p>MonetDB 需要手动编码很多接口，来保证实现的高效，比如：</p>
+<p><img src="https://image.mwish.me/blog-image/EFB64D40-4E1C-44E6-8F06-27F13520317C.png" alt="EFB64D40-4E1C-44E6-8F06-27F13520317C"></p>
+<p>（上面 <code>*</code> 表示一个 sequence）</p>
+<p><img src="https://image.mwish.me/blog-image/CB2CEB26-698F-4F7A-95F7-7FD07BFA2069.png" alt="CB2CEB26-698F-4F7A-95F7-7FD07BFA2069"></p>
+<p>（你看一个加法写四遍，这得模版大师来写一套了）</p>
+<p>此外，这里还支持 <em>compound primitive signature</em> :</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">(square(-(double*, double*)), double*)</span><br></pre></td></tr></table></figure>
+<p>这种组合的 primitives 能够提供两倍的性能优化，原因应该和访存有关：</p>
+<blockquote>
+<p>The reason why compound primitives are more efficient is a better instruction mix. Like in the example with addition on the MIPS processor in Section 3.1, vectorized execution often becomes load/store bound, because for simple 2-ary calculations, each vectorized instruction requires loading two parameters and storing one result (1 work instruction, 3 memory instructions). Modern CPUs can typically only perform 1 or 2 load/store operations per cycle. In compound primitives, the results from one calculation are passed via a CPU register to the next calculation, with load/stores only occurring at the edges of the expression graph.</p>
+</blockquote>
+<h3 id="Storage"><a href="#Storage" class="headerlink" title="Storage"></a>Storage</h3><p><img src="https://image.mwish.me/blog-image/0334E642-F1AD-400F-97ED-BF59F09E1007.png" alt="0334E642-F1AD-400F-97ED-BF59F09E1007"></p>
+<p>MonetDB 的 BAT 把相同的 column 存一起，而 ColumnBM 权衡了读写，把列存为大于 1MB 的 chunks.</p>
+<p>它的更新操作如上图所属，把原本的视作不可变的对象，然后ColumnBM 实际上将所有 delta 列存储在一个块中，这等同于 PAX [2]。因此，这两种操作都只产生一个 I/O。更新只是删除后插入。更新使 delta 列增长，因此只要它们的大小超过总表大小的一个比较小的百分比，就应该重新组织数据存储（compaction?)，以便垂直存储再次更新并且清空 delta。</p>
+<h2 id="TPC-H"><a href="#TPC-H" class="headerlink" title="TPC-H"></a>TPC-H</h2><p>再次跑 TPC-H 之后，X100 获得了没那么大的内存带宽和很好的性能，即使 SF=100，这里 RAM 开销也没那么大。Query 1 的 IPC 提升了很多：</p>
+<blockquote>
+<p>A first observation is that X100 manages to run all primitives at a very low number of CPU cycles per tuple even relatively complex primitives like aggregation run in 6 cycles per tuple. Notice that a multiplication (map mul *) is handled in 2.2 cycles per tuple, which is way better than the 49 cycles per tuple achieved by MySQL (see Section 3.1).</p>
+</blockquote>
+<p>测试还给出了 vector size 的影响：</p>
+<p><img src="https://image.mwish.me/blog-image/F409BB1E-BA05-44B0-BBC8-B60C234EC993.png" alt="F409BB1E-BA05-44B0-BBC8-B60C234EC993"></p>
+<p>这里，比较明显的事，vector size 能在 cache 里面放下的时候，性能是提升的，当放不下的时候，开始访存，性能裂化。比较极端的情况就是回到 MonetDB/MIL 的情景。</p>
+<h2 id="Reference"><a href="#Reference" class="headerlink" title="Reference"></a>Reference</h2><ul>
+<li>CIDR’05: MonetDB/X100: Hyper-Pipelining Query Execution</li>
+<li><strong>The Design and Implementation of Modern Column-Oriented Database Systems</strong></li>
+<li><strong>Computer Organization and Design</strong></li>
+</ul>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#MonetDB"><span class="toc-number">1.</span> <span class="toc-text">MonetDB</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#CPU-amp-amp-DB"><span class="toc-number">2.</span> <span class="toc-text">CPU &amp;&amp; DB</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8F%AF%E4%BB%A5%E6%8F%90%E4%BE%9B%E7%9A%84%E4%BC%98%E5%8C%96"><span class="toc-number">2.1.</span> <span class="toc-text">可以提供的优化</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#TPC-H-%E6%B5%8B%E8%AF%95"><span class="toc-number">2.2.</span> <span class="toc-text">TPC-H 测试</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#TPC-H-%E6%B5%8B%E8%AF%95-MonetDB-MIL"><span class="toc-number">2.2.1.</span> <span class="toc-text">TPC-H 测试 MonetDB&#x2F;MIL</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#X100-A-Vectorized-Query-Processor"><span class="toc-number">3.</span> <span class="toc-text">X100: A Vectorized Query Processor</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Query-Language"><span class="toc-number">3.1.</span> <span class="toc-text">Query Language</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#X100-Algebra"><span class="toc-number">3.2.</span> <span class="toc-text">X100 Algebra</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Vectorized-Primitives"><span class="toc-number">3.3.</span> <span class="toc-text">Vectorized Primitives</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Storage"><span class="toc-number">3.4.</span> <span class="toc-text">Storage</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#TPC-H"><span class="toc-number">4.</span> <span class="toc-text">TPC-H</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Reference"><span class="toc-number">5.</span> <span class="toc-text">Reference</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2021/07/05/MonetDB-X100-Hyper-Pipelining-Query-Execution/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2021/07/05/MonetDB-X100-Hyper-Pipelining-Query-Execution/&text=[CIDR 05] MonetDB/X100: Hyper-Pipelining Query Execution"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2021/07/05/MonetDB-X100-Hyper-Pipelining-Query-Execution/&title=[CIDR 05] MonetDB/X100: Hyper-Pipelining Query Execution"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2021/07/05/MonetDB-X100-Hyper-Pipelining-Query-Execution/&is_video=false&description=[CIDR 05] MonetDB/X100: Hyper-Pipelining Query Execution"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=[CIDR 05] MonetDB/X100: Hyper-Pipelining Query Execution&body=Check out this article: http://blog.mwish.me/2021/07/05/MonetDB-X100-Hyper-Pipelining-Query-Execution/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2021/07/05/MonetDB-X100-Hyper-Pipelining-Query-Execution/&title=[CIDR 05] MonetDB/X100: Hyper-Pipelining Query Execution"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2021/07/05/MonetDB-X100-Hyper-Pipelining-Query-Execution/&title=[CIDR 05] MonetDB/X100: Hyper-Pipelining Query Execution"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2021/07/05/MonetDB-X100-Hyper-Pipelining-Query-Execution/&title=[CIDR 05] MonetDB/X100: Hyper-Pipelining Query Execution"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2021/07/05/MonetDB-X100-Hyper-Pipelining-Query-Execution/&title=[CIDR 05] MonetDB/X100: Hyper-Pipelining Query Execution"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2021/07/05/MonetDB-X100-Hyper-Pipelining-Query-Execution/&name=[CIDR 05] MonetDB/X100: Hyper-Pipelining Query Execution&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2021/07/05/MonetDB-X100-Hyper-Pipelining-Query-Execution/&t=[CIDR 05] MonetDB/X100: Hyper-Pipelining Query Execution"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

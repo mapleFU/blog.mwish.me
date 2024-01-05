@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="如果你啃过 OSTEP 或者什么国内的教材，那么你一定知道 Paging 这些虚拟内存相关的策略，那下面我们整理一下知识点：  操作系统 采用了 虚拟内存 的策略，这个策略实际上很类似 CPU 的 cache CPU 使用的是虚拟地址，经 页表 转化为物理地址。这种虚拟内存的方案优势是： 支持更大的虚拟地址空间，我们可能只有16G的 物理内存，但我们有一个 32位&#x2F;64位的地址空间，同时，我们也能">
+<meta property="og:type" content="article">
+<meta property="og:title" content="软&#x2F;硬的分界: 虚拟">
+<meta property="og:url" content="http://blog.mwish.me/2020/11/08/%E8%BD%AF-%E7%A1%AC%E7%9A%84%E5%88%86%E7%95%8C-%E8%99%9A%E6%8B%9F/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="如果你啃过 OSTEP 或者什么国内的教材，那么你一定知道 Paging 这些虚拟内存相关的策略，那下面我们整理一下知识点：  操作系统 采用了 虚拟内存 的策略，这个策略实际上很类似 CPU 的 cache CPU 使用的是虚拟地址，经 页表 转化为物理地址。这种虚拟内存的方案优势是： 支持更大的虚拟地址空间，我们可能只有16G的 物理内存，但我们有一个 32位&#x2F;64位的地址空间，同时，我们也能">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/966DE38A-A499-4BDC-8BDF-46F344EFC8CC.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/43A18D7F-8D2B-4D62-8AA4-7BD8571D10CB.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/D31816F2-EF17-4CFF-85B5-AD88A1CA02BB.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/38E18604-E8F2-428B-8D5F-FDFEB55163B2.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/41D68117-8467-417E-AD42-78503FA7754C.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/7D933BA9-C8E0-4893-ABDD-37527C82C8B9.png">
+<meta property="article:published_time" content="2020-11-08T14:27:47.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.561Z">
+<meta property="article:author" content="mwish">
+<meta property="article:tag" content="system">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/966DE38A-A499-4BDC-8BDF-46F344EFC8CC.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>软/硬的分界: 虚拟</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2020/11/14/%E4%BA%8B%E5%8A%A1-%E5%8D%8F%E8%AE%AE%E5%92%8C%E9%9A%94%E7%A6%BB/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2020/11/01/Cache-and-Related-Part3-Coherent/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/11/08/%E8%BD%AF-%E7%A1%AC%E7%9A%84%E5%88%86%E7%95%8C-%E8%99%9A%E6%8B%9F/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/11/08/%E8%BD%AF-%E7%A1%AC%E7%9A%84%E5%88%86%E7%95%8C-%E8%99%9A%E6%8B%9F/&text=软/硬的分界: 虚拟"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/11/08/%E8%BD%AF-%E7%A1%AC%E7%9A%84%E5%88%86%E7%95%8C-%E8%99%9A%E6%8B%9F/&title=软/硬的分界: 虚拟"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/11/08/%E8%BD%AF-%E7%A1%AC%E7%9A%84%E5%88%86%E7%95%8C-%E8%99%9A%E6%8B%9F/&is_video=false&description=软/硬的分界: 虚拟"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=软/硬的分界: 虚拟&body=Check out this article: http://blog.mwish.me/2020/11/08/%E8%BD%AF-%E7%A1%AC%E7%9A%84%E5%88%86%E7%95%8C-%E8%99%9A%E6%8B%9F/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/11/08/%E8%BD%AF-%E7%A1%AC%E7%9A%84%E5%88%86%E7%95%8C-%E8%99%9A%E6%8B%9F/&title=软/硬的分界: 虚拟"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/11/08/%E8%BD%AF-%E7%A1%AC%E7%9A%84%E5%88%86%E7%95%8C-%E8%99%9A%E6%8B%9F/&title=软/硬的分界: 虚拟"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/11/08/%E8%BD%AF-%E7%A1%AC%E7%9A%84%E5%88%86%E7%95%8C-%E8%99%9A%E6%8B%9F/&title=软/硬的分界: 虚拟"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/11/08/%E8%BD%AF-%E7%A1%AC%E7%9A%84%E5%88%86%E7%95%8C-%E8%99%9A%E6%8B%9F/&title=软/硬的分界: 虚拟"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/11/08/%E8%BD%AF-%E7%A1%AC%E7%9A%84%E5%88%86%E7%95%8C-%E8%99%9A%E6%8B%9F/&name=软/硬的分界: 虚拟&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/11/08/%E8%BD%AF-%E7%A1%AC%E7%9A%84%E5%88%86%E7%95%8C-%E8%99%9A%E6%8B%9F/&t=软/硬的分界: 虚拟"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Review"><span class="toc-number">1.</span> <span class="toc-text">Review</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#1-%E5%9C%B0%E5%9D%80"><span class="toc-number">1.0.1.</span> <span class="toc-text">1: 地址</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#2-%E7%89%B9%E6%9D%83"><span class="toc-number">1.0.2.</span> <span class="toc-text">2: 特权</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-number">2.</span> <span class="toc-text">总结</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        软/硬的分界: 虚拟
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2020-11-08T14:27:47.000Z" itemprop="datePublished">2020-11-08</time>
+        
+      
+    </div>
+
+
+      
+
+      
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/system/" rel="tag">system</a>
+    </div>
+
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>如果你啃过 OSTEP 或者什么国内的教材，那么你一定知道 Paging 这些虚拟内存相关的策略，那下面我们整理一下知识点：</p>
+<ol>
+<li><strong>操作系统</strong> 采用了 <strong>虚拟内存</strong> 的策略，这个策略实际上很类似 CPU 的 cache</li>
+<li><strong>CPU</strong> 使用的是<strong>虚拟地址</strong>，经 <strong>页表</strong> 转化为物理地址。这种虚拟内存的方案优势是：<ol>
+<li>支持更大的虚拟地址空间，我们可能只有16G的 <strong>物理内存</strong>，但我们有一个 32位/64位的地址空间，同时，我们也能够适当的完成 swap </li>
+<li>支持隔离，保护一个 <strong>进程</strong> 免受其他 <strong>进程</strong> 的影响</li>
+</ol>
+</li>
+<li>虚拟地址被分为虚拟页号(可能有数级)和页内偏移，经 <strong>转化</strong> 之后称为一份</li>
+<li><strong>页表</strong> 存储在 <strong>内存</strong> 中，对一个地址空间而言，每一个位置维护一个 page table entry 的内存开销过高，所以会采取多级页表的形式，减少 <strong>内存访问</strong> 的开销。实际上，很多时候页表的结构类似 radix tree。</li>
+<li>因为 <strong>内存</strong> 的访问有巨大的 gap, 所以需要 TLB 作为一种 cache<ol>
+<li>对于多个进程而言，每个<strong>进程</strong>会有一套自己独立的地址空间，上下文切换的时候，TLB 需要 Flush 对应的表项，或者给 entry 一个 <strong>标示进程</strong> 的字段</li>
+</ol>
+</li>
+<li>具体访问的时候，某个 <strong>Page</strong> 可能在<strong>访问位</strong>被标记上读/写 flag，甚至会有 <strong>保护页</strong> 的存在</li>
+</ol>
+<p>然后，我们还知道：</p>
+<ul>
+<li>TLB 没有对应的 Page entry，会发生 TLB 失效。这个时候，Page 可能在<strong>内存</strong>中，需要访问加载，可能不在内存中，需要<strong>操作系统</strong> 来处理缺页异常(page fault).<ul>
+<li>这需要额外的机制来<strong>中断</strong>正在运行中的活跃进程，将控制权转移到 <strong>操作系统</strong>，然后再恢复过来。</li>
+</ul>
+</li>
+</ul>
+<p>好吧，我最早考 OS 的时候觉得上面的观点都是很自然的，但是你会发现有问题就是：</p>
+<ul>
+<li>哪些部分是软件(OS)做的，哪些部分是硬件做的？</li>
+<li>虚拟地址是对谁而言的？</li>
+<li>进程切换 Flush TLB 这些是谁做的？</li>
+</ul>
+<p>这个时候你会感觉突然不正常了起来，我们需要知道的是：</p>
+<ol>
+<li>OS 支持了什么</li>
+<li>ISA 支持了什么，硬件要做什么</li>
+</ol>
+<p>然后，OS 以 xv6 的 RISC-V 版本为例，ISA 以 RISC-V 为例，去看看问题到底是什么样子的。</p>
+<p>最后，在具体讨论之前，需要注意的是：<strong>操作系统 和 ISA 的分界并不是平坦的，很多东西即可以软件做，又可以硬件做（但是很多时候在 ISA 上提供切口大概会方便很多）</strong>。</p>
+<h2 id="Review"><a href="#Review" class="headerlink" title="Review"></a>Review</h2><p>我们在这个 Part 其实很早就聊过 OS 应该做什么： <a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/150571417">https://zhuanlan.zhihu.com/p/150571417</a></p>
+<ul>
+<li><p>memory translation</p>
+</li>
+<li><ul>
+<li>每个运行的进程需要从 virtual 的进程转成物理内存</li>
+<li>program 实际处理的是虚拟内存，需要硬件支持</li>
+</ul>
+</li>
+<li><p>protection and privilege</p>
+</li>
+<li><ul>
+<li>需要提供 user 和 supervisor 的模式，在 RISC-V 中有 machine 和 supervisor 模式</li>
+</ul>
+</li>
+<li><p>更低的层次不能修改 memory mapping</p>
+</li>
+<li><ul>
+<li>supervisor 可以</li>
+<li>supervisor 有独立于用户程序的 virtual 到 physical 映射</li>
+</ul>
+</li>
+<li><p>提供 traps 和 interrupt，在命令层面提供了到 supervisor 的方法</p>
+</li>
+</ul>
+<p>也就是说：</p>
+<h4 id="1-地址"><a href="#1-地址" class="headerlink" title="1: 地址"></a>1: 地址</h4><p>指令中给的有可能是 <strong>虚拟地址</strong>，也有可能是<strong>物理地址</strong>，需要 ISA/硬件 进行额外的支持。实际上，正常的用户态程序运行的时候，我们使用的地址、汇编中的地址都是 <strong>虚拟地址</strong></p>
+<p><img src="https://image.mwish.me/blog-image/966DE38A-A499-4BDC-8BDF-46F344EFC8CC.png" alt="966DE38A-A499-4BDC-8BDF-46F344EFC8CC"></p>
+<p>Supervisor 模式提供了一种简单基于页面的虚拟内存，这种方式如下所示：</p>
+<p><img src="https://image.mwish.me/blog-image/43A18D7F-8D2B-4D62-8AA4-7BD8571D10CB.png" alt="43A18D7F-8D2B-4D62-8AA4-7BD8571D10CB"></p>
+<ol>
+<li>硬件/ISA 可以分清楚页表项，并且交给硬件进行访问</li>
+<li>软件(OS)也可以进行对应的设置，在内存中操作，处理缺页的异常。</li>
+</ol>
+<p>而是否 enable 虚拟内存这种机制，取决于 <code>satp</code> 寄存器：</p>
+<blockquote>
+<p>一个叫 satp(Supervisor Address Translation and Protection，监管者地址转换和保护) 的 S 模式控制状态寄存器控制了分页系统。如图 10.12 所示，satp 有三个域。MODE 域可 以开启分页并选择页表级数，图 10.13 展示了它的编码。ASID(Address Space Identifier， 地址空间标识符)域是可选的，它可以用来降低上下文切换的开销。最后，PPN 字段保存 了根页表的物理地址，它以 4 KiB 的页面大小为单位。通常 M 模式的程序在第一次进入 S 模式之前会把零写入 satp 以禁用分页，然后 S 模式的程序在初始化页表以后会再次进行 satp 寄存器的写操作。</p>
+</blockquote>
+<p><img src="https://image.mwish.me/blog-image/D31816F2-EF17-4CFF-85B5-AD88A1CA02BB.png" alt="D31816F2-EF17-4CFF-85B5-AD88A1CA02BB"></p>
+<p>而 <code>satp</code> 寄存器：</p>
+<blockquote>
+<p>当在 satp 寄存器中启用了分页时，S 模式和 U 模式中的虚拟地址会以从根部遍历页表 的方式转换为物理地址。图 10.14 描述了这个过程:</p>
+<ol>
+<li>satp.PPN 给出了一级页表的基址，VA[31:22]给出了一级页号，因此<strong>处理器</strong>会读取 位于地址(satp. PPN × 4096 + VA[31: 22] × 4)的页表项。</li>
+<li>该 PTE 包含二级页表的基址，VA[21:12]给出了二级页号，因此<strong>处理器</strong>读取位于地 址(PTE. PPN × 4096 + VA[21: 12] × 4)的叶节点页表项。</li>
+<li>叶节点页表项的 PPN 字段和页内偏移(原始虚址的最低 12 个有效位)组成了最终结果: 物理地址就是(LeafPTE. PPN × 4096 + VA[11: 0])</li>
+</ol>
+</blockquote>
+<p>此外，关于之前的 TLB 的问题，指令提供了对应的支持：</p>
+<blockquote>
+<p>这意味着如果操 作系统修改了页表，那么这个缓存会变得陈旧而不可用。S 模式添加了另一条指令来解决 这个问题。这条 sfence.vma 会通知处理器，软件可能已经修改了页表，于是处理器可以 相应地刷新转换缓存。它需要两个可选的参数，这样可以缩小缓存刷新的范围。一个位于 rs1，它指示了页表哪个虚址对应的转换被修改了;另一个位于 rs2，它给出了被修改页表 的进程的地址空间标识符(ASID)。如果两者都是 x0，便会刷新整个转换缓存。</p>
+</blockquote>
+<p>和下面这段</p>
+<blockquote>
+<p>sfence.vma 仅影响执行当前指令的 hart 的地址转换硬件。当 hart 更改了另一个 hart 正在使 用的页表时，前一个 hart 必须用处理器间中断来通知后一个 hart，他应该执行 sfence.vma 指令。这个过程通常被称为 <em>TLB</em> 击落。</p>
+</blockquote>
+<p>我们可以在 xv6 看到相关的代码:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br></pre></td><td class="code"><pre><span class="line">.globl trampoline</span><br><span class="line">trampoline:</span><br><span class="line">.align 4</span><br><span class="line">.globl uservec</span><br><span class="line">uservec:    </span><br><span class="line">	#</span><br><span class="line">        # trap.c sets stvec to point here, so</span><br><span class="line">        # traps from user space start here,</span><br><span class="line">        # in supervisor mode, but with a</span><br><span class="line">        # user page table.</span><br><span class="line">        #</span><br><span class="line">        # sscratch points to where the process&#x27;s p-&gt;tf is</span><br><span class="line">        # mapped into user space, at TRAPFRAME.</span><br><span class="line">        #</span><br><span class="line">        </span><br><span class="line">	# swap a0 and sscratch</span><br><span class="line">        # so that a0 is TRAPFRAME</span><br><span class="line">        csrrw a0, sscratch, a0</span><br><span class="line"></span><br><span class="line">        # save the user registers in TRAPFRAME</span><br><span class="line">        sd ra, 40(a0)</span><br><span class="line">        sd sp, 48(a0)</span><br><span class="line">        sd gp, 56(a0)</span><br><span class="line">        sd tp, 64(a0)</span><br><span class="line">        sd t0, 72(a0)</span><br><span class="line">        sd t1, 80(a0)</span><br><span class="line">        sd t2, 88(a0)</span><br><span class="line">        sd s0, 96(a0)</span><br><span class="line">        sd s1, 104(a0)</span><br><span class="line">        sd a1, 120(a0)</span><br><span class="line">        sd a2, 128(a0)</span><br><span class="line">        sd a3, 136(a0)</span><br><span class="line">        sd a4, 144(a0)</span><br><span class="line">        sd a5, 152(a0)</span><br><span class="line">        sd a6, 160(a0)</span><br><span class="line">        sd a7, 168(a0)</span><br><span class="line">        sd s2, 176(a0)</span><br><span class="line">        sd s3, 184(a0)</span><br><span class="line">        sd s4, 192(a0)</span><br><span class="line">        sd s5, 200(a0)</span><br><span class="line">        sd s6, 208(a0)</span><br><span class="line">        sd s7, 216(a0)</span><br><span class="line">        sd s8, 224(a0)</span><br><span class="line">        sd s9, 232(a0)</span><br><span class="line">        sd s10, 240(a0)</span><br><span class="line">        sd s11, 248(a0)</span><br><span class="line">        sd t3, 256(a0)</span><br><span class="line">        sd t4, 264(a0)</span><br><span class="line">        sd t5, 272(a0)</span><br><span class="line">        sd t6, 280(a0)</span><br><span class="line"></span><br><span class="line">	# save the user a0 in p-&gt;tf-&gt;a0</span><br><span class="line">        csrr t0, sscratch</span><br><span class="line">        sd t0, 112(a0)</span><br><span class="line"></span><br><span class="line">        # restore kernel stack pointer from p-&gt;tf-&gt;kernel_sp</span><br><span class="line">        ld sp, 8(a0)</span><br><span class="line"></span><br><span class="line">        # make tp hold the current hartid, from p-&gt;tf-&gt;kernel_hartid</span><br><span class="line">        ld tp, 32(a0)</span><br><span class="line"></span><br><span class="line">        # load the address of usertrap(), p-&gt;tf-&gt;kernel_trap</span><br><span class="line">        ld t0, 16(a0)</span><br><span class="line"></span><br><span class="line">        # restore kernel page table from p-&gt;tf-&gt;kernel_satp</span><br><span class="line">        ld t1, 0(a0)</span><br><span class="line">        csrw satp, t1</span><br><span class="line">        sfence.vma zero, zero</span><br><span class="line"></span><br><span class="line">        # a0 is no longer valid, since the kernel page</span><br><span class="line">        # table does not specially map p-&gt;tf.</span><br><span class="line"></span><br><span class="line">        # jump to usertrap(), which does not return</span><br><span class="line">        jr t0</span><br><span class="line"># 中间被我省略了</span><br><span class="line">.globl userret</span><br><span class="line">userret:</span><br><span class="line">        # userret(TRAPFRAME, pagetable)</span><br><span class="line">        # switch from kernel to user.</span><br><span class="line">        # usertrapret() calls here.</span><br><span class="line">        # a0: TRAPFRAME, in user page table.</span><br><span class="line">        # a1: user page table, for satp.</span><br><span class="line"></span><br><span class="line">        # switch to the user page table.</span><br><span class="line">        csrw satp, a1</span><br><span class="line">        sfence.vma zero, zero</span><br><span class="line"></span><br><span class="line">.globl userret</span><br><span class="line">userret:</span><br><span class="line">        # userret(TRAPFRAME, pagetable)</span><br><span class="line">        # switch from kernel to user.</span><br><span class="line">        # usertrapret() calls here.</span><br><span class="line">        # a0: TRAPFRAME, in user page table.</span><br><span class="line">        # a1: user page table, for satp.</span><br><span class="line"></span><br><span class="line">        # switch to the user page table.</span><br><span class="line">        csrw satp, a1</span><br><span class="line">        sfence.vma zero, zero</span><br><span class="line"></span><br><span class="line">        # put the saved user a0 in sscratch, so we</span><br><span class="line">        # can swap it with our a0 (TRAPFRAME) in the last step.</span><br><span class="line">        ld t0, 112(a0)</span><br><span class="line">        csrw sscratch, t0</span><br></pre></td></tr></table></figure>
+<p>好吧，我承认 reader 手册说的不是很明白，我在 trap 和 ret 中间都省略了一些代码，关于这个 sfence.vma 使用，可以参考：<a target="_blank" rel="noopener" href="https://utk.instructure.com/courses/66647/files/3182543/download?verifier=JLzdkcM2uy4hNshzq9Tus0Kll1vJys8bsoFbgcl0&amp;wrap=1">https://utk.instructure.com/courses/66647/files/3182543/download?verifier=JLzdkcM2uy4hNshzq9Tus0Kll1vJys8bsoFbgcl0&amp;wrap=1</a></p>
+<p><img src="https://image.mwish.me/blog-image/38E18604-E8F2-428B-8D5F-FDFEB55163B2.png" alt="38E18604-E8F2-428B-8D5F-FDFEB55163B2"></p>
+<p>所以这里相当于切换了 <code>satp</code> 从内核到用户态/从内内核态到用户态之后，fence 整个地址空间。</p>
+<h4 id="2-特权"><a href="#2-特权" class="headerlink" title="2: 特权"></a>2: 特权</h4><p>RISC-V 提供了两种额外的模式：</p>
+<blockquote>
+<p> 运行最 可信的代码的机器模式(machine mode)，以及为 Linux，FreeBSD 和 Windows 等操作系统 提供支持的监管者模式(supervisor mode)</p>
+</blockquote>
+<p><img src="https://image.mwish.me/blog-image/41D68117-8467-417E-AD42-78503FA7754C.png" alt="41D68117-8467-417E-AD42-78503FA7754C"></p>
+<p>硬件对指令有约束，不能在 User 模式下执行特权指令。这提供了某种情况的保护，而操作系统又有这种保护的权限，而关于 <code>m</code> 和 <code>s</code> 模式，就简要贴一下：</p>
+<blockquote>
+<p>默认情况下，发生所有异常(不论在什么权限模式下)的时候，控制权都会被移交到 M 模式的异常处理程序。但是 Unix 系统中的大多数例外都应该进行 S 模式下的系统调 用。M 模式的异常处理程序可以将异常重新导向 S 模式，但这些额外的操作会减慢大多数 异常的处理速度。因此，RISC-V 提供了一种异常委托机制。通过该机制可以选择性地将中 断和同步异常交给 S 模式处理，而完全绕过 M 模式。</p>
+<p>mideleg(Machine Interrupt Delegation，机器中断委托)CSR 控制将哪些中断委托给 S 模式。</p>
+</blockquote>
+<p>所以实际上，这种模式是由硬件来保证的。</p>
+<p>RISC-V 提供了一组 CSR 寄存器，如  <a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/150571417">https://zhuanlan.zhihu.com/p/150571417</a> 所示，帮助标示和完成异常、恢复上下文。</p>
+<p>实际上，触发 trap 的时候，硬件需要把现在运行的指令记录到 <code>mepc</code>, 然后 stop 整个流水线，完成之前所说的异常处理。</p>
+<p>实际上，回到之前页表，我们可以看到，xv6 中：</p>
+<ol>
+<li>翻译是由硬件处理的</li>
+<li>出现缺页异常，由操作系统这样的软件来处理。</li>
+</ol>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>有一张绝世好图：</p>
+<p><img src="https://image.mwish.me/blog-image/7D933BA9-C8E0-4893-ABDD-37527C82C8B9.png" alt="7D933BA9-C8E0-4893-ABDD-37527C82C8B9"></p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Review"><span class="toc-number">1.</span> <span class="toc-text">Review</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#1-%E5%9C%B0%E5%9D%80"><span class="toc-number">1.0.1.</span> <span class="toc-text">1: 地址</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#2-%E7%89%B9%E6%9D%83"><span class="toc-number">1.0.2.</span> <span class="toc-text">2: 特权</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-number">2.</span> <span class="toc-text">总结</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/11/08/%E8%BD%AF-%E7%A1%AC%E7%9A%84%E5%88%86%E7%95%8C-%E8%99%9A%E6%8B%9F/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/11/08/%E8%BD%AF-%E7%A1%AC%E7%9A%84%E5%88%86%E7%95%8C-%E8%99%9A%E6%8B%9F/&text=软/硬的分界: 虚拟"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/11/08/%E8%BD%AF-%E7%A1%AC%E7%9A%84%E5%88%86%E7%95%8C-%E8%99%9A%E6%8B%9F/&title=软/硬的分界: 虚拟"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/11/08/%E8%BD%AF-%E7%A1%AC%E7%9A%84%E5%88%86%E7%95%8C-%E8%99%9A%E6%8B%9F/&is_video=false&description=软/硬的分界: 虚拟"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=软/硬的分界: 虚拟&body=Check out this article: http://blog.mwish.me/2020/11/08/%E8%BD%AF-%E7%A1%AC%E7%9A%84%E5%88%86%E7%95%8C-%E8%99%9A%E6%8B%9F/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/11/08/%E8%BD%AF-%E7%A1%AC%E7%9A%84%E5%88%86%E7%95%8C-%E8%99%9A%E6%8B%9F/&title=软/硬的分界: 虚拟"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/11/08/%E8%BD%AF-%E7%A1%AC%E7%9A%84%E5%88%86%E7%95%8C-%E8%99%9A%E6%8B%9F/&title=软/硬的分界: 虚拟"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/11/08/%E8%BD%AF-%E7%A1%AC%E7%9A%84%E5%88%86%E7%95%8C-%E8%99%9A%E6%8B%9F/&title=软/硬的分界: 虚拟"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/11/08/%E8%BD%AF-%E7%A1%AC%E7%9A%84%E5%88%86%E7%95%8C-%E8%99%9A%E6%8B%9F/&title=软/硬的分界: 虚拟"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/11/08/%E8%BD%AF-%E7%A1%AC%E7%9A%84%E5%88%86%E7%95%8C-%E8%99%9A%E6%8B%9F/&name=软/硬的分界: 虚拟&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/11/08/%E8%BD%AF-%E7%A1%AC%E7%9A%84%E5%88%86%E7%95%8C-%E8%99%9A%E6%8B%9F/&t=软/硬的分界: 虚拟"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

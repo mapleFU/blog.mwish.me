@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="先贴几个图  RV32I 指令图    下面是具体的指令格式    下面是指令格式展开的格式   上面几张图可以在包云岗老师翻译的 RISC-V book 里面找到。  图 2.2 显示了六种基本指令格式，分别是:用于寄存器-寄存器操作的 R 类型指令，用于短立即数和访存 load 操作的 I 型指令，用于访存 store 操作的 S 型指令，用于条件跳转操作的 B 类型指令，用于长立即数的 U">
+<meta property="og:type" content="article">
+<meta property="og:title" content="RISC-V 指令格式">
+<meta property="og:url" content="http://blog.mwish.me/2020/10/04/RISC-V-%E6%8C%87%E4%BB%A4%E6%A0%BC%E5%BC%8F/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="先贴几个图  RV32I 指令图    下面是具体的指令格式    下面是指令格式展开的格式   上面几张图可以在包云岗老师翻译的 RISC-V book 里面找到。  图 2.2 显示了六种基本指令格式，分别是:用于寄存器-寄存器操作的 R 类型指令，用于短立即数和访存 load 操作的 I 型指令，用于访存 store 操作的 S 型指令，用于条件跳转操作的 B 类型指令，用于长立即数的 U">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/D35C054C-DCDE-4C29-BDC1-6637C915952B.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/83904B69-0871-4150-98DE-1F0EA0877D17.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/1B9BA357-6712-4A2D-B287-FE774DF41B4F.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/98C5AAD5-6084-4061-9F60-2C4713515ACE.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/28CB5742-AD12-4C86-8AA8-7E8DCA8EF12E.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/6415DC2D-0A51-49C5-B1AE-606145CEB81F.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/02D8BD3A-6757-4E0F-B976-A0B66ED9A93B.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/5890A79A-BC93-4D19-AC79-447D0273E059.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/8E9E3C64254443AF66A352BF0DD83DB4.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/7ACB61F8-C66F-4612-9DBD-1F7095D2CE9E.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/36F645F0-136D-449D-BCCF-97C8ED834226.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/04E9659D-BA95-4219-ACF8-A031BD9F7472.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/80146EE9-9531-455F-86F9-1C7BBB41A9A8.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/BECEBBA9-B72D-4E25-A767-DD54718C7AA5.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/96F9098A-5CC8-4041-8448-92AAFAA92718.png">
+<meta property="article:published_time" content="2020-10-04T06:34:38.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.568Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/D35C054C-DCDE-4C29-BDC1-6637C915952B.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>RISC-V 指令格式</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2020/10/05/RISC-V-%E7%BC%96%E8%AF%91%E3%80%81%E9%93%BE%E6%8E%A5%E3%80%81%E5%8A%A0%E8%BD%BD/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2020/09/19/Integer-Endian/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/10/04/RISC-V-%E6%8C%87%E4%BB%A4%E6%A0%BC%E5%BC%8F/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/10/04/RISC-V-%E6%8C%87%E4%BB%A4%E6%A0%BC%E5%BC%8F/&text=RISC-V 指令格式"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/10/04/RISC-V-%E6%8C%87%E4%BB%A4%E6%A0%BC%E5%BC%8F/&title=RISC-V 指令格式"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/10/04/RISC-V-%E6%8C%87%E4%BB%A4%E6%A0%BC%E5%BC%8F/&is_video=false&description=RISC-V 指令格式"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=RISC-V 指令格式&body=Check out this article: http://blog.mwish.me/2020/10/04/RISC-V-%E6%8C%87%E4%BB%A4%E6%A0%BC%E5%BC%8F/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/10/04/RISC-V-%E6%8C%87%E4%BB%A4%E6%A0%BC%E5%BC%8F/&title=RISC-V 指令格式"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/10/04/RISC-V-%E6%8C%87%E4%BB%A4%E6%A0%BC%E5%BC%8F/&title=RISC-V 指令格式"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/10/04/RISC-V-%E6%8C%87%E4%BB%A4%E6%A0%BC%E5%BC%8F/&title=RISC-V 指令格式"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/10/04/RISC-V-%E6%8C%87%E4%BB%A4%E6%A0%BC%E5%BC%8F/&title=RISC-V 指令格式"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/10/04/RISC-V-%E6%8C%87%E4%BB%A4%E6%A0%BC%E5%BC%8F/&name=RISC-V 指令格式&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/10/04/RISC-V-%E6%8C%87%E4%BB%A4%E6%A0%BC%E5%BC%8F/&t=RISC-V 指令格式"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#R-Format-Instruction"><span class="toc-number">1.</span> <span class="toc-text">R-Format Instruction</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#I-Format-Instruction"><span class="toc-number">2.</span> <span class="toc-text">I-Format Instruction</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#S-Format"><span class="toc-number">3.</span> <span class="toc-text">S-Format</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#B-Format-%E5%92%8C-Label"><span class="toc-number">4.</span> <span class="toc-text">B-Format 和 Label</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#U-Format"><span class="toc-number">5.</span> <span class="toc-text">U-Format</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#J-Format"><span class="toc-number">6.</span> <span class="toc-text">J-Format</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        RISC-V 指令格式
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2020-10-04T06:34:38.000Z" itemprop="datePublished">2020-10-04</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>先贴几个图</p>
+<ul>
+<li>RV32I 指令图</li>
+</ul>
+<p><img src="https://image.mwish.me/blog-image/D35C054C-DCDE-4C29-BDC1-6637C915952B.png" alt="D35C054C-DCDE-4C29-BDC1-6637C915952B"></p>
+<ul>
+<li>下面是具体的指令格式</li>
+</ul>
+<p><img src="https://image.mwish.me/blog-image/83904B69-0871-4150-98DE-1F0EA0877D17.png" alt="83904B69-0871-4150-98DE-1F0EA0877D17"></p>
+<ul>
+<li>下面是指令格式展开的格式</li>
+</ul>
+<p><img src="https://image.mwish.me/blog-image/1B9BA357-6712-4A2D-B287-FE774DF41B4F.png" alt="1B9BA357-6712-4A2D-B287-FE774DF41B4F"></p>
+<p>上面几张图可以在包云岗老师翻译的 RISC-V book 里面找到。</p>
+<blockquote>
+<p>图 2.2 显示了六种基本指令格式，分别是:用于寄存器-寄存器操作的 R 类型指令，用于短立即数和访存 load 操作的 I 型指令，用于访存 store 操作的 S 型指令，用于条件跳转操作的 B 类型指令，用于长立即数的 U 型指令和用于无条件跳转的 J 型指令。图 2.3 使用图 2.2 的指令格式列出了图 2.1 中出现的所有 RV32I 指令的操作码.</p>
+<p>为了帮助程序员，所有位全部是 0 是非法的 RV32I 指令。因此, 试图跳转到被清零的 内存区域的错误跳转将会立即触发异常，这可以帮助调试。类似地，所有位全部是 1 的指 令也是非法指令，它将捕获其他常见的错误，诸如未编程的非易失性内存设备、断开连接 的内存总线或者坏掉的内存芯片。</p>
+</blockquote>
+<h2 id="R-Format-Instruction"><a href="#R-Format-Instruction" class="headerlink" title="R-Format Instruction"></a>R-Format Instruction</h2><p>R-Format 用于寄存器-寄存器操作</p>
+<p><img src="https://image.mwish.me/blog-image/98C5AAD5-6084-4061-9F60-2C4713515ACE.png" alt="98C5AAD5-6084-4061-9F60-2C4713515ACE"></p>
+<h2 id="I-Format-Instruction"><a href="#I-Format-Instruction" class="headerlink" title="I-Format Instruction"></a>I-Format Instruction</h2><blockquote>
+<p> 用于短立即数和访存 load 操作的 I 型指令</p>
+</blockquote>
+<p><img src="https://image.mwish.me/blog-image/28CB5742-AD12-4C86-8AA8-7E8DCA8EF12E.png" alt="28CB5742-AD12-4C86-8AA8-7E8DCA8EF12E"></p>
+<p>很重要的是，RISC-V 所有的立即数都是 signed 的。例如：</p>
+<p><img src="https://image.mwish.me/blog-image/6415DC2D-0A51-49C5-B1AE-606145CEB81F.png" alt="6415DC2D-0A51-49C5-B1AE-606145CEB81F"></p>
+<p>除了这种 <code>add imm</code>. load 操作也是 I 型的：</p>
+<p><img src="https://image.mwish.me/blog-image/02D8BD3A-6757-4E0F-B976-A0B66ED9A93B.png" alt="02D8BD3A-6757-4E0F-B976-A0B66ED9A93B"></p>
+<blockquote>
+<p>Note: if instruction has immediate, then uses at most 2 registers (one source, one destination)</p>
+</blockquote>
+<p>load 的模式通常是 <code>load rd, rs</code> 或者 <code>load rd, imm(rs)</code>.</p>
+<h2 id="S-Format"><a href="#S-Format" class="headerlink" title="S-Format"></a>S-Format</h2><p>需要保存2个 Register 和一个小的 imm:</p>
+<p><img src="https://image.mwish.me/blog-image/5890A79A-BC93-4D19-AC79-447D0273E059.png" alt="5890A79A-BC93-4D19-AC79-447D0273E059"></p>
+<blockquote>
+<p>RISC-V design decision is move low 5 bits of immediate to where rd field was in other instructions – keep <strong>rs1</strong>/<strong>rs2</strong> fields in same place.</p>
+</blockquote>
+<p>因为 store 只是把寄存器的存到内存中，所以没有“目标寄存器”。</p>
+<hr>
+<p>以上指令中，你会发现，RISC-V 希望 <code>rs1</code> <code>rs2</code> <code>rd</code> 三个寄存器 <strong>存在的话即有相同的位置</strong>。</p>
+<blockquote>
+<ul>
+<li>By always placing the read sources in the same place, the register file can read without hesitation. If the data ends up being unnecessary (e.g. I-Type), it can be ignored</li>
+</ul>
+</blockquote>
+<hr>
+<h2 id="B-Format-和-Label"><a href="#B-Format-和-Label" class="headerlink" title="B-Format 和 Label"></a>B-Format 和 Label</h2><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">BEQx1,x2,Label</span><br></pre></td></tr></table></figure>
+<p>上面是一个很正常的跳转指令，但是本身 .label 如何在机器码上存在呢？</p>
+<p>在 RISC-V 中，一切都是有内存位置的，包括指令，那么跳转到对应指令的内存即可。在这里，因为 <code>.code</code> 端本身占用内存的大小有限，所以这里使用 PC-Relative Addressing:</p>
+<ul>
+<li>使用 <code>imm</code> 字段，表示 PC 的二进制补码偏移量。（<code>Could specify ± 211 addresses offset from the PC</code>)</li>
+<li>To improve the reach of a single branch instruction, <em>in principle</em>, could multiply the offset by four bytes before adding to PC (<em>instructions are 4 bytes and word aligned</em>). 因为我们的 RV32I 都是 32bits 的，而且是 4bytes align 的，所以可以把偏移量 <code>* 32</code></li>
+<li>This would allow one branch instruction to reach <code>± 211 × 32-bit</code> instructions either side of PC</li>
+</ul>
+<p>但是，考虑压缩指令，即扩展的 16-bit instructions，RISC-V 需要支持的还有 16bits 的扩展指令。</p>
+<ul>
+<li>To enable this, RISC-V always scales the branch offset by 2 bytes - even when there are no 16-bit instructions</li>
+</ul>
+<p>所以需要处理 size, 不能 <code>*32</code>, </p>
+<p>在 RISC-V 中，conditional branch 逻辑如下：</p>
+<ul>
+<li>如果跳转成功了，<code>PC = PC + imm</code>, imm 是二进制补码，是 signed 的</li>
+<li>否则，<code>PC = PC + 4</code></li>
+</ul>
+<p>最后，指令的支持形式如下</p>
+<p><img src="https://image.mwish.me/blog-image/8E9E3C64254443AF66A352BF0DD83DB4.png" alt="8E9E3C64254443AF66A352BF0DD83DB4"></p>
+<p><img src="https://image.mwish.me/blog-image/7ACB61F8-C66F-4612-9DBD-1F7095D2CE9E.png" alt="7ACB61F8-C66F-4612-9DBD-1F7095D2CE9E"></p>
+<p>下面给了一个例子：</p>
+<p><img src="https://image.mwish.me/blog-image/36F645F0-136D-449D-BCCF-97C8ED834226.png" alt="36F645F0-136D-449D-BCCF-97C8ED834226"></p>
+<p>以上是 16bytes，而我们有 <code>imm[12]</code>, 偏移量相当于乘了 byte，同时预留了一个虚拟 <code>0</code> bit, 相当于 <code>*2byte</code>, 实在不够，会使用 <code>branch</code> + <code>jal</code> 的方式支持。</p>
+<h2 id="U-Format"><a href="#U-Format" class="headerlink" title="U-Format"></a>U-Format</h2><blockquote>
+<p> 用于长立即数的 U 型指令</p>
+</blockquote>
+<p><img src="https://image.mwish.me/blog-image/04E9659D-BA95-4219-ACF8-A031BD9F7472.png" alt="04E9659D-BA95-4219-ACF8-A031BD9F7472"></p>
+<ul>
+<li>AUIPC – Add Upper Immediate to PC</li>
+<li>LUI – Load Upper Immediate</li>
+</ul>
+<p>注意这俩对应的都是高位。可以用 <code>lui</code> + <code>addi</code> 构造 32位的数（毕竟立即数不够大）。</p>
+<p>需要注意的是，<code>addi</code> 指令中，写入 <code>imm[11:0]</code>, 看上去和 lui 没有冲突，但是如果构造 <code>0xDEADBEEF</code>这种，因为这辆都是二进制补码，需要处理低12位中，<code>imm[11]</code> 是 1的问题，这会导致整个结果成一个负数。</p>
+<p>这里我们要回到二进制补码的特点：加一个负数的时候加法仍然是按位加的，但是进位是要从高位 <code>-1</code> 的 。这里需要高位再 <code>+1</code> 再处理。</p>
+<p><img src="https://image.mwish.me/blog-image/80146EE9-9531-455F-86F9-1C7BBB41A9A8.png" alt="80146EE9-9531-455F-86F9-1C7BBB41A9A8"></p>
+<h2 id="J-Format"><a href="#J-Format" class="headerlink" title="J-Format"></a>J-Format</h2><p>下面是 JAL 和 JALR</p>
+<p><img src="https://image.mwish.me/blog-image/BECEBBA9-B72D-4E25-A767-DD54718C7AA5.png" alt="BECEBBA9-B72D-4E25-A767-DD54718C7AA5"></p>
+<p><code>jal</code> 根据 <code>imm</code> 来跳跃，<code>rd</code> 存储。这个 <code>jal</code> 中遵循和 branch 中一样的测试，即 <code>*2byte</code></p>
+<p><img src="https://image.mwish.me/blog-image/96F9098A-5CC8-4041-8448-92AAFAA92718.png" alt="96F9098A-5CC8-4041-8448-92AAFAA92718"></p>
+<p><code>jalr</code> 中，把结果存到寄存器中, 注意，这回儿它就不 <code>*2byte</code> 了</p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#R-Format-Instruction"><span class="toc-number">1.</span> <span class="toc-text">R-Format Instruction</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#I-Format-Instruction"><span class="toc-number">2.</span> <span class="toc-text">I-Format Instruction</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#S-Format"><span class="toc-number">3.</span> <span class="toc-text">S-Format</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#B-Format-%E5%92%8C-Label"><span class="toc-number">4.</span> <span class="toc-text">B-Format 和 Label</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#U-Format"><span class="toc-number">5.</span> <span class="toc-text">U-Format</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#J-Format"><span class="toc-number">6.</span> <span class="toc-text">J-Format</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/10/04/RISC-V-%E6%8C%87%E4%BB%A4%E6%A0%BC%E5%BC%8F/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/10/04/RISC-V-%E6%8C%87%E4%BB%A4%E6%A0%BC%E5%BC%8F/&text=RISC-V 指令格式"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/10/04/RISC-V-%E6%8C%87%E4%BB%A4%E6%A0%BC%E5%BC%8F/&title=RISC-V 指令格式"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/10/04/RISC-V-%E6%8C%87%E4%BB%A4%E6%A0%BC%E5%BC%8F/&is_video=false&description=RISC-V 指令格式"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=RISC-V 指令格式&body=Check out this article: http://blog.mwish.me/2020/10/04/RISC-V-%E6%8C%87%E4%BB%A4%E6%A0%BC%E5%BC%8F/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/10/04/RISC-V-%E6%8C%87%E4%BB%A4%E6%A0%BC%E5%BC%8F/&title=RISC-V 指令格式"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/10/04/RISC-V-%E6%8C%87%E4%BB%A4%E6%A0%BC%E5%BC%8F/&title=RISC-V 指令格式"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/10/04/RISC-V-%E6%8C%87%E4%BB%A4%E6%A0%BC%E5%BC%8F/&title=RISC-V 指令格式"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/10/04/RISC-V-%E6%8C%87%E4%BB%A4%E6%A0%BC%E5%BC%8F/&title=RISC-V 指令格式"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/10/04/RISC-V-%E6%8C%87%E4%BB%A4%E6%A0%BC%E5%BC%8F/&name=RISC-V 指令格式&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/10/04/RISC-V-%E6%8C%87%E4%BB%A4%E6%A0%BC%E5%BC%8F/&t=RISC-V 指令格式"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

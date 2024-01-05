@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="我的友人 xzt 老师曾经对我说过一个笑话，大概长这样：  高情商：”我们有基于数据湖的数据管理系统”低情商：”你要在 HDFS 上手写 MapReduce 任务”  我一直觉得这是个没毛病的说法，所以对最近创业的各种东西感觉比较困惑。尤其是之前上网搜了一波数据湖是什么，感觉他们讲的都是一些哲学概念而不是技术。今天看了看 Databricks 的 Delta Lake 和 Lakehouse，想了">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Delta Lake &amp; Lakehouse">
+<meta property="og:url" content="http://blog.mwish.me/2022/05/01/Delta-Lake-Lakehouse/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="我的友人 xzt 老师曾经对我说过一个笑话，大概长这样：  高情商：”我们有基于数据湖的数据管理系统”低情商：”你要在 HDFS 上手写 MapReduce 任务”  我一直觉得这是个没毛病的说法，所以对最近创业的各种东西感觉比较困惑。尤其是之前上网搜了一波数据湖是什么，感觉他们讲的都是一些哲学概念而不是技术。今天看了看 Databricks 的 Delta Lake 和 Lakehouse，想了">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/C7203105-EDF4-4E9C-92D3-21C031F4E77B.png">
+<meta property="article:published_time" content="2022-05-01T11:06:17.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.565Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/C7203105-EDF4-4E9C-92D3-21C031F4E77B.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>Delta Lake &amp; Lakehouse</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2022/05/02/Arch-Blog-Overviews/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2022/04/30/ARIES-IM/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2022/05/01/Delta-Lake-Lakehouse/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2022/05/01/Delta-Lake-Lakehouse/&text=Delta Lake &amp; Lakehouse"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2022/05/01/Delta-Lake-Lakehouse/&title=Delta Lake &amp; Lakehouse"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2022/05/01/Delta-Lake-Lakehouse/&is_video=false&description=Delta Lake &amp; Lakehouse"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Delta Lake &amp; Lakehouse&body=Check out this article: http://blog.mwish.me/2022/05/01/Delta-Lake-Lakehouse/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2022/05/01/Delta-Lake-Lakehouse/&title=Delta Lake &amp; Lakehouse"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2022/05/01/Delta-Lake-Lakehouse/&title=Delta Lake &amp; Lakehouse"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2022/05/01/Delta-Lake-Lakehouse/&title=Delta Lake &amp; Lakehouse"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2022/05/01/Delta-Lake-Lakehouse/&title=Delta Lake &amp; Lakehouse"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2022/05/01/Delta-Lake-Lakehouse/&name=Delta Lake &amp; Lakehouse&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2022/05/01/Delta-Lake-Lakehouse/&t=Delta Lake &amp; Lakehouse"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#References"><span class="toc-number">1.</span> <span class="toc-text">References</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Delta Lake &amp; Lakehouse
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2022-05-01T11:06:17.000Z" itemprop="datePublished">2022-05-01</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>我的友人 xzt 老师曾经对我说过一个笑话，大概长这样：</p>
+<blockquote>
+<p>高情商：”我们有基于数据湖的数据管理系统”<br>低情商：”你要在 HDFS 上手写 MapReduce 任务”</p>
+</blockquote>
+<p>我一直觉得这是个没毛病的说法，所以对最近创业的各种东西感觉比较困惑。尤其是之前上网搜了一波数据湖是什么，感觉他们讲的都是一些哲学概念而不是技术。今天看了看 Databricks 的 Delta Lake 和 Lakehouse，想了想，终于知道数据湖这个批词指的是什么东西了。</p>
+<p>Delta Lake 提供了一个类似表格的服务，在 S3 上提供了 ACID 语义。它存储类似 Parquet 这样支持 nested 的格式，并且给每列数据一些描述元信息。同时，它本身的 Schema 应该是柔性的，对比到行存类似 Protobuf、Avro 这种软的格式。对前台写入而言，Delta Lake 的上述内容提供了 ACID 的写入，这点对用户还是比较重要的，这里可以对比 Hive，用户瞎几把改了一堆数据然后任务挂了，你这堆东西你看你留不留？Delta Lake 很好的解决了这个问题。Delta Lake 提供了在 OSS 上实现 ACID 语义的逻辑，并支持了 Streaming 等接口（但不太是给 Streaming 原生设计的，感觉写入性能还是受限的）。</p>
+<p>对数据分析师或者各种用户而言，比较重要的是 <code>Optimize</code> 操作。这个有点类似 LSM 的 Compaction，会把零散的 Parquet 文件组织成便于分析的 Parquet 文件，这个过程似乎被称作 Clustering : 把你写的那些乱七八糟的 Schema 组织成一些比较结构化的、便于 AP 查询执行的 Schema，然后这些文件对于每列会有一些 <code>min-max</code> 描索引信息，帮助上层查询跳过。这部分在 Delta Lake 论文有简短描述。</p>
+<p>对于上层系统而言，Lakehouse 对 Delta Lake 提供了元数据层、缓存和一些端到端的 API，做到了嗯舔用户。</p>
+<p><img src="https://image.mwish.me/blog-image/C7203105-EDF4-4E9C-92D3-21C031F4E77B.png" alt="C7203105-EDF4-4E9C-92D3-21C031F4E77B"></p>
+<p>回过头来说，如果说 snowflake 是发现了云上 “不跑的机器可以不收费” + “AP Workload 没有那么延时敏感” + “算不来的东西多调机器就行了”，那么 Delta Lake + Lakehouse 则是 “云上低性能 Batch ACID” + “Compaction 阶段调整格式”。关于 Cache 其实和 Snowflake 差不多。</p>
+<p>本来想写点什么的，但是感觉知道它在做什么就索然无味了…所以就发个这么短的了。</p>
+<h2 id="References"><a href="#References" class="headerlink" title="References"></a>References</h2><ol>
+<li>深度对比delta、iceberg和hudi三大开源数据湖方案: <a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/110748218">https://zhuanlan.zhihu.com/p/110748218</a></li>
+<li>通过数据组织加速大规模数据分析: <a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/354334895">https://zhuanlan.zhihu.com/p/354334895</a></li>
+<li>【论文分享】从Lakehouse看Databricks对下一代数据湖架构的理解 - ShallowMind的文章 - 知乎 <a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/462094560">https://zhuanlan.zhihu.com/p/462094560</a></li>
+<li>数据湖竟然能和数据仓库打通？如何评价阿里云推出的湖仓一体解决方案？ - 贾扬清的回答 - 知乎 <a target="_blank" rel="noopener" href="https://www.zhihu.com/question/421711474/answer/1480957849">https://www.zhihu.com/question/421711474/answer/1480957849</a></li>
+</ol>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#References"><span class="toc-number">1.</span> <span class="toc-text">References</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2022/05/01/Delta-Lake-Lakehouse/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2022/05/01/Delta-Lake-Lakehouse/&text=Delta Lake &amp; Lakehouse"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2022/05/01/Delta-Lake-Lakehouse/&title=Delta Lake &amp; Lakehouse"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2022/05/01/Delta-Lake-Lakehouse/&is_video=false&description=Delta Lake &amp; Lakehouse"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Delta Lake &amp; Lakehouse&body=Check out this article: http://blog.mwish.me/2022/05/01/Delta-Lake-Lakehouse/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2022/05/01/Delta-Lake-Lakehouse/&title=Delta Lake &amp; Lakehouse"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2022/05/01/Delta-Lake-Lakehouse/&title=Delta Lake &amp; Lakehouse"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2022/05/01/Delta-Lake-Lakehouse/&title=Delta Lake &amp; Lakehouse"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2022/05/01/Delta-Lake-Lakehouse/&title=Delta Lake &amp; Lakehouse"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2022/05/01/Delta-Lake-Lakehouse/&name=Delta Lake &amp; Lakehouse&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2022/05/01/Delta-Lake-Lakehouse/&t=Delta Lake &amp; Lakehouse"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

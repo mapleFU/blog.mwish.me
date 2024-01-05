@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="我们的计算机构建在电路和芯片上，虽然程序员一般不会了解这些。现在我们可能有两种电压：  Vdd , 高电压, 在树莓派里面大概是 1.2伏特 低电压，0伏特或者接地  通常，我们选择某种中间值，大于中间值的视为 1&#x2F;true, 小于这个值的设置为0&#x2F;false. 高中物理实验里面我们会有个电池，然后起一个电线+物理的“switch”开关，现代我们使用 CMOS 作为这个开关：  在 CMOS 中，">
+<meta property="og:type" content="article">
+<meta property="og:title" content="SDS Intro &amp; RISC-V Datapath(0): 预备知识">
+<meta property="og:url" content="http://blog.mwish.me/2020/10/14/SDS-Intro-RISC-V-Datapath/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="我们的计算机构建在电路和芯片上，虽然程序员一般不会了解这些。现在我们可能有两种电压：  Vdd , 高电压, 在树莓派里面大概是 1.2伏特 低电压，0伏特或者接地  通常，我们选择某种中间值，大于中间值的视为 1&#x2F;true, 小于这个值的设置为0&#x2F;false. 高中物理实验里面我们会有个电池，然后起一个电线+物理的“switch”开关，现代我们使用 CMOS 作为这个开关：  在 CMOS 中，">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/DFFF2237-A3C0-4A47-A529-B3F8DBBFC35A.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/FBC51C46-58ED-4A23-BCE8-ABBAADBF736E.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/FEB6CDCD-A282-4DB6-9BFA-F6662859DFAE.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/61EB95F0-389F-480B-BBF0-6334C4FD38BF.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/61EB95F0-389F-480B-BBF0-6334C4FD38BF.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/233C6157-C855-4424-9957-2F78D8A78BEE.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/16550D9D-C7A7-45DD-BDC0-A002645C48CA.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/7992A522-FFA5-4D90-A89A-7D7FDE404463.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/A2377FD7-3492-45D6-A748-F19B13CC387D.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/35022F87-4627-432A-B48A-A17D4D8DB558.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/68EBFEC9-FFFC-4498-87B5-122B932EA452.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/C6D1D07C-931A-44F6-9827-B123338E2EEF.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/image-20201015130546809.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/image-20201017153211876.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/image-20201017153438192.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/6206E039-8E6E-42AD-A0F5-C5F1956820F2.png">
+<meta property="article:published_time" content="2020-10-13T16:01:17.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.562Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/DFFF2237-A3C0-4A47-A529-B3F8DBBFC35A.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>SDS Intro &amp; RISC-V Datapath(0): 预备知识</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2020/10/15/SDS-Intro-RISC-V-Datapath-2-Datapath/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2020/10/05/RISC-V-%E7%BC%96%E8%AF%91%E3%80%81%E9%93%BE%E6%8E%A5%E3%80%81%E5%8A%A0%E8%BD%BD/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/10/14/SDS-Intro-RISC-V-Datapath/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/10/14/SDS-Intro-RISC-V-Datapath/&text=SDS Intro &amp; RISC-V Datapath(0): 预备知识"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/10/14/SDS-Intro-RISC-V-Datapath/&title=SDS Intro &amp; RISC-V Datapath(0): 预备知识"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/10/14/SDS-Intro-RISC-V-Datapath/&is_video=false&description=SDS Intro &amp; RISC-V Datapath(0): 预备知识"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=SDS Intro &amp; RISC-V Datapath(0): 预备知识&body=Check out this article: http://blog.mwish.me/2020/10/14/SDS-Intro-RISC-V-Datapath/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/10/14/SDS-Intro-RISC-V-Datapath/&title=SDS Intro &amp; RISC-V Datapath(0): 预备知识"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/10/14/SDS-Intro-RISC-V-Datapath/&title=SDS Intro &amp; RISC-V Datapath(0): 预备知识"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/10/14/SDS-Intro-RISC-V-Datapath/&title=SDS Intro &amp; RISC-V Datapath(0): 预备知识"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/10/14/SDS-Intro-RISC-V-Datapath/&title=SDS Intro &amp; RISC-V Datapath(0): 预备知识"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/10/14/SDS-Intro-RISC-V-Datapath/&name=SDS Intro &amp; RISC-V Datapath(0): 预备知识&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/10/14/SDS-Intro-RISC-V-Datapath/&t=SDS Intro &amp; RISC-V Datapath(0): 预备知识"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8F%8D%E9%A6%88%E4%B8%8E%E8%A7%A6%E5%8F%91%E5%99%A8"><span class="toc-number">1.</span> <span class="toc-text">反馈与触发器</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#flip-flop"><span class="toc-number">1.1.</span> <span class="toc-text">flip-flop</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%B3%BB%E7%BB%9F%E6%A8%A1%E5%9E%8B%E5%92%8C%E6%97%B6%E9%92%9F%E5%91%A8%E6%9C%9F"><span class="toc-number">1.2.</span> <span class="toc-text">系统模型和时钟周期</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%B5%81%E6%B0%B4%E7%BA%BF"><span class="toc-number">1.3.</span> <span class="toc-text">流水线</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9B%9E%E5%88%B0-sum"><span class="toc-number">1.4.</span> <span class="toc-text">回到 sum</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Critical-path-%E4%B8%8D%E8%83%BD%E6%8A%84%E8%BF%91%E9%81%93"><span class="toc-number">1.5.</span> <span class="toc-text">Critical path: 不能抄近道</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%80%BB%E8%BE%91%E8%AE%BE%E8%AE%A1"><span class="toc-number">1.6.</span> <span class="toc-text">逻辑设计</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%8A%A0%E6%B3%95%E5%99%A8"><span class="toc-number">1.6.1.</span> <span class="toc-text">加法器</span></a></li></ol></li></ol></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        SDS Intro &amp; RISC-V Datapath(0): 预备知识
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2020-10-13T16:01:17.000Z" itemprop="datePublished">2020-10-14</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>我们的计算机构建在电路和芯片上，虽然程序员一般不会了解这些。现在我们可能有两种电压：</p>
+<ul>
+<li><code>Vdd</code> , 高电压, 在树莓派里面大概是 1.2伏特</li>
+<li>低电压，0伏特或者接地</li>
+</ul>
+<p>通常，我们选择某种中间值，大于中间值的视为 <code>1</code>/<code>true</code>, 小于这个值的设置为<code>0</code>/<code>false</code>. 高中物理实验里面我们会有个电池，然后起一个电线+物理的“switch”开关，现代我们使用 CMOS 作为这个开关：</p>
+<p><img src="https://image.mwish.me/blog-image/DFFF2237-A3C0-4A47-A529-B3F8DBBFC35A.png" alt="DFFF2237-A3C0-4A47-A529-B3F8DBBFC35A"></p>
+<p>在 CMOS 中，我们实现了这种逻辑。图上的 <code>n</code> 是 negetive, <code>p</code> 是 positive, 具体如下：</p>
+<p><img src="https://image.mwish.me/blog-image/FBC51C46-58ED-4A23-BCE8-ABBAADBF736E.png" alt="FBC51C46-58ED-4A23-BCE8-ABBAADBF736E"></p>
+<p>后面两条就是高中物理知识了，短路什么的…上面两条比较重要：</p>
+<ul>
+<li>n-type 不带圈，低电压时，它是通的，否则通</li>
+<li>p-type 带圈，高电压时，是通的，否则不通</li>
+</ul>
+<p>那么可以理解下面这图了：</p>
+<p><img src="https://image.mwish.me/blog-image/FEB6CDCD-A282-4DB6-9BFA-F6662859DFAE.png" alt="FEB6CDCD-A282-4DB6-9BFA-F6662859DFAE"></p>
+<p>X 为 Vdd 时，p-type 通，n-type 不通，那么 Y 电压是 1；X为 GND 时，p-type 不通，n-type 通，Y 为 0V。很显然，上面的可以算一个非门？</p>
+<p>那么我们再来分析一个 slide 里的电路：</p>
+<p><img src="https://image.mwish.me/blog-image/61EB95F0-389F-480B-BBF0-6334C4FD38BF.png" alt="61EB95F0-389F-480B-BBF0-6334C4FD38BF"></p>
+<p>上图中，X Y 任意一个电压为一，那么 Z — 1V 中间是通的（这两个的 p-type 中并联了）；而下面 n-type 串联，需要 X, Y 都为 0，它们才是通的，Z 才为 0 V。</p>
+<p>那我们可以用电路来实现一些语义，下面是你们应该都学过的一些记号，为了灌水我就贴张图了：</p>
+<p><img src="https://image.mwish.me/blog-image/61EB95F0-389F-480B-BBF0-6334C4FD38BF.png" alt="61EB95F0-389F-480B-BBF0-6334C4FD38BF"></p>
+<p>以上是相关的电路知识。实际上我们可以用几个数学工具来表示需要的逻辑：</p>
+<p><img src="https://image.mwish.me/blog-image/233C6157-C855-4424-9957-2F78D8A78BEE.png" alt="233C6157-C855-4424-9957-2F78D8A78BEE"></p>
+<p>我们可以用：</p>
+<ul>
+<li>Boolean expression: 与或非这些算子的布尔逻辑</li>
+<li>Truth table: 预期的输入对应的输出的所有表格</li>
+<li>Gate Diagram: 上述门和输入、输出的描述图</li>
+</ul>
+<p>实际上，<strong>电路中是会有一些 delay</strong> 的：</p>
+<p><img src="https://image.mwish.me/blog-image/16550D9D-C7A7-45DD-BDC0-A002645C48CA.png" alt="16550D9D-C7A7-45DD-BDC0-A002645C48CA"></p>
+<h2 id="反馈与触发器"><a href="#反馈与触发器" class="headerlink" title="反馈与触发器"></a>反馈与触发器</h2><p>我们主要介绍 <em>Synchronous Digital Systems</em>，不介绍异步的系统</p>
+<p><strong>组合逻辑(Combinational Logic)</strong>,其输出只是当前输入的函数，与之前状态无关，无存储功能；另一种是<strong>时序逻辑(Sequential Logic)</strong>，能够存储数据供以后使用，如触发器，memory，寄存器(register,由多个触发器组成)。</p>
+<p>上述内容提示我们，除了与或门和加法之类的 ALU 计算，我们还需要寄存器、内存等能够非顺时的保存状态的设备，同时，我们也需要状态，来结合上述各个部分，完成控制：比如我们有一个加法的组件，但是我们会希望让加法的结果在一定时间内是可读的，所以我们需要 flip-flop, 即触发器。</p>
+<p>假设我们计算一个数组的和，即</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">int</span> sum = <span class="number">0</span>;</span><br><span class="line"><span class="keyword">for</span> (<span class="type">int</span> i = <span class="number">0</span>; i &lt; size; ++i) &#123;</span><br><span class="line">	sum += <span class="built_in">array</span>[i];</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>我们没有地方存储 sum，那么就无法完成计算。很显然，我们需要寄存器这样的东西，那么，寄存器实际上是由一组 flip-flop 构成的.</p>
+<h3 id="flip-flop"><a href="#flip-flop" class="headerlink" title="flip-flop"></a>flip-flop</h3><blockquote>
+<p>Flip-flop name because the output flips and flops between 0 and 1</p>
+</blockquote>
+<p><img src="https://image.mwish.me/blog-image/7992A522-FFA5-4D90-A89A-7D7FDE404463.png" alt="7992A522-FFA5-4D90-A89A-7D7FDE404463"></p>
+<p>下面是 D-type flip flop, <code>d</code> 作为输入，<code>q</code> 作为输出。它是 “positive edge-triggered” 的，即变为高电压的时候，边缘触发，并保持记录。即</p>
+<blockquote>
+<p>“On the rising edge of the clock, the input d is sampled and transferred to the output. At all other times, the input d is ignored.”</p>
+</blockquote>
+<p>同时，高位的时间中，<code>d</code> 需要保持稳定，即如下图：</p>
+<p><img src="https://image.mwish.me/blog-image/A2377FD7-3492-45D6-A748-F19B13CC387D.png" alt="A2377FD7-3492-45D6-A748-F19B13CC387D"></p>
+<p>我们有几个关键时间，如上图：</p>
+<ul>
+<li>Setup Time: when the input must be stable <em>before</em> the edge of the CLK</li>
+<li>Hold Time: when the input must be stable <em>after</em> the edge of the CLK</li>
+<li>“CLK-to-Q” Delay: how long it takes the output to change, measured from the edge of the CLK</li>
+</ul>
+<h3 id="系统模型和时钟周期"><a href="#系统模型和时钟周期" class="headerlink" title="系统模型和时钟周期"></a>系统模型和时钟周期</h3><p><img src="https://image.mwish.me/blog-image/35022F87-4627-432A-B48A-A17D4D8DB558.png" alt="35022F87-4627-432A-B48A-A17D4D8DB558"></p>
+<p>上述是电路的基本模型，同时，对时钟周期和频率，我们有：</p>
+<blockquote>
+<p>Period = Max Delay = CLK-to-Q Delay + CL Delay + Setup Time</p>
+<p>Frequency = 1/Period</p>
+</blockquote>
+<p>时间的计算会是后续的内容。</p>
+<h3 id="流水线"><a href="#流水线" class="headerlink" title="流水线"></a>流水线</h3><p><img src="https://image.mwish.me/blog-image/68EBFEC9-FFFC-4498-87B5-122B932EA452.png" alt="68EBFEC9-FFFC-4498-87B5-122B932EA452"></p>
+<p>计算的每一步依赖上一步的状态，所以我们可能要多个 register, 但是不用保持过久，因为实际上我们假设模型是如上，那么每一步只依赖上一步的状态。我们可以 pipeline 的去处理指令。</p>
+<h3 id="回到-sum"><a href="#回到-sum" class="headerlink" title="回到 sum"></a>回到 sum</h3><p>回到 sum 的计算，我们有：</p>
+<p><img src="https://image.mwish.me/blog-image/C6D1D07C-931A-44F6-9827-B123338E2EEF.png" alt="C6D1D07C-931A-44F6-9827-B123338E2EEF"></p>
+<ol>
+<li><code>S_i-1</code> 保存上一轮的 value, 由 <code>Reg</code> 持续输出</li>
+<li><code>S_i-1</code> 和 <code>x_i</code> 经过加法器计算出 <code>S_i</code></li>
+<li><code>reset</code> 信号将 reg 重置为 0，寄存器输出 <code>0</code></li>
+<li><code>xi</code> 开始输入 <code>x_0</code> , 经过加法器和 <code>clk to q</code> 的时间, 提供给 Reg</li>
+<li>CLK 起时，Reg 再次设置，成为 <code>x0</code> </li>
+</ol>
+<p><img src="https://image.mwish.me/blog-image/image-20201015130546809.png" alt="image-20201015130546809"></p>
+<p>这个时期见，period 等同于最大延迟，即 <code>CLK-to-Q Delay + CL Delay + Setup Time</code></p>
+<p>也可以观察到<code>S_i</code>  和 <code>S_(i - 1)</code> 变动的关系。</p>
+<h3 id="Critical-path-不能抄近道"><a href="#Critical-path-不能抄近道" class="headerlink" title="Critical path: 不能抄近道"></a>Critical path: 不能抄近道</h3><p>Critical Path 指的是拿到寄存器输出的必要时间，指的是 next register 的 setup time, 也是整个逻辑电路可能的最慢的时间，即 clock 到 q 响应的时间。</p>
+<p>极端情况是：</p>
+<p><code>Clk-&gt;Q + **best case** combinational delay &lt; Hold time</code></p>
+<p>这个时候我们需要甚至人为制造一些 delay, 来让它有足够的维持时间，即 hold time，来成功输入给寄存器的 flip-flop.</p>
+<h3 id="逻辑设计"><a href="#逻辑设计" class="headerlink" title="逻辑设计"></a>逻辑设计</h3><p>寄存器本身是一个状态，电路也充满了状态，我们会有上一步的状态，下一步的状态</p>
+<p><img src="https://image.mwish.me/blog-image/image-20201017153211876.png" alt="image-20201017153211876"></p>
+<p>我们可以用有限状态自动机，来代表需要的逻辑。同时也可能拿到对应的输入输出的表：</p>
+<blockquote>
+<p>Combinational logic circuit is used to implement a function that maps from <em>present state and input</em> to <em>next state and output.</em></p>
+</blockquote>
+<p>根据状态机，我们可以设计 ALU:</p>
+<p><img src="https://image.mwish.me/blog-image/image-20201017153438192.png" alt="image-20201017153438192"></p>
+<h4 id="加法器"><a href="#加法器" class="headerlink" title="加法器"></a>加法器</h4><p>加法要有 carry-bit 实现进位，然后每两位按位相加。逻辑如下：</p>
+<p><img src="https://image.mwish.me/blog-image/6206E039-8E6E-42AD-A0F5-C5F1956820F2.png" alt="6206E039-8E6E-42AD-A0F5-C5F1956820F2"></p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8F%8D%E9%A6%88%E4%B8%8E%E8%A7%A6%E5%8F%91%E5%99%A8"><span class="toc-number">1.</span> <span class="toc-text">反馈与触发器</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#flip-flop"><span class="toc-number">1.1.</span> <span class="toc-text">flip-flop</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%B3%BB%E7%BB%9F%E6%A8%A1%E5%9E%8B%E5%92%8C%E6%97%B6%E9%92%9F%E5%91%A8%E6%9C%9F"><span class="toc-number">1.2.</span> <span class="toc-text">系统模型和时钟周期</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%B5%81%E6%B0%B4%E7%BA%BF"><span class="toc-number">1.3.</span> <span class="toc-text">流水线</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9B%9E%E5%88%B0-sum"><span class="toc-number">1.4.</span> <span class="toc-text">回到 sum</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Critical-path-%E4%B8%8D%E8%83%BD%E6%8A%84%E8%BF%91%E9%81%93"><span class="toc-number">1.5.</span> <span class="toc-text">Critical path: 不能抄近道</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%80%BB%E8%BE%91%E8%AE%BE%E8%AE%A1"><span class="toc-number">1.6.</span> <span class="toc-text">逻辑设计</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%8A%A0%E6%B3%95%E5%99%A8"><span class="toc-number">1.6.1.</span> <span class="toc-text">加法器</span></a></li></ol></li></ol></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/10/14/SDS-Intro-RISC-V-Datapath/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/10/14/SDS-Intro-RISC-V-Datapath/&text=SDS Intro &amp; RISC-V Datapath(0): 预备知识"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/10/14/SDS-Intro-RISC-V-Datapath/&title=SDS Intro &amp; RISC-V Datapath(0): 预备知识"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/10/14/SDS-Intro-RISC-V-Datapath/&is_video=false&description=SDS Intro &amp; RISC-V Datapath(0): 预备知识"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=SDS Intro &amp; RISC-V Datapath(0): 预备知识&body=Check out this article: http://blog.mwish.me/2020/10/14/SDS-Intro-RISC-V-Datapath/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/10/14/SDS-Intro-RISC-V-Datapath/&title=SDS Intro &amp; RISC-V Datapath(0): 预备知识"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/10/14/SDS-Intro-RISC-V-Datapath/&title=SDS Intro &amp; RISC-V Datapath(0): 预备知识"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/10/14/SDS-Intro-RISC-V-Datapath/&title=SDS Intro &amp; RISC-V Datapath(0): 预备知识"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/10/14/SDS-Intro-RISC-V-Datapath/&title=SDS Intro &amp; RISC-V Datapath(0): 预备知识"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/10/14/SDS-Intro-RISC-V-Datapath/&name=SDS Intro &amp; RISC-V Datapath(0): 预备知识&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/10/14/SDS-Intro-RISC-V-Datapath/&t=SDS Intro &amp; RISC-V Datapath(0): 预备知识"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

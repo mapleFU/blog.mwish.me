@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="Golang 的类型分为：  basic type: string bool int&#x2F;uint&#x2F;float byte and rune is uint8 and int32 complex   composite type pointer struct function container slice array map   channel interface    每种 type 都有一个 ki">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Types In Golang: part1">
+<meta property="og:url" content="http://blog.mwish.me/2020/05/01/Types-In-Golang/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="Golang 的类型分为：  basic type: string bool int&#x2F;uint&#x2F;float byte and rune is uint8 and int32 complex   composite type pointer struct function container slice array map   channel interface    每种 type 都有一个 ki">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://blog.mwish.me/Users/fuasahi/Downloads/47D191C9293076F9A6775E0FA2546192.png">
+<meta property="article:published_time" content="2020-04-30T17:39:14.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.555Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://blog.mwish.me/Users/fuasahi/Downloads/47D191C9293076F9A6775E0FA2546192.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>Types In Golang: part1</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2020/05/01/Types-In-Golang-Part2/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2020/04/06/Distribute-Transaction-basic-of-2PC/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/05/01/Types-In-Golang/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/05/01/Types-In-Golang/&text=Types In Golang: part1"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/05/01/Types-In-Golang/&title=Types In Golang: part1"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/05/01/Types-In-Golang/&is_video=false&description=Types In Golang: part1"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Types In Golang: part1&body=Check out this article: http://blog.mwish.me/2020/05/01/Types-In-Golang/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/05/01/Types-In-Golang/&title=Types In Golang: part1"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/05/01/Types-In-Golang/&title=Types In Golang: part1"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/05/01/Types-In-Golang/&title=Types In Golang: part1"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/05/01/Types-In-Golang/&title=Types In Golang: part1"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/05/01/Types-In-Golang/&name=Types In Golang: part1&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/05/01/Types-In-Golang/&t=Types In Golang: part1"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-4"><a class="toc-link" href="#underlying-type"><span class="toc-number">1.</span> <span class="toc-text">underlying type</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#value"><span class="toc-number">2.</span> <span class="toc-text">value</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%8C%87%E9%92%88"><span class="toc-number"></span> <span class="toc-text">指针</span></a><ol class="toc-child"><li class="toc-item toc-level-5"><a class="toc-link" href="#%E5%8F%AF%E5%AF%BB%E5%9D%80"><span class="toc-number">0.1.</span> <span class="toc-text">可寻址</span></a></li></ol></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E7%BB%93%E6%9E%84%E4%BD%93"><span class="toc-number">1.</span> <span class="toc-text">结构体</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%80%BC%E4%B8%8E%E5%BC%95%E7%94%A8"><span class="toc-number">2.</span> <span class="toc-text">值与引用</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#array-slice-map"><span class="toc-number"></span> <span class="toc-text">array slice map</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E9%9B%B6%E5%80%BC"><span class="toc-number">1.</span> <span class="toc-text">零值</span></a><ol class="toc-child"><li class="toc-item toc-level-5"><a class="toc-link" href="#%E6%AF%94%E8%BE%83"><span class="toc-number">1.1.</span> <span class="toc-text">比较</span></a></li><li class="toc-item toc-level-5"><a class="toc-link" href="#len-cap"><span class="toc-number">1.2.</span> <span class="toc-text">len cap</span></a></li><li class="toc-item toc-level-5"><a class="toc-link" href="#%E5%85%83%E7%B4%A0%E7%9A%84-r-w"><span class="toc-number">1.3.</span> <span class="toc-text">元素的 r&#x2F;w</span></a></li></ol></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Slice-%E7%9A%84%E7%BB%93%E6%9E%84%E4%B8%8E%E6%93%8D%E4%BD%9C%E8%AF%AD%E4%B9%89"><span class="toc-number">2.</span> <span class="toc-text">Slice 的结构与操作语义</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%AE%B9%E5%99%A8%E5%85%83%E7%B4%A0%EF%BC%9A%E5%AF%BB%E5%9D%80"><span class="toc-number">3.</span> <span class="toc-text">容器元素：寻址</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#slice-copy"><span class="toc-number">4.</span> <span class="toc-text">slice copy</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#for-loop"><span class="toc-number">5.</span> <span class="toc-text">for-loop</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Types In Golang: part1
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2020-04-30T17:39:14.000Z" itemprop="datePublished">2020-05-01</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>Golang 的类型分为：</p>
+<ul>
+<li>basic type:<ul>
+<li>string</li>
+<li>bool</li>
+<li>int/uint/float</li>
+<li>byte and rune is uint8 and int32</li>
+<li>complex</li>
+</ul>
+</li>
+<li>composite type<ul>
+<li>pointer</li>
+<li>struct</li>
+<li>function</li>
+<li>container<ul>
+<li>slice</li>
+<li>array</li>
+<li>map</li>
+</ul>
+</li>
+<li>channel</li>
+<li>interface</li>
+</ul>
+</li>
+</ul>
+<p>每种 type 都有一个 kind</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">type A B  // A is an another type</span><br><span class="line">type A = B // A is an alias of B</span><br></pre></td></tr></table></figure>
+<h4 id="underlying-type"><a href="#underlying-type" class="headerlink" title="underlying type"></a>underlying type</h4><ul>
+<li>每个 type 都有 underlying type</li>
+<li>内置类型 underlying type 为自身</li>
+<li>unsafe.Pointer undefined</li>
+<li>一个 undefined type 即 <code>=</code> 构成的 composite type</li>
+<li>一个类型声明中，两个类型共享 underlying type</li>
+</ul>
+<p>上面的内容4/5写的很乱，其实就是下面：</p>
+<ul>
+<li><code>AgeSlice</code> 底层类型是 <code>[]Age</code></li>
+<li><code>Age</code> 的底层类型是 <code>MyInt</code>, <code>MyInt</code> 底层类型是 <code>int</code>, <code>int</code> 底层类型是自己</li>
+</ul>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">package</span> typesys</span><br><span class="line"></span><br><span class="line"><span class="keyword">type</span> (</span><br><span class="line">	MyInt <span class="type">int</span></span><br><span class="line">	Age MyInt</span><br><span class="line">)</span><br><span class="line"></span><br><span class="line"><span class="keyword">type</span> (</span><br><span class="line">	IntSlice []<span class="type">int</span></span><br><span class="line">	MyIntSlice []MyInt</span><br><span class="line">	AgeSlice []Age</span><br><span class="line">)</span><br><span class="line"></span><br><span class="line"><span class="keyword">type</span> Ages []Age</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">f1</span><span class="params">(v <span class="type">int</span>)</span></span>  &#123;</span><br><span class="line">	<span class="built_in">panic</span>(<span class="string">&quot;implement me&quot;</span>)</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">f2</span><span class="params">([]Age)</span></span>  &#123;</span><br><span class="line"></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">f3</span><span class="params">([]<span class="type">int</span>)</span></span>  &#123;</span><br><span class="line"></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">Call1</span><span class="params">()</span></span>  &#123;</span><br><span class="line">	<span class="keyword">var</span> v MyInt = <span class="number">114514</span></span><br><span class="line">	<span class="comment">//cannot call</span></span><br><span class="line">	<span class="comment">//f1(v)</span></span><br><span class="line">	f1(<span class="type">int</span>(v))</span><br><span class="line"></span><br><span class="line">	<span class="keyword">var</span> s []Age</span><br><span class="line">	f2(s)</span><br><span class="line">	<span class="keyword">var</span> s2 AgeSlice</span><br><span class="line">	f2(s2)</span><br><span class="line"></span><br><span class="line">	<span class="comment">// cannot call</span></span><br><span class="line">	<span class="comment">//f3(s)</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>注意，类型别名中</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> A = B</span><br><span class="line"><span class="keyword">type</span> C = B</span><br><span class="line"></span><br><span class="line"><span class="keyword">type</span> AA = <span class="keyword">struct</span> &#123;&#125;</span><br><span class="line"><span class="keyword">type</span> BB = <span class="keyword">struct</span> &#123;&#125;</span><br></pre></td></tr></table></figure>
+<p>AA, BB 都是同一种类型</p>
+<h4 id="value"><a href="#value" class="headerlink" title="value"></a>value</h4><p>一个类型有：</p>
+<ul>
+<li>不同的 value</li>
+<li>一个零值</li>
+</ul>
+<p>我们可以用 unsafe 标准库包中的 Sizeof 函数来取得任何一个值的 memory size。</p>
+<blockquote>
+<p>裹在一个接口值中的非接口 值称为此接口值的动态值。此动态值的类型称为此接口值的动态类型。 一个什么也没包裹的接口值为 一个零值接口值。零值接口值的动态值和动态类型均为不存在。</p>
+<p>一个接口类型可以指定若干个(可以是零个)方法，这些方法形成了此接口类型的方法集。</p>
+</blockquote>
+<h3 id="指针"><a href="#指针" class="headerlink" title="指针"></a>指针</h3><p>这个概念类似 C 的 pointer, 但是有 gc 兜底，所以我总觉得 Go 里面指针怪怪的</p>
+<h5 id="可寻址"><a href="#可寻址" class="headerlink" title="可寻址"></a>可寻址</h5><p><code>return &amp;func()</code> 可能会给你报错 “不可寻址”，这一点我总觉得很离谱… 但是我们总得搞明白为什么。</p>
+<blockquote>
+<p>一个可寻址的值是指被放置在内存中某固定位置处的一个值(但放置在某固定位置处的一个 值并非一定是可寻址的)。 目前，我们只需知道所有变量都是可以寻址的;但是所有常量、函数返回 值和强制转换结果都是不可寻址的。 当一个变量被声明的时候，Go运行时将为此变量开辟一段内存。 此内存的起始地址即为此变量的地址。</p>
+</blockquote>
+<p><code>*p</code> 类似 C，对 <code>nil</code> deref 会 panic.</p>
+<p><img src="/Users/fuasahi/Downloads/47D191C9293076F9A6775E0FA2546192.png" alt="47D191C9293076F9A6775E0FA2546192"></p>
+<p>这个写的比较迷，我个人理解是：</p>
+<ul>
+<li>如果是 underline type 相同，可以 implicit 转</li>
+<li>如果关系多层，需要 explict 的转</li>
+</ul>
+<p>指针只能与 nil 比较</p>
+<p>（unsafe.Pointer 类似 C Pointer, 可以让我们大展宏图）</p>
+<h4 id="结构体"><a href="#结构体" class="headerlink" title="结构体"></a>结构体</h4><ul>
+<li>当一个(源)结构体值被赋值给另外一个(目标)结构体值时，其效果和逐个将源结构体值的各个字段 赋值给目标结构体值的各个对应字段的效果是一样的。</li>
+<li><code>&amp;Struct&#123;&#125;</code> 是一个语法糖，<code>(&amp;Struct&#123;&#125;.field)</code> 不可以，但是 <code>&amp;Struct&#123;&#125;</code> 本身的 field 是可以续命的（想起 C++ 用 <code>&amp;&amp;</code> 续命了）</li>
+</ul>
+<h4 id="值与引用"><a href="#值与引用" class="headerlink" title="值与引用"></a>值与引用</h4><p>Go 里面有两种指针：</p>
+<ul>
+<li>类型安全的 pointer</li>
+<li>不安全的 unsafe.Pointer</li>
+</ul>
+<blockquote>
+<p>一个指针值存储着另一个值的地址，除非此指针值是一个nil空指针。 我们可以说此指针引用着(第15 章)另外一个值，或者说另外一个值正被此指针所引用。 </p>
+</blockquote>
+<p>实际上，如果传参，参数是 slice/map/string, 然后你把整个 对象 copy 了一遍，显然是不合理的。很显然这需要 pass 一个 pointer/引用一样的对象进去。</p>
+<p>实际上我们可以找到一些对象定义：</p>
+<ol>
+<li>slice: <a target="_blank" rel="noopener" href="https://github.com/golang/go/blob/master/src/runtime/slice.go">https://github.com/golang/go/blob/master/src/runtime/slice.go</a></li>
+</ol>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> slice <span class="keyword">struct</span> &#123;</span><br><span class="line">	array unsafe.Pointer</span><br><span class="line">	<span class="built_in">len</span>   <span class="type">int</span></span><br><span class="line">	<span class="built_in">cap</span>   <span class="type">int</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<ol>
+<li>map: <a target="_blank" rel="noopener" href="https://github.com/golang/go/blob/master/src/runtime/map.go">https://github.com/golang/go/blob/master/src/runtime/map.go</a></li>
+<li>…</li>
+</ol>
+<p>这些具体 parse 的时候都是类似：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">type _map *hashtableImpl</span><br></pre></td></tr></table></figure>
+<p>这样的引用对象。</p>
+<p>比较需要注意的是 interface</p>
+<blockquote>
+<p>一个非空接口类型的值的dynamicTypeInfo字段的methods字段引用着一个方法列表。 此列表中的每 一项为此接口值的动态类型上定义的一个方法，此方法对应着此接口类型所指定的一个的同原型的方 法。</p>
+</blockquote>
+<p>所以：</p>
+<blockquote>
+<ul>
+<li>在赋值中，底层间接值部将不会被复制</li>
+<li>在使用 unsafe.Sizeof 函数计算一个值的尺寸的 时候，此值的间接部分所占内存空间未被计算在内。</li>
+</ul>
+</blockquote>
+<p>需要理解引用这个词，在 Go 里面实际上没有很好的 context</p>
+<blockquote>
+<p>在Go中，只有切片、映射、通道和函数类型属于引用类型。 (如果我们确实需要引用类型这个术 语，那么我们不应把其它指针持有者类型排除在引用类型之外。) 一些函数调用的参数是通过引用来传递的。 (对不起，在Go中，所有的函数调用的参数都是通过 值复制的方式来传递的。)</p>
+</blockquote>
+<h3 id="array-slice-map"><a href="#array-slice-map" class="headerlink" title="array slice map"></a>array slice map</h3><ul>
+<li>一个映射类型的键值类型必须为一个可比较类型</li>
+<li>数组和切片类型的键类型均为内 置类型int。 一个数组或切片的一个元素对应的键值总是一个非负整数下标，此非负整数表示该元素在 该数组或切片所有元素中的顺序位置。此非负整数下标亦常称为一个元素索引(index)。</li>
+<li>每个容器值有一个长度属性</li>
+<li>每个数组值仅由一个直接部分组成，而一个切片或者映射值是由一个直接 部分和一个可能的被此直接部分引用着的间接部分组成。</li>
+</ul>
+<blockquote>
+<p>一个数组或者切片的所有元素紧挨着存放在一块连续的内存中。一个数组中的所有元素均存放在此数组 值的直接部分，一个切片中的所元素均存放在此切片值的间接部分。 在官方标准编译器和运行时中， 映射是使用哈希表算法来实现的。所以一个映射中的所有元素也均存放在一块连续的内存中，但是映射 中的元素并不一定紧挨着存放。</p>
+<p>对于这三种容器，元素访问的时间复杂度均为<em>O</em>(1)。</p>
+</blockquote>
+<h4 id="零值"><a href="#零值" class="headerlink" title="零值"></a>零值</h4><ol>
+<li><p><code>A&#123;&#125;</code> —&gt; <code>[]int&#123;&#125;</code></p>
+</li>
+<li><p>和指针一样，所有切片和映射类型的零值均用预声明的标识符 nil 来表示。</p>
+</li>
+<li><p>即使一个数组变量在声明的时候未指定初始值，它的元素所占的内存空间也已经被开辟出</p>
+<p>来。 但是一个nil切片或者映射值的元素的内存空间尚未被开辟出来。</p>
+</li>
+<li><p><code>[]T&#123;&#125;</code>表示类型<code>[]T</code>的一个空切片值，它和<code>[]T(nil)</code>是不等价的。 同样，<code>map[K]T&#123;&#125;</code>和</p>
+<p><code>map[K]T(nil)</code> 也是不等价的。</p>
+</li>
+</ol>
+<p>以上内容是很显然的，但是实际使用的时候，因为 slice 我们通常和 append 联用，所以<code>var v []int</code> 然后再对它不断 append</p>
+<h5 id="比较"><a href="#比较" class="headerlink" title="比较"></a>比较</h5><ul>
+<li>同类型数组是可比较的，类似 C 里面 strcmp</li>
+<li>slice map 可以同 nil 比较</li>
+</ul>
+<h5 id="len-cap"><a href="#len-cap" class="headerlink" title="len cap"></a>len cap</h5><ul>
+<li>slice: len cap</li>
+<li>map: len, 它的 cap 是无限大</li>
+<li>array: len cap 都是自身的 size</li>
+</ul>
+<h5 id="元素的-r-w"><a href="#元素的-r-w" class="headerlink" title="元素的 r/w"></a>元素的 r/w</h5><p>在 C++ 中，我们可以想象：</p>
+<ul>
+<li><code>const T&amp; operator[](int v)</code> 和  <code>T&amp; operator[](int v)</code> , 保证你拿出来是个 ref</li>
+</ul>
+<p>在 Go 的 <code>v[k]</code> 中：</p>
+<p>如果是个 slice/array</p>
+<ul>
+<li>v 是一个 nil slice: panic</li>
+<li>slice/array 中必须有长度的限制</li>
+</ul>
+<p>如果是个 map</p>
+<ul>
+<li>如果 k 是一个动态类型为不可比较类型的接口值，则 v[k] 在运行时刻将造成一个 Panic （比如你定义了一个 map[interface{}]xxx, 然后传了一个不可以 cmp 的 key, 它会 panic 说这玩意不是 hashable 的）</li>
+<li>如果 <code>v[k] = xxx</code> ，且 <code>v</code> is nil, 会 panic</li>
+<li><code>v[k]</code> 读取时，<strong>无论如何不会 panic</strong>, 如果不存在会返回 Value 类型的 零值</li>
+</ul>
+<h4 id="Slice-的结构与操作语义"><a href="#Slice-的结构与操作语义" class="headerlink" title="Slice 的结构与操作语义"></a>Slice 的结构与操作语义</h4><p>了解了 slice 的语义，我们才能不瞎几把用。首先要知道 Slice 并不是 immutable + Persistent 的结构，也就是说，实际上这些操作是很可能有副作用的</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> slice <span class="keyword">struct</span> &#123;</span><br><span class="line">	array unsafe.Pointer</span><br><span class="line">	<span class="built_in">len</span>   <span class="type">int</span></span><br><span class="line">	<span class="built_in">cap</span>   <span class="type">int</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<blockquote>
+<p>当一个切片被用做一个 append 函数调用中的基础切片，</p>
+<p>如果添加的元素数量大于此(基础)切片的冗余元素槽位的数量，则一个新的底层内存片段将被 开辟出来并用来存放结果切片的元素。 这时，基础切片和结果切片不共享任何底层元素。 否则，不会有底层内存片段被开辟出来。这时，基础切片中的所有元素也同时属于结果切片。两 个切片的元素都存放于同一个内存片段上。</p>
+</blockquote>
+<p>实际上，如果不注意的话，很容易发生多个 slice 共享底层内存的情况，请注意。</p>
+<ul>
+<li>slice 赋值改变 slice 的引用对象</li>
+<li>array 赋值 copy 全部元素</li>
+</ul>
+<p>对于 map 来说，增改/删分别是：</p>
+<ul>
+<li><code>v[k] = s</code></li>
+<li><code>delete(v, k)</code></li>
+</ul>
+<p>map 上操作似乎都是泛型的，（Go 没有泛型就是sb，哎）。</p>
+<blockquote>
+<p>注意，在Go 1.12之前，映射打印结果中的条目顺序并不固定，两次打印结果可能并不相同。</p>
+</blockquote>
+<p>至于 slice, 通常靠 append, 但是 slice 又不是 immutable 的，所以实际上 <code>append()</code> 可能会返回一个改变 len 而不改变 cap 的：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">package</span> main</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> <span class="string">&quot;fmt&quot;</span></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">main</span><span class="params">()</span></span>  &#123;</span><br><span class="line">	s1 := []<span class="type">int</span> &#123; <span class="number">1</span>, <span class="number">1</span>, <span class="number">4</span>, <span class="number">5</span>, <span class="number">1</span>, <span class="number">4</span>&#125;</span><br><span class="line">	fmt.Printf(<span class="string">&quot;len: %d cap: %d\n&quot;</span>, <span class="built_in">len</span>(s1), <span class="built_in">cap</span>(s1))</span><br><span class="line">	s1 = <span class="built_in">append</span>(s1, <span class="number">4</span>)</span><br><span class="line">	fmt.Printf(<span class="string">&quot;len: %d cap: %d\n&quot;</span>, <span class="built_in">len</span>(s1), <span class="built_in">cap</span>(s1))</span><br><span class="line">	s2 := <span class="built_in">append</span>(s1, <span class="number">5</span>)</span><br><span class="line">	fmt.Printf(<span class="string">&quot;len: %d cap: %d\n&quot;</span>, <span class="built_in">len</span>(s1), <span class="built_in">cap</span>(s1))</span><br><span class="line">	fmt.Printf(<span class="string">&quot;len: %d cap: %d\n&quot;</span>, <span class="built_in">len</span>(s2), <span class="built_in">cap</span>(s2))</span><br><span class="line"></span><br><span class="line">	s1[<span class="number">2</span>] = <span class="number">5</span></span><br><span class="line">	<span class="comment">// s1: 5 s2: 5</span></span><br><span class="line">	fmt.Printf(<span class="string">&quot;s1: %d s2: %d\n&quot;</span>, s1[<span class="number">2</span>], s2[<span class="number">2</span>])</span><br><span class="line"></span><br><span class="line">	s3 := <span class="built_in">append</span>(s1, <span class="number">6</span>)</span><br><span class="line">	<span class="comment">// s2: 6 s3: 6</span></span><br><span class="line">	fmt.Printf(<span class="string">&quot;s2: %d s3: %d\n&quot;</span>, s2[<span class="built_in">len</span>(s2) - <span class="number">1</span>], s3[<span class="built_in">len</span>(s3) - <span class="number">1</span>])</span><br><span class="line"></span><br><span class="line">	sptr := &amp;s1[<span class="number">5</span>]</span><br><span class="line">	*sptr = <span class="number">114514</span></span><br><span class="line">	<span class="comment">// s2: 114514 s3: 114514</span></span><br><span class="line">	fmt.Printf(<span class="string">&quot;s2: %d s3: %d\n&quot;</span>, s2[<span class="number">5</span>], s3[<span class="number">5</span>])</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>所以我个人觉得，还是把 slice 当成“有内部所有权的指针”吧</p>
+<p>（我局的挺傻逼的，真的）</p>
+<p>创建容器可以：</p>
+<ul>
+<li><code>new</code></li>
+<li><code>make</code></li>
+<li>字面量</li>
+</ul>
+<h4 id="容器元素：寻址"><a href="#容器元素：寻址" class="headerlink" title="容器元素：寻址"></a>容器元素：寻址</h4><blockquote>
+<p>可寻址的数组的元素也是可寻址的。</p>
+<p>不可寻址的数组的元素也是不可寻址的。 原因很简单，因为 一个数组中的所有元素均处于此数组的直接部分。 </p>
+<p>一个切片值的任何元素都是可寻址的，即使此切片本身是不可寻址的。 这是因为一个切片的底层 元素总是存储在一个被开辟出来的内存片段上。 任何映射元素都是不可寻址的。原因详见此条问答(第51章)。</p>
+<p>如果一个映射类型的元素类型为一个结构体类型，则我们无法修改此映射类型的值中的每个结构 体元素的单个字段。 我们必须整体地同时修改所有结构体字段。 </p>
+<p>如果一个映射类型的元素类型为一个数组类型，则我们无法修改此映射类型的值中的每个数组元 素的单个元素。 我们必须整体地同时修改所有数组元素。</p>
+</blockquote>
+<h4 id="slice-copy"><a href="#slice-copy" class="headerlink" title="slice copy"></a>slice copy</h4><p><code>copy</code> 函数形式是 <code>copy(dest, src)</code>. 在 dest 拷贝到 len 为止，返回拷贝的长度。</p>
+<h4 id="for-loop"><a href="#for-loop" class="headerlink" title="for-loop"></a>for-loop</h4><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">for</span> key, element = <span class="keyword">range</span> aContainer &#123; </span><br><span class="line">	<span class="comment">// 使用key和element ...</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>在 cpp 中，我们会有（实际上加入 range 之后会更好使）：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">for</span> (<span class="keyword">auto</span>&amp; p: container) &#123;&#125;</span><br><span class="line"><span class="keyword">for</span> (<span class="type">const</span> <span class="keyword">auto</span>&amp; p: container) &#123;&#125;</span><br></pre></td></tr></table></figure>
+<p>感觉 Go 的 loop 功能孱弱很多：</p>
+<ul>
+<li>如果你需要修改值，其实还是要借助 key</li>
+</ul>
+<blockquote>
+<ol>
+<li>如果 aContainer 是一个数组，那么在遍历过程中对此数组元素的修改不会体现到循环变量 中。 原因是此数组的副本(被真正遍历的容器)和此数组不共享任何元素。</li>
+<li>如果 aContainer 是一个切片(或者映射)，那么在遍历过程中对此切片(或者映射)元素 的修改将体现到循环变量中。 原因是此切片(或者映射)的副本和此切片(或者映射)共 享元素(或条目)。</li>
+<li>在遍历中的每个循环步， aContainer 副本中的一个键值元素对将被赋值(复制)给循环变量。 所以对循环变量的直接部分的修改将不会体现在aContainer中的对应元素中。 (因为这个原 因，并且 for-range 循环是遍历映射条目的唯一途径，所以最好不要使用大尺寸的映射键值和元 素类型，以避免较大的复制负担。)</li>
+</ol>
+</blockquote>
+<p>这里有一些细节：</p>
+<blockquote>
+<p>映射中的条目的遍历顺序是不确定的(可以认为是随机的)。或者说，同一个映射中的条目的两 次遍历中，条目的顺序很可能是不一致的，即使在这两次遍历之间，此映射并未发生任何改变。</p>
+<p> 如果在一个映射中的条目的遍历过程中，一个还没有被遍历到的条目被删除了，则此条目保证不 会被遍历出来。</p>
+<p>如果在一个映射中的条目的遍历过程中，一个新的条目被添加入此映射，则此条目并不保证将在 此遍历过程中被遍历出来。</p>
+</blockquote>
+<p>循环变量是单个的，实际上你可以试试：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">main</span><span class="params">()</span></span> &#123;</span><br><span class="line">	<span class="comment">// 可以使用 persons[:] 或者 &amp;persons 避免开销</span></span><br><span class="line">	<span class="keyword">for</span> i, p := <span class="keyword">range</span> persons &#123;</span><br><span class="line">		fmt.Println(i, p)</span><br><span class="line">		<span class="comment">// Note: 不改变遍历过程中的值</span></span><br><span class="line">		persons[<span class="number">1</span>].name = <span class="string">&quot;Jack&quot;</span></span><br><span class="line">		p.age = <span class="number">31</span></span><br><span class="line">	&#125;</span><br><span class="line">	fmt.Println(<span class="string">&quot;persons:&quot;</span>, &amp;persons)</span><br><span class="line"></span><br><span class="line">	persons[<span class="number">1</span>].name = <span class="string">&quot;nmsl.xt&quot;</span></span><br><span class="line"></span><br><span class="line">	<span class="keyword">var</span> personSlice []Person</span><br><span class="line">	personSlice = persons[:]</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">	<span class="keyword">for</span> i, p := <span class="keyword">range</span> personSlice &#123;</span><br><span class="line">		fmt.Println(i, p)</span><br><span class="line">		<span class="comment">// Note: 不改变遍历过程中的值</span></span><br><span class="line">		personSlice[<span class="number">1</span>].name = <span class="string">&quot;Jack&quot;</span></span><br><span class="line">		p.age = <span class="number">31</span></span><br><span class="line">	&#125;</span><br><span class="line">	fmt.Println(<span class="string">&quot;persons:&quot;</span>, &amp;personSlice)</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">type</span> Person <span class="keyword">struct</span> &#123;</span><br><span class="line">	name <span class="type">string</span></span><br><span class="line">	age <span class="type">int</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<blockquote>
+<p>请注意，上述所有各种容器操作的内部实现都未进行同步。如果不使用今后将要介绍的各种并发同步技 术，在没有协程修改一个容器值和它的元素的时候，多个协程并发读取此容器值和它的元素是安全的。 但是并发修改同一个容器值则是不安全的。</p>
+</blockquote>
+<p>需要注意的一点是：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">for</span> k, v := <span class="keyword">range</span> container &#123;</span><br><span class="line">	slice = <span class="built_in">append</span>(slice, &amp;v)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>你会发现，如同那个经典的并发错误一样，你 append 了同一个值。</p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-4"><a class="toc-link" href="#underlying-type"><span class="toc-number">1.</span> <span class="toc-text">underlying type</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#value"><span class="toc-number">2.</span> <span class="toc-text">value</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%8C%87%E9%92%88"><span class="toc-number"></span> <span class="toc-text">指针</span></a><ol class="toc-child"><li class="toc-item toc-level-5"><a class="toc-link" href="#%E5%8F%AF%E5%AF%BB%E5%9D%80"><span class="toc-number">0.1.</span> <span class="toc-text">可寻址</span></a></li></ol></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E7%BB%93%E6%9E%84%E4%BD%93"><span class="toc-number">1.</span> <span class="toc-text">结构体</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%80%BC%E4%B8%8E%E5%BC%95%E7%94%A8"><span class="toc-number">2.</span> <span class="toc-text">值与引用</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#array-slice-map"><span class="toc-number"></span> <span class="toc-text">array slice map</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E9%9B%B6%E5%80%BC"><span class="toc-number">1.</span> <span class="toc-text">零值</span></a><ol class="toc-child"><li class="toc-item toc-level-5"><a class="toc-link" href="#%E6%AF%94%E8%BE%83"><span class="toc-number">1.1.</span> <span class="toc-text">比较</span></a></li><li class="toc-item toc-level-5"><a class="toc-link" href="#len-cap"><span class="toc-number">1.2.</span> <span class="toc-text">len cap</span></a></li><li class="toc-item toc-level-5"><a class="toc-link" href="#%E5%85%83%E7%B4%A0%E7%9A%84-r-w"><span class="toc-number">1.3.</span> <span class="toc-text">元素的 r&#x2F;w</span></a></li></ol></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Slice-%E7%9A%84%E7%BB%93%E6%9E%84%E4%B8%8E%E6%93%8D%E4%BD%9C%E8%AF%AD%E4%B9%89"><span class="toc-number">2.</span> <span class="toc-text">Slice 的结构与操作语义</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%AE%B9%E5%99%A8%E5%85%83%E7%B4%A0%EF%BC%9A%E5%AF%BB%E5%9D%80"><span class="toc-number">3.</span> <span class="toc-text">容器元素：寻址</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#slice-copy"><span class="toc-number">4.</span> <span class="toc-text">slice copy</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#for-loop"><span class="toc-number">5.</span> <span class="toc-text">for-loop</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/05/01/Types-In-Golang/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/05/01/Types-In-Golang/&text=Types In Golang: part1"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/05/01/Types-In-Golang/&title=Types In Golang: part1"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/05/01/Types-In-Golang/&is_video=false&description=Types In Golang: part1"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Types In Golang: part1&body=Check out this article: http://blog.mwish.me/2020/05/01/Types-In-Golang/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/05/01/Types-In-Golang/&title=Types In Golang: part1"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/05/01/Types-In-Golang/&title=Types In Golang: part1"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/05/01/Types-In-Golang/&title=Types In Golang: part1"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/05/01/Types-In-Golang/&title=Types In Golang: part1"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/05/01/Types-In-Golang/&name=Types In Golang: part1&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/05/01/Types-In-Golang/&t=Types In Golang: part1"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

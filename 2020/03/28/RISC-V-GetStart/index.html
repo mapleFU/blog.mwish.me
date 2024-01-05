@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="RISC-V and C ToolchainsISA &amp;&amp; RISC-V指令(Instruction) 是 CPU 的 primitives operations, 我们可以知道有这样的保障：  指令顺序执行 每条指令完成很轻量的、基本的操作 每条指令会作用在 operand 上，甚至可能变更指令的顺序。  CPU 会有某个 “family”, 实现了它自己的 instructio">
+<meta property="og:type" content="article">
+<meta property="og:title" content="RISC-V GetStart">
+<meta property="og:url" content="http://blog.mwish.me/2020/03/28/RISC-V-GetStart/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="RISC-V and C ToolchainsISA &amp;&amp; RISC-V指令(Instruction) 是 CPU 的 primitives operations, 我们可以知道有这样的保障：  指令顺序执行 每条指令完成很轻量的、基本的操作 每条指令会作用在 operand 上，甚至可能变更指令的顺序。  CPU 会有某个 “family”, 实现了它自己的 instructio">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/寄存器模型.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/8C6F3A35-2220-475D-A75B-C1E09A1E6B69.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/853BC117-2DE0-49B5-AD9C-B3D24C18BE16.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/9BB275BA-B363-4E42-B421-7A75C4D0F1CC.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/随便从知乎找的图.jpg">
+<meta property="og:image" content="https://image.mwish.me/blog-image/1D6C494E-FAEE-4D74-ACD9-F9FD987A591B.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/7FFBD3D3-88CB-43F5-BB70-F069403DC8CC.png">
+<meta property="article:published_time" content="2020-03-27T17:09:42.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.567Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/寄存器模型.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>RISC-V GetStart</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2020/04/04/CALL-libc-%E5%92%8C-C-%E6%A0%87%E5%87%86%E5%BA%93/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2020/02/29/The-Go-Memory-Model/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/03/28/RISC-V-GetStart/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/03/28/RISC-V-GetStart/&text=RISC-V GetStart"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/03/28/RISC-V-GetStart/&title=RISC-V GetStart"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/03/28/RISC-V-GetStart/&is_video=false&description=RISC-V GetStart"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=RISC-V GetStart&body=Check out this article: http://blog.mwish.me/2020/03/28/RISC-V-GetStart/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/03/28/RISC-V-GetStart/&title=RISC-V GetStart"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/03/28/RISC-V-GetStart/&title=RISC-V GetStart"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/03/28/RISC-V-GetStart/&title=RISC-V GetStart"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/03/28/RISC-V-GetStart/&title=RISC-V GetStart"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/03/28/RISC-V-GetStart/&name=RISC-V GetStart&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/03/28/RISC-V-GetStart/&t=RISC-V GetStart"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#RISC-V-and-C-Toolchains"><span class="toc-number">1.</span> <span class="toc-text">RISC-V and C Toolchains</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#ISA-amp-amp-RISC-V"><span class="toc-number">1.1.</span> <span class="toc-text">ISA &amp;&amp; RISC-V</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#RISC-V-basic-RV32I"><span class="toc-number">1.2.</span> <span class="toc-text">RISC-V basic: RV32I</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#RISC-V-Instructions"><span class="toc-number">1.2.1.</span> <span class="toc-text">RISC-V Instructions</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E7%AB%8B%E5%8D%B3%E6%95%B0-immediates-%E5%92%8C%E5%B8%B8%E9%87%8F%E6%9E%84%E5%BB%BA"><span class="toc-number">1.2.1.1.</span> <span class="toc-text">立即数(immediates) 和常量构建</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#data-transfer"><span class="toc-number">1.2.2.</span> <span class="toc-text">data transfer</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Logical-Instruction"><span class="toc-number">1.2.3.</span> <span class="toc-text">Logical Instruction</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%88%86%E6%94%AF%E6%8C%87%E4%BB%A4"><span class="toc-number">1.2.4.</span> <span class="toc-text">分支指令</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%88%86%E6%94%AF%E6%8C%87%E4%BB%A4-1"><span class="toc-number">1.2.5.</span> <span class="toc-text">分支指令</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%86%8D%E8%AE%BA%E8%AE%A1%E7%AE%97"><span class="toc-number">1.2.6.</span> <span class="toc-text">再论计算</span></a></li></ol></li></ol></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        RISC-V GetStart
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2020-03-27T17:09:42.000Z" itemprop="datePublished">2020-03-28</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <h1 id="RISC-V-and-C-Toolchains"><a href="#RISC-V-and-C-Toolchains" class="headerlink" title="RISC-V and C Toolchains"></a>RISC-V and C Toolchains</h1><h2 id="ISA-amp-amp-RISC-V"><a href="#ISA-amp-amp-RISC-V" class="headerlink" title="ISA &amp;&amp; RISC-V"></a>ISA &amp;&amp; RISC-V</h2><p>指令(Instruction) 是 CPU 的 primitives operations, 我们可以知道有这样的保障：</p>
+<ul>
+<li>指令顺序执行</li>
+<li>每条指令完成很轻量的、基本的操作</li>
+<li>每条指令会作用在 operand 上，甚至可能变更指令的顺序。</li>
+</ul>
+<p>CPU 会有某个 “family”, 实现了它自己的 instruction set。这个独特的 instruction set 又实现了某个具体的 ISA，例如：</p>
+<ol>
+<li>ARM, Intel x86, MIPS, RISC-V, IBM/Motorola PowerPC (old Mac), Intel IA64</li>
+</ol>
+<p>RISC-V 希望保证简洁的特性(以下摘自 RISC-V v2p1)：</p>
+<blockquote>
+<p>RISC-V的不同寻常之处，除了在于它是最近诞生的和开源的以外，还在于:和几乎所 有以往的ISA不同，它是模块化的。它的核心是一个名为<em>RV32I</em>的基础ISA，运行一个完整 的软件栈。RV32I是固定的，永远不会改变。这为编译器编写者，操作系统开发人员和汇 编语言程序员提供了稳定的目标。模块化来源于可选的标准扩展，根据应用程序的需要， 硬件可以包含或不包含这些扩展。这种模块化特性使得RISC-V具有了袖珍化、低能耗的特 点，而这对于嵌入式应用可能至关重要。RISC-V编译器得知当前硬件包含哪些扩展后，便 可以生成当前硬件条件下的最佳代码。惯例是把代表扩展的字母附加到指令集名称之后作 为指示。例如，RV32IMFD将乘法(RV32M)，单精度浮点(RV32F)和双精度浮点 (RV32D)的扩展添加到了基础指令集(RV32I)中。</p>
+</blockquote>
+<h2 id="RISC-V-basic-RV32I"><a href="#RISC-V-basic-RV32I" class="headerlink" title="RISC-V basic: RV32I"></a>RISC-V basic: RV32I</h2><p><img src="https://image.mwish.me/blog-image/寄存器模型.png" alt="寄存器模型"></p>
+<ul>
+<li>Registers: 32 words，每个长度是 32bits。（非基础的有16bit的压缩指令和 64bit 甚至更大的指令）</li>
+<li>Memory: Huge</li>
+</ul>
+<p>访问 registers 和 memory 的速度大概差距 100-500倍</p>
+<p>RISC-V 有 32个 <strong>RV32I</strong> 寄存器, 名称是 <code>x0</code>-<code>x31</code></p>
+<blockquote>
+<p>x0 is special, always holds the value zero<br> • So really only 31 registers able to hold variable values</p>
+</blockquote>
+<p>注意 6.828 可能会有对应的 name, 下面对原因有一定的解释</p>
+<blockquote>
+<p>Registers are also given symbolic names: <br> These will be described later and are a “convention”/“ABI” (Application Binary Interface):   Not actually enforced in hardware but needed to follow to keep things consistent</p>
+</blockquote>
+<p>Register 本身是没有类型的（废话）。</p>
+<ul>
+<li>RISC-V does not <strong>require</strong> that integers be word aligned</li>
+<li>但是，如果不 align，对 atomicity 支持缺乏，同时 load 操作会慢上很多。</li>
+</ul>
+<p>So in <strong>practice</strong>, RISC-V requires integers to be aligned on 4-byte boundaries</p>
+<h3 id="RISC-V-Instructions"><a href="#RISC-V-Instructions" class="headerlink" title="RISC-V Instructions"></a>RISC-V Instructions</h3><p>Instructions are fixed, 32b long （话说似乎 b 是 bit, B 是 Byte）</p>
+<p><img src="https://image.mwish.me/blog-image/8C6F3A35-2220-475D-A75B-C1E09A1E6B69.png" alt="8C6F3A35-2220-475D-A75B-C1E09A1E6B69"></p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">add x1, x2, x3</span><br></pre></td></tr></table></figure>
+<p><code>x1 = x2 + x3</code> 与上面等价. add 是 operation code (opcode), x1 是 destination register, <code>x2</code> <code>x3</code> 是第一、第二个 operand register。以上的格式被称为 assembly comment syntax</p>
+<p><code>x0</code> 在 RISC-V 中代表 no-op, 就是“读是0，什么都不写”。实际上，RISC-V 核心的指令很精简，它依靠 <code>x0</code> 来实现很多伪指令。</p>
+<h4 id="立即数-immediates-和常量构建"><a href="#立即数-immediates-和常量构建" class="headerlink" title="立即数(immediates) 和常量构建"></a>立即数(immediates) 和常量构建</h4><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">addi x3, x4, -10</span><br></pre></td></tr></table></figure>
+<p>相当于 <code>f = g - 10</code>，当然这里有个问题就是这个立即数能有多大呢？ RISC-V 32 中指令是定长的，虽然我们有压缩指令之类的支持，但是 <code>imm</code> 占用的 bytes 仍然是受限的，显然，它没有能力表示 32 位长度的数据：一个 I-type 的指令只有 12bits 来保存立即数。</p>
+<p>那肯定我们还需要构建一个 32bit 的数吧！可以看看如下：</p>
+<blockquote>
+<p>图 2.1 剩下的两条整数计算指令主要用于构造大的常量数值和链接。加载立即数到高 位(lui)将 20 位常量加载到寄存器的高 20 位。接着便可以使用标准的立即指令来创建 32 位常量。这样子，仅使用 2 条 32 位 RV32I 指令，便可构造一个 32 位常量。向 PC 高位加 上立即数(auipc)让我们仅用两条指令，便可以基于当前 PC 以任意偏移量转移控制流或 者访问数据。将 auipc 中的 20 位立即数与 jalr(参见下面)中 12 位立即数的组合，我们 可以将执行流转移到任何 32 位 PC 相对地址。而 auipc 加上普通加载或存储指令中的 12 位立即数偏移量，使我们可以访问任何 32 位 PC 相对地址的数据。</p>
+</blockquote>
+<h3 id="data-transfer"><a href="#data-transfer" class="headerlink" title="data transfer"></a>data transfer</h3><p><img src="https://image.mwish.me/blog-image/853BC117-2DE0-49B5-AD9C-B3D24C18BE16.png" alt="853BC117-2DE0-49B5-AD9C-B3D24C18BE16"></p>
+<p>很正常的思路是，要从内存 — 寄存器读写数据，而且地址是 32位的 （肯定不能给立即数了）</p>
+<ul>
+<li>1 word = 4bytes</li>
+<li>Data typically smaller than 32 bits, but rarely smaller than 8 bits</li>
+<li>Memory addresses are really  in bytes, not words</li>
+</ul>
+<p>下面的<code>lw</code> <code>sw</code> 表示 <code>load</code> <code>store</code> 单位为 <code>word</code> 的数据</p>
+<p>注意，这里提到 RISC-V 是 Little-Endian 的，这意味着我们从下头读 <code>0x000408012</code></p>
+<p><img src="https://image.mwish.me/blog-image/9BB275BA-B363-4E42-B421-7A75C4D0F1CC.png" alt="9BB275BA-B363-4E42-B421-7A75C4D0F1CC"></p>
+<p>随便从知乎找的图</p>
+<p><img src="https://image.mwish.me/blog-image/随便从知乎找的图.jpg" alt="随便从知乎找的图"></p>
+<p>也就是说，一个 int 0x03f5</p>
+<p>是：</p>
+<ul>
+<li>f5 : 0</li>
+<li>03 : 1</li>
+<li>00 : 2</li>
+<li>00 : 3</li>
+</ul>
+<p>实际上 BigEndian LittleEndian 可以看之前 Post 的那篇文章: <a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/254144597">https://zhuanlan.zhihu.com/p/254144597</a></p>
+<p><img src="https://image.mwish.me/blog-image/1D6C494E-FAEE-4D74-ACD9-F9FD987A591B.png" alt="1D6C494E-FAEE-4D74-ACD9-F9FD987A591B"></p>
+<p><code>int</code> 如果是 32 bit 的，那么 1word = 4byte, 显然合理对吧，上面这段也很好懂。</p>
+<ul>
+<li>lw 是 reg &lt;- memory on address</li>
+<li>sw 是 reg value -&gt; memory on address</li>
+</ul>
+<p>还有 <code>lb</code> <code>sb</code> , 很好懂对吧，就不多解释了。</p>
+<blockquote>
+<p>RISC-V also has “unsigned byte” loads (<strong>lbu</strong>) which zero extend to fill register. Why no unsigned store byte <strong>sbu</strong>?</p>
+</blockquote>
+<h3 id="Logical-Instruction"><a href="#Logical-Instruction" class="headerlink" title="Logical Instruction"></a>Logical Instruction</h3><p><img src="https://image.mwish.me/blog-image/7FFBD3D3-88CB-43F5-BB70-F069403DC8CC.png" alt="7FFBD3D3-88CB-43F5-BB70-F069403DC8CC"></p>
+<p>注意算数移位和逻辑移位：对于signed, 算数移位会把符号位移动下来。</p>
+<p>然后在 RISC-V 里面，可以把它们最后一个字母当成区分 <code>logical</code> 和 <code>arithmetic</code> 的标志</p>
+<h3 id="分支指令"><a href="#分支指令" class="headerlink" title="分支指令"></a>分支指令</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">beq register1,register2,L1</span><br></pre></td></tr></table></figure>
+<p><code>if (x1 == x2) goto L1</code>, 其中 L1 是一个 Label.</p>
+<h3 id="分支指令-1"><a href="#分支指令-1" class="headerlink" title="分支指令"></a>分支指令</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">beq register1,register2,L1</span><br></pre></td></tr></table></figure>
+<p>if (x1 == x2) goto L1, 其中 L1 是一个 Label. S</p>
+<p>beq 这种 b 开头的指令中，b 是 branch 的缩写，beq 就是 Branch on EQual，同理可以推测：</p>
+<ul>
+<li>blt: branch on less than </li>
+<li>bne: branch on not equal</li>
+<li>bltu Branch on Greater Than Unsigned </li>
+</ul>
+<p>值得玩味的是，RISC-V 里面不存在greater ，它会被转成 less  。</p>
+<p>上面的代码可以被视为 conditional branch, 此外我们还可以关注 unconditional branch. 也就是 always jump 的 case，这里有语句 j，即 jump。jal 和 jalr 这两个指令，jal 是 jump and link。它的形式大概是：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">jal rd offset</span><br><span class="line">jalr rd rs (offset)</span><br></pre></td></tr></table></figure>
+<ul>
+<li>jal 会把 PC+4 写入到 rd 寄存器中，作为保存“调用者” ，然后把内容跳转到 offset </li>
+</ul>
+<p>所以它可能的使用场景是：</p>
+<ol>
+<li>无条件的跳转（代码里写 goto）</li>
+<li>调用别的函数（上下文写到rd里面）</li>
+</ol>
+<p>如果是 jalr 就是 <code>PC + imm</code> 变成 <code>rs + imm</code></p>
+<h3 id="再论计算"><a href="#再论计算" class="headerlink" title="再论计算"></a>再论计算</h3><blockquote>
+<p>有什么不同之处?首先，RISC-V 中没有字节或半字宽度的整数计算操作。操作始终 是以完整的寄存器宽度。内存访问需要的能量比算术运算高几个数量级。因此低宽度的数 据访问可以节省大量的能量，但低宽度的运算不会。ARM-32 具有一个不寻常的功能，对 于大多数算术逻辑运算中的一个操作数，你可以选择对它进行移位。尽管这些指令的使用 频率很低，但它使数据路径和数据通路更加复杂。与此相对的是，RV32I 提供了单独的移位指令。</p>
+<p>RV32I 也不包含乘法和除法，它们包含在可选的 RV32M 扩展中(参见第 4 章)。与 ARM-32 和 x86-32 不同，即使处理器没有添加乘除法扩展，完整的 RISC-V 软件栈也可以 运行，这可以缩小嵌入式芯片的面积。MIPS-32 汇编程序可能用一系列移位以及加法指令 来替换乘法，以提高性能，这可能会使程序员看到处理器执行了汇编程序中没有的指令， 进而造成混淆。RV32I 可以忽略了这些特性:循环移位指令和整数算术溢出检测，这两个 特性都可以用若干条 RV32I 指令来实现(参见第 2.6 节)。</p>
+</blockquote>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#RISC-V-and-C-Toolchains"><span class="toc-number">1.</span> <span class="toc-text">RISC-V and C Toolchains</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#ISA-amp-amp-RISC-V"><span class="toc-number">1.1.</span> <span class="toc-text">ISA &amp;&amp; RISC-V</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#RISC-V-basic-RV32I"><span class="toc-number">1.2.</span> <span class="toc-text">RISC-V basic: RV32I</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#RISC-V-Instructions"><span class="toc-number">1.2.1.</span> <span class="toc-text">RISC-V Instructions</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E7%AB%8B%E5%8D%B3%E6%95%B0-immediates-%E5%92%8C%E5%B8%B8%E9%87%8F%E6%9E%84%E5%BB%BA"><span class="toc-number">1.2.1.1.</span> <span class="toc-text">立即数(immediates) 和常量构建</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#data-transfer"><span class="toc-number">1.2.2.</span> <span class="toc-text">data transfer</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Logical-Instruction"><span class="toc-number">1.2.3.</span> <span class="toc-text">Logical Instruction</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%88%86%E6%94%AF%E6%8C%87%E4%BB%A4"><span class="toc-number">1.2.4.</span> <span class="toc-text">分支指令</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%88%86%E6%94%AF%E6%8C%87%E4%BB%A4-1"><span class="toc-number">1.2.5.</span> <span class="toc-text">分支指令</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%86%8D%E8%AE%BA%E8%AE%A1%E7%AE%97"><span class="toc-number">1.2.6.</span> <span class="toc-text">再论计算</span></a></li></ol></li></ol></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/03/28/RISC-V-GetStart/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/03/28/RISC-V-GetStart/&text=RISC-V GetStart"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/03/28/RISC-V-GetStart/&title=RISC-V GetStart"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/03/28/RISC-V-GetStart/&is_video=false&description=RISC-V GetStart"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=RISC-V GetStart&body=Check out this article: http://blog.mwish.me/2020/03/28/RISC-V-GetStart/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/03/28/RISC-V-GetStart/&title=RISC-V GetStart"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/03/28/RISC-V-GetStart/&title=RISC-V GetStart"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/03/28/RISC-V-GetStart/&title=RISC-V GetStart"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/03/28/RISC-V-GetStart/&title=RISC-V GetStart"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/03/28/RISC-V-GetStart/&name=RISC-V GetStart&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/03/28/RISC-V-GetStart/&t=RISC-V GetStart"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

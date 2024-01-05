@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="（这是最近写的最烂的一篇文章了） 对于 OTAP 和传统的数据库来说，执行引擎 &#x2F; 前台 &#x2F; 存储即使有一些拆分，总体上还是单个程序执行。在前台由 SQL 解析，然后 Planner 下发到执行层，执行层可能会带一个 Context 来部分限制资源的执行。然后 Queuing 的话，有一些全链路的 Queue，然后在 overquota 或者内存过大的时候，触发一些内存上的限制。 Hive 由 F">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Apache Hive: A History on Hadoop">
+<meta property="og:url" content="http://blog.mwish.me/2023/03/17/Apache-Hive-A-History-on-Hadoop/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="（这是最近写的最烂的一篇文章了） 对于 OTAP 和传统的数据库来说，执行引擎 &#x2F; 前台 &#x2F; 存储即使有一些拆分，总体上还是单个程序执行。在前台由 SQL 解析，然后 Planner 下发到执行层，执行层可能会带一个 Context 来部分限制资源的执行。然后 Queuing 的话，有一些全链路的 Queue，然后在 overquota 或者内存过大的时候，触发一些内存上的限制。 Hive 由 F">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/arch-hive.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/arch-hive-1-x.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/hive-on-yarn.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/yarn-internal.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/hive-and-mr.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/tez-and-hive.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/tez-llap.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/hive-partition-and-buckets.png">
+<meta property="article:published_time" content="2023-03-17T15:20:00.000Z">
+<meta property="article:modified_time" content="2023-05-26T16:47:34.891Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/arch-hive.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>Apache Hive: A History on Hadoop</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2023/03/19/Apache-Iceberg-and-changes-above-Hive/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2023/03/11/Beyond-Parquet-ORC-and-new-file-format/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2023/03/17/Apache-Hive-A-History-on-Hadoop/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2023/03/17/Apache-Hive-A-History-on-Hadoop/&text=Apache Hive: A History on Hadoop"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2023/03/17/Apache-Hive-A-History-on-Hadoop/&title=Apache Hive: A History on Hadoop"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2023/03/17/Apache-Hive-A-History-on-Hadoop/&is_video=false&description=Apache Hive: A History on Hadoop"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Apache Hive: A History on Hadoop&body=Check out this article: http://blog.mwish.me/2023/03/17/Apache-Hive-A-History-on-Hadoop/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2023/03/17/Apache-Hive-A-History-on-Hadoop/&title=Apache Hive: A History on Hadoop"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2023/03/17/Apache-Hive-A-History-on-Hadoop/&title=Apache Hive: A History on Hadoop"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2023/03/17/Apache-Hive-A-History-on-Hadoop/&title=Apache Hive: A History on Hadoop"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2023/03/17/Apache-Hive-A-History-on-Hadoop/&title=Apache Hive: A History on Hadoop"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2023/03/17/Apache-Hive-A-History-on-Hadoop/&name=Apache Hive: A History on Hadoop&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2023/03/17/Apache-Hive-A-History-on-Hadoop/&t=Apache Hive: A History on Hadoop"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Hive-%E4%B8%80%E4%BA%9B%E5%B8%B8%E7%94%A8%E7%9A%84-SQL"><span class="toc-number">1.</span> <span class="toc-text">Hive 一些常用的 SQL</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%A1%A8%E7%9A%84%E5%88%9B%E5%BB%BA%E5%92%8C%E5%8A%A0%E8%BD%BD"><span class="toc-number">1.1.</span> <span class="toc-text">表的创建和加载</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%9F%A5%E8%AF%A2"><span class="toc-number">1.2.</span> <span class="toc-text">查询</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%81%B6%E8%A1%A5%E4%B8%80%E4%BA%9B%E6%9F%A5%E8%AF%A2%E7%9A%84%E6%97%B6%E5%80%99%E9%9C%80%E8%A6%81%E7%9A%84-SQL"><span class="toc-number">1.2.1.</span> <span class="toc-text">恶补一些查询的时候需要的 SQL</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Hive-%E7%AE%80%E5%8D%95%E4%BD%BF%E7%94%A8"><span class="toc-number">2.</span> <span class="toc-text">Hive 简单使用</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Partition-amp-Bucket"><span class="toc-number">3.</span> <span class="toc-text">Partition &amp; Bucket</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#References"><span class="toc-number">4.</span> <span class="toc-text">References</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Apache Hive: A History on Hadoop
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2023-03-17T15:20:00.000Z" itemprop="datePublished">2023-03-17</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>（这是最近写的最烂的一篇文章了）</p>
+<p>对于 OTAP 和传统的数据库来说，执行引擎 / 前台 / 存储即使有一些拆分，总体上还是单个程序执行。在前台由 SQL 解析，然后 Planner 下发到执行层，执行层可能会带一个 Context 来部分限制资源的执行。然后 Queuing 的话，有一些全链路的 Queue，然后在 overquota 或者内存过大的时候，触发一些内存上的限制。</p>
+<p>Hive 由 Facebook 开发，发表于 ICDE’10，后来 Cloudera 也进行了不少开发，感觉基本上是他们在管，Hive 经历了 0.x、1.0、2.0、3.0 版本，在过去 SQL on BigData 不甚完善的时代，是大数据的事实标准。即使现在新技术一代代出现，他们也要兼容一些 Hive 相关的语义，同时，即使 Hive 哪天真的死了，它在 HDFS / S3 的表结构相关的信息也会存活。大体来说，Hive 是一个数据仓库，你可以说「Hive 流程大致和它们差不多」，但具体还是有蛮多设计上的比较大的区别的，我们可以简单从一张架构图来延展：</p>
+<p><img src="https://image.mwish.me/blog-image/arch-hive.png" alt="arch-hive"></p>
+<ol>
+<li>MetaData 存储在单独的服务（MetaStore）上</li>
+<li>Hive 自己不完全负责查询的执行，而是下发给 MapReduce/Tez 之类的 Runtime</li>
+<li>Hive 自己不完全负责任务的调度，而是下发给 Yarn 之类的，在 Yarn 的框架下进行调度</li>
+<li>数据存放在 HDFS 上。对外部数据源的尊重，不分情况支持对托管表的处理</li>
+<li>Planner 并不是那么「物理」的 SQL Operator，很大程度上是下推给执行引擎的 Plan</li>
+</ol>
+<p>在 Hive 中，任务调度如上图所示。</p>
+<p>同时，Hive SQL 和 OLTP 的 SQL 使用区别还是比较大的，它提供了 Partition / Bucket 的概念，在操作的时候，经常对 Partition 和 Bucket 做 Insert Overwrite 等相对比较重的处理操作. 这里可能可以让它的 SQL 被弄进 SQL 标准，但总的来说，这个和 TP 系常用的那些 SQL 差别还是不小的。此外，对于 Hive 而言，有一点比较乐子的地方是，它虽然能做一些优化，但是你可能是用 Calcite 来优化，最后跑在一个 MapReduce 上，多少有点隔靴子挠痒，然后 Plan 也是对应 Stage 的 Plan，因此 Hive SQL 也得专门抽时间学习才能写好，而不如 DB 那样 EXPLAIN / PROFILE 那样直观。（还有一些比较好玩的 case 是，因为 MR 几乎总是 Shuffle，所以我们某种程度上可以发现，一些公司 Data Stack 会在查询引擎逐步降级，从 Presto -&gt; Spark -&gt; Hive 这样逐步的降级，直到跑出任务）。</p>
+<p>Hive 在历史上也进行过不少优化，包括从 MapReduce 换 Tez 等模式、向量化、LLAP。很多用户的观念还停留在 0.14 之类的版本。</p>
+<h2 id="Hive-一些常用的-SQL"><a href="#Hive-一些常用的-SQL" class="headerlink" title="Hive 一些常用的 SQL"></a>Hive 一些常用的 SQL</h2><h3 id="表的创建和加载"><a href="#表的创建和加载" class="headerlink" title="表的创建和加载"></a>表的创建和加载</h3><p>Hive 的 config 用 set 之类的定义，数据源也可以定义 Serde 之类的 config:</p>
+<p>在创建表的时候，内容如下：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">CREATE</span> <span class="keyword">TABLE</span> pageviews (userid <span class="type">VARCHAR</span>(<span class="number">64</span>), link STRING, came_from STRING)</span><br><span class="line">  PARTITIONED <span class="keyword">BY</span> (datestamp STRING) CLUSTERED <span class="keyword">BY</span> (userid) <span class="keyword">INTO</span> <span class="number">256</span> BUCKETS STORED <span class="keyword">AS</span> ORC;</span><br></pre></td></tr></table></figure>
+<p>这里:</p>
+<ol>
+<li>注意 Partition BY 的内容不完全出现在表 Schema 中</li>
+<li>CLUSTER BY 指定分 bucket 之类的信息</li>
+<li>还可以指定表的一些 Schema</li>
+</ol>
+<p>然后用户可以通过 load 等方式来加载数据，这里加载甚至可以选择 OVERWRITE 某个 Partition 的方式进行</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">LOAD DATA [<span class="keyword">LOCAL</span>] INPATH <span class="string">&#x27;filepath&#x27;</span> [OVERWRITE] <span class="keyword">INTO</span> <span class="keyword">TABLE</span> tablename [<span class="keyword">PARTITION</span> (partcol1<span class="operator">=</span>val1, partcol2<span class="operator">=</span>val2 ...)]</span><br><span class="line"> </span><br><span class="line">LOAD DATA [<span class="keyword">LOCAL</span>] INPATH <span class="string">&#x27;filepath&#x27;</span> [OVERWRITE] <span class="keyword">INTO</span> <span class="keyword">TABLE</span> tablename [<span class="keyword">PARTITION</span> (partcol1<span class="operator">=</span>val1, partcol2<span class="operator">=</span>val2 ...)] [INPUTFORMAT <span class="string">&#x27;inputformat&#x27;</span> SERDE <span class="string">&#x27;serde&#x27;</span>] (<span class="number">3.0</span> <span class="keyword">or</span> later)</span><br></pre></td></tr></table></figure>
+<p>然后，INSERT 可以选中数据，分别有 INSERT INTO 和 INSERT OVERWRITE. 大致上，INTO 是插入的时候直接插入，OVERWRITE 是覆写，插入的对象是 Table 或者 Partition。</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">LOAD DATA [<span class="keyword">LOCAL</span>] INPATH <span class="string">&#x27;filepath&#x27;</span> [OVERWRITE] <span class="keyword">INTO</span> <span class="keyword">TABLE</span> tablename [<span class="keyword">PARTITION</span> (partcol1<span class="operator">=</span>val1, partcol2<span class="operator">=</span>val2 ...)]</span><br><span class="line"> </span><br><span class="line">LOAD DATA [<span class="keyword">LOCAL</span>] INPATH <span class="string">&#x27;filepath&#x27;</span> [OVERWRITE] <span class="keyword">INTO</span> <span class="keyword">TABLE</span> tablename [<span class="keyword">PARTITION</span> (partcol1<span class="operator">=</span>val1, partcol2<span class="operator">=</span>val2 ...)] [INPUTFORMAT <span class="string">&#x27;inputformat&#x27;</span> SERDE <span class="string">&#x27;serde&#x27;</span>] (<span class="number">3.0</span> <span class="keyword">or</span> later)</span><br></pre></td></tr></table></figure>
+<p>Hive 的 Insert 还支持 Multi-Table-Insert，这是什么玩意呢？答案是它希望只读一遍数据然后插入多个 Partition / 表，借用一个 SQL：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">FROM</span> my_table</span><br><span class="line"><span class="keyword">INSERT</span> <span class="keyword">INTO</span> temp_table_20201115 <span class="keyword">SELECT</span> <span class="operator">*</span> <span class="keyword">WHERE</span> dt <span class="operator">=</span><span class="string">&#x27;2020-11-15&#x27;</span></span><br><span class="line"><span class="keyword">INSERT</span> <span class="keyword">INTO</span> temp_table_20201116 <span class="keyword">SELECT</span> <span class="operator">*</span> <span class="keyword">WHERE</span> dt <span class="operator">=</span><span class="string">&#x27;2020-11-16&#x27;</span></span><br></pre></td></tr></table></figure>
+<p>恶心吧！</p>
+<p>哦对了，虽然不是很想在这个阶段介绍 Partition，但是 INSERT 的时候，如果打开了动态分区，Hive 会根据最后几列的内容，创建新的分区，具体见：<a target="_blank" rel="noopener" href="https://cwiki.apache.org/confluence/display/Hive/Tutorial#Tutorial-Dynamic-PartitionInsert">https://cwiki.apache.org/confluence/display/Hive/Tutorial#Tutorial-Dynamic-PartitionInsert</a></p>
+<p>CRUD 就不介绍了，另一些有意思的包括 MERGE INTO, Merge 在 Hive 2.2 支持:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">Standard Syntax:</span><br><span class="line"><span class="keyword">MERGE</span> <span class="keyword">INTO</span> <span class="operator">&lt;</span>target <span class="keyword">table</span><span class="operator">&gt;</span> <span class="keyword">AS</span> T <span class="keyword">USING</span> <span class="operator">&lt;</span>source expression<span class="operator">/</span><span class="keyword">table</span><span class="operator">&gt;</span> <span class="keyword">AS</span> S</span><br><span class="line"><span class="keyword">ON</span> <span class="operator">&lt;</span><span class="type">boolean</span> expression1<span class="operator">&gt;</span></span><br><span class="line"><span class="keyword">WHEN</span> MATCHED [<span class="keyword">AND</span> <span class="operator">&lt;</span><span class="type">boolean</span> expression2<span class="operator">&gt;</span>] <span class="keyword">THEN</span> <span class="keyword">UPDATE</span> <span class="keyword">SET</span> <span class="operator">&lt;</span><span class="keyword">set</span> clause list<span class="operator">&gt;</span></span><br><span class="line"><span class="keyword">WHEN</span> MATCHED [<span class="keyword">AND</span> <span class="operator">&lt;</span><span class="type">boolean</span> expression3<span class="operator">&gt;</span>] <span class="keyword">THEN</span> <span class="keyword">DELETE</span></span><br><span class="line"><span class="keyword">WHEN</span> <span class="keyword">NOT</span> MATCHED [<span class="keyword">AND</span> <span class="operator">&lt;</span><span class="type">boolean</span> expression4<span class="operator">&gt;</span>] <span class="keyword">THEN</span> <span class="keyword">INSERT</span> <span class="keyword">VALUES</span><span class="operator">&lt;</span><span class="keyword">value</span> list<span class="operator">&gt;</span></span><br></pre></td></tr></table></figure>
+<p>Merge 是一套相对恶心的东西…就是对匹配到的数据进行操作，举个例子：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">MERGE</span> <span class="keyword">INTO</span> customer <span class="keyword">USING</span> (<span class="keyword">SELECT</span> <span class="operator">*</span> <span class="keyword">FROM</span> new_customer_stage) sub <span class="keyword">ON</span> sub.id <span class="operator">=</span> customer.id </span><br><span class="line"><span class="keyword">WHEN</span> MATCHED <span class="keyword">THEN</span> <span class="keyword">UPDATE</span> <span class="keyword">SET</span> name <span class="operator">=</span> sub.name, state <span class="operator">=</span> sub.new_state </span><br><span class="line"><span class="keyword">WHEN</span> <span class="keyword">NOT</span> MATCHED <span class="keyword">THEN</span> <span class="keyword">INSERT</span> <span class="keyword">VALUES</span> (sub.id, sub.name, sub.state);</span><br></pre></td></tr></table></figure>
+<p>好用是蛮好用的，就是 SCOPE 太大了点，有点震撼，相当于做出一定的筛选，再对筛选出来的数据处理。好像 Oracle 也支持这样的语法。</p>
+<h3 id="查询"><a href="#查询" class="headerlink" title="查询"></a>查询</h3><p>INSERT OVERWRITE 从一张表插入另外一张表这种 SQL 我就不说了，这里着重贴一下分区相关的 SQL 和 JOIN</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">INSERT</span> OVERWRITE <span class="keyword">TABLE</span> xyz_com_page_views</span><br><span class="line"><span class="keyword">SELECT</span> page_views.<span class="operator">*</span></span><br><span class="line"><span class="keyword">FROM</span> page_views</span><br><span class="line"><span class="keyword">WHERE</span> page_views.date <span class="operator">&gt;=</span> <span class="string">&#x27;2008-03-01&#x27;</span> <span class="keyword">AND</span> page_views.date <span class="operator">&lt;=</span> <span class="string">&#x27;2008-03-31&#x27;</span> <span class="keyword">AND</span></span><br><span class="line">      page_views.referrer_url <span class="keyword">like</span> <span class="string">&#x27;%xyz.com&#x27;</span>;</span><br></pre></td></tr></table></figure>
+<p>注意到 date 不一定是 table 中的字段，这里可能作为对应的分区字段。</p>
+<p>这里还支持了 SAMPLING，Array/Map/Struct 类型，Schema Evolution 等：<a target="_blank" rel="noopener" href="https://cwiki.apache.org/confluence/display/Hive/Tutorial#Tutorial-QueryingandInsertingData">Tutorial - Apache Hive - Apache Software Foundation</a></p>
+<p>总之，Hive 提供的这套语义在大数据场景下，还是有用武之地的。这里专门提一下 Co-Groups:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">FROM</span> (</span><br><span class="line">     <span class="keyword">FROM</span> (</span><br><span class="line">             <span class="keyword">FROM</span> action_video av</span><br><span class="line">             <span class="keyword">SELECT</span> av.uid <span class="keyword">AS</span> uid, av.id <span class="keyword">AS</span> id, av.date <span class="keyword">AS</span> <span class="type">date</span></span><br><span class="line"> </span><br><span class="line">            <span class="keyword">UNION</span> <span class="keyword">ALL</span></span><br><span class="line"> </span><br><span class="line">             <span class="keyword">FROM</span> action_comment ac</span><br><span class="line">             <span class="keyword">SELECT</span> ac.uid <span class="keyword">AS</span> uid, ac.id <span class="keyword">AS</span> id, ac.date <span class="keyword">AS</span> <span class="type">date</span></span><br><span class="line">     ) union_actions</span><br><span class="line">     <span class="keyword">SELECT</span> union_actions.uid, union_actions.id, union_actions.date</span><br><span class="line">     CLUSTER <span class="keyword">BY</span> union_actions.uid) map</span><br><span class="line"> </span><br><span class="line"> <span class="keyword">INSERT</span> OVERWRITE <span class="keyword">TABLE</span> actions_reduced</span><br><span class="line">     <span class="keyword">SELECT</span> TRANSFORM(map.uid, map.id, map.date) <span class="keyword">USING</span> <span class="string">&#x27;reduce_script&#x27;</span> <span class="keyword">AS</span> (uid, id, reduced_val);</span><br></pre></td></tr></table></figure>
+<p>这里后台需要是一个 MapReduce 程序，然后定义 reduce_script。这套东西就能泡在它上面了。</p>
+<p>此外，大数据还需要一些作为 CUBE，ROLLUP 之类的语义，比如：</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://cwiki.apache.org/confluence/display/Hive/LanguageManual+GroupBy">https://cwiki.apache.org/confluence/display/Hive/LanguageManual+GroupBy</a> （GROUP BY，GROUPINGSETS，ROLLUP，CUBE）</li>
+<li>使用窗口函数来获得一定的 WINDOW 信息（TODO(mwish): 丰富这里）</li>
+<li>Coalesce, CASE WHEN 之类的，处理类似 if 的语义</li>
+</ul>
+<p>在 JOIN 的时候，Hive SQL 还支持类似 HINT 的语法（我看了下，Spark 也支持），来手动干预 JOIN 的 Plan: <a target="_blank" rel="noopener" href="https://cwiki.apache.org/confluence/display/hive/languagemanual+joinoptimization">https://cwiki.apache.org/confluence/display/hive/languagemanual+joinoptimization</a></p>
+<h4 id="恶补一些查询的时候需要的-SQL"><a href="#恶补一些查询的时候需要的-SQL" class="headerlink" title="恶补一些查询的时候需要的 SQL"></a>恶补一些查询的时候需要的 SQL</h4><p>本来 Hive 和 SQL 标准应该尽量分开讲的，除非一些标准的 SQL，不应该在文章正文部分介绍，但是我又不想专门花一篇内容介绍高级 SQL, 所以干脆在这里说了</p>
+<p>RANK 之类的，可以在序列中，额外提供一个 RANK 的数字，相当于在 SQL 中提供了一个 idx 的抽象：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">SELECT</span> ID, <span class="built_in">rank</span>() <span class="keyword">over</span> (<span class="keyword">order</span> <span class="keyword">by</span> (GPA) <span class="keyword">desc</span>) <span class="keyword">as</span> s_rank</span><br><span class="line"><span class="keyword">from</span> student_grades;</span><br></pre></td></tr></table></figure>
+<p>这里没有指定输出排序顺序。还有一些能替代 <code>rank</code> 的函数，比如：</p>
+<ul>
+<li><code>percent_rank</code>: 排序中的比例</li>
+<li><code>cume_dist</code>:累积分布</li>
+<li><code>row_number</code>: 类似 rank, 作为排序的时候唯一的行号。</li>
+<li><code>ntile</code> 把结果分成对应的桶，来处理相关的逻辑</li>
+</ul>
+<p>SQL 还提供了窗口函数和对应的功能。这个是可以向前滑动的，就是一个row可能被算进多个窗口：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">SELECT</span> <span class="keyword">year</span>, <span class="built_in">avg</span>(num_credits) <span class="keyword">over</span> (<span class="keyword">order</span> <span class="keyword">by</span> <span class="keyword">year</span> <span class="keyword">rows</span> <span class="number">3</span> preceding) <span class="keyword">as</span> avg_total_credits</span><br><span class="line"><span class="keyword">from</span> tot_credits;</span><br></pre></td></tr></table></figure>
+<p><code>range</code> <code>over</code> 可以提供窗口有关的靠谱功能</p>
+<p><code>pivot</code>做的时期相当于把SQL中的 enum 展开，从 <code>table(a, b, c)</code> 展开成 <code>table(a, b, c_value1, c_value2 ...)</code>:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">SELECT</span> <span class="operator">*</span></span><br><span class="line"><span class="keyword">from</span> <span class="keyword">table</span></span><br><span class="line">pivot (</span><br><span class="line">  <span class="built_in">sum</span>(d)</span><br><span class="line">  <span class="keyword">for</span> c <span class="keyword">in</span> (c_value1, c_value2, ...)</span><br><span class="line">);</span><br></pre></td></tr></table></figure>
+<p>这里还有一些 rollup, cube 和 grouping sets 来表达一些混杂的 GROUP BY. 简单来说，这些不同于多列 GROUP BY (<code>GROUP BY c1, c2</code>), 他们相当于多列 GROUP BY 的 UNION。</p>
+<ol>
+<li><code>rollup</code> 相当于<strong>前缀</strong>的 group by 和，<code>rollup(a, b, c...)</code> 相当于 <code>UNION&#123;(a, b, c..), ... (a, b), (a), ()&#125;</code></li>
+<li><code>cube</code> 相当于所有按照顺序排列的子集 (<code>CUBE(a,b,c) == GROUPING SETS((a,b,c), (a,b),(a,c),(b,c),(a),...())</code> )</li>
+<li><code>grouping sets</code> 相当于手动列出这些集合 </li>
+</ol>
+<p>这些还可以和 <code>COALESCE</code> 连用</p>
+<h2 id="Hive-简单使用"><a href="#Hive-简单使用" class="headerlink" title="Hive 简单使用"></a>Hive 简单使用</h2><p>知道了上面的内容之后，就可以写基本的 Hive SQL 了，Hive 的 EXPLAIN 有点难懂，会输出一大堆和 Stage 有关的东西：</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://cwiki.apache.org/confluence/display/Hive/LanguageManual+Explain">https://cwiki.apache.org/confluence/display/Hive/LanguageManual+Explain</a></li>
+<li><a target="_blank" rel="noopener" href="https://cwiki.apache.org/confluence/display/Hive/Cost-based+optimization+in+Hive">https://cwiki.apache.org/confluence/display/Hive/Cost-based+optimization+in+Hive</a></li>
+<li><a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/352076174">https://zhuanlan.zhihu.com/p/352076174</a></li>
+</ul>
+<p>EXPLAIN 这里可能输出对应的 Stage，Hive 高版本还引入了 CBO。</p>
+<p><img src="https://image.mwish.me/blog-image/arch-hive-1-x.png" alt="arch-hive-1-x"></p>
+<p>Hive 在执行的时候，在进行数据处理时先将计算发往数据所在的节点，将数据以键-值对作为输入，在本地处理后再以键-值对的形式发往远端的节点，这个过程通用叫法为Shuffle，远端的节点将接收的数据组织成键-值对的形式作为输入，处理后的数据，最终也以键-值对的形式输出。</p>
+<p>这里非 LLAP 的模式可能还要通过 Yarn 拉起一个进程，然后选出一个管理器，来协调任务的执行</p>
+<p><img src="https://image.mwish.me/blog-image/hive-on-yarn.png" alt="hive-on-yarn"></p>
+<p><img src="https://image.mwish.me/blog-image/yarn-internal.png" alt="yarn-internal"></p>
+<p>这里要关注一个问题，就是，在 Hive 1.x 执行问题按我们最早贴的那张图所述，这里 YARN 会有调度器和队列，然后进程都是拉起一大堆的，整个流程相对于 OLTP Database 都很重量级。YARN 按照 DRF 之类的方式进行调度。</p>
+<p>数据在这里存储在 HDFS 上。</p>
+<p>这里计算引擎还有对应的：</p>
+<ul>
+<li>MapReduce</li>
+<li>Tez</li>
+</ul>
+<p>MapReduce 如下图所示</p>
+<p><img src="https://image.mwish.me/blog-image/hive-and-mr.png" alt="hive-and-mr"></p>
+<p><img src="https://image.mwish.me/blog-image/tez-and-hive.png" alt="tez-and-hive"></p>
+<p>Hive 还有 LLAP 模式，这里相当于持久驻留进程，有点类似现代人心目中的 database (但话又说回来，某种意义上，非 LLAP 那套还挺<strong>云</strong>）</p>
+<p><img src="https://image.mwish.me/blog-image/tez-llap.png" alt="tez-llap"></p>
+<p>LLAP 模式中，可以：</p>
+<ol>
+<li>push 对应的数据，而不用必须 shuffle 到 HDFS 上</li>
+<li>缓存数据</li>
+<li>…</li>
+</ol>
+<p>此外，这里还支持计算调度到 Hive 上.</p>
+<h2 id="Partition-amp-Bucket"><a href="#Partition-amp-Bucket" class="headerlink" title="Partition &amp; Bucket"></a>Partition &amp; Bucket</h2><p><a target="_blank" rel="noopener" href="https://cwiki.apache.org/confluence/display/Hive/Design">Design - Apache Hive - Apache Software Foundation</a></p>
+<ul>
+<li>Table 是 HDFS 上的一个目录</li>
+<li>Partition 被设置成 HDFS 上的一个目录</li>
+<li>Bucket 作为一个文件来被存储</li>
+</ul>
+<p>这就是 Hive 的表结构，Iceberg 优化了这个表结构。</p>
+<p><img src="https://image.mwish.me/blog-image/hive-partition-and-buckets.png" alt="hive-partition-and-buckets"></p>
+<h2 id="References"><a href="#References" class="headerlink" title="References"></a>References</h2><ul>
+<li>面试|不可不知的十大Hive调优技巧最佳实践 - 大数据技术与数仓的文章 - 知乎 <a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/296254978">https://zhuanlan.zhihu.com/p/296254978</a></li>
+<li>SQL to Hive CheatSheet: <a target="_blank" rel="noopener" href="https://hortonworks.com/wp-content/uploads/2016/05/Hortonworks.CheatSheet.SQLtoHive.pdf">https://hortonworks.com/wp-content/uploads/2016/05/Hortonworks.CheatSheet.SQLtoHive.pdf</a></li>
+<li><strong>Hive性能调优实战</strong> </li>
+<li>Hive Wiki: <a target="_blank" rel="noopener" href="https://cwiki.apache.org/confluence/display/Hive/">https://cwiki.apache.org/confluence/display/Hive/</a></li>
+<li>HCatalog Wiki: <a target="_blank" rel="noopener" href="https://cwiki.apache.org/confluence/display/Hive/HCatalog">https://cwiki.apache.org/confluence/display/Hive/HCatalog</a></li>
+</ul>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Hive-%E4%B8%80%E4%BA%9B%E5%B8%B8%E7%94%A8%E7%9A%84-SQL"><span class="toc-number">1.</span> <span class="toc-text">Hive 一些常用的 SQL</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%A1%A8%E7%9A%84%E5%88%9B%E5%BB%BA%E5%92%8C%E5%8A%A0%E8%BD%BD"><span class="toc-number">1.1.</span> <span class="toc-text">表的创建和加载</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%9F%A5%E8%AF%A2"><span class="toc-number">1.2.</span> <span class="toc-text">查询</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%81%B6%E8%A1%A5%E4%B8%80%E4%BA%9B%E6%9F%A5%E8%AF%A2%E7%9A%84%E6%97%B6%E5%80%99%E9%9C%80%E8%A6%81%E7%9A%84-SQL"><span class="toc-number">1.2.1.</span> <span class="toc-text">恶补一些查询的时候需要的 SQL</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Hive-%E7%AE%80%E5%8D%95%E4%BD%BF%E7%94%A8"><span class="toc-number">2.</span> <span class="toc-text">Hive 简单使用</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Partition-amp-Bucket"><span class="toc-number">3.</span> <span class="toc-text">Partition &amp; Bucket</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#References"><span class="toc-number">4.</span> <span class="toc-text">References</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2023/03/17/Apache-Hive-A-History-on-Hadoop/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2023/03/17/Apache-Hive-A-History-on-Hadoop/&text=Apache Hive: A History on Hadoop"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2023/03/17/Apache-Hive-A-History-on-Hadoop/&title=Apache Hive: A History on Hadoop"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2023/03/17/Apache-Hive-A-History-on-Hadoop/&is_video=false&description=Apache Hive: A History on Hadoop"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Apache Hive: A History on Hadoop&body=Check out this article: http://blog.mwish.me/2023/03/17/Apache-Hive-A-History-on-Hadoop/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2023/03/17/Apache-Hive-A-History-on-Hadoop/&title=Apache Hive: A History on Hadoop"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2023/03/17/Apache-Hive-A-History-on-Hadoop/&title=Apache Hive: A History on Hadoop"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2023/03/17/Apache-Hive-A-History-on-Hadoop/&title=Apache Hive: A History on Hadoop"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2023/03/17/Apache-Hive-A-History-on-Hadoop/&title=Apache Hive: A History on Hadoop"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2023/03/17/Apache-Hive-A-History-on-Hadoop/&name=Apache Hive: A History on Hadoop&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2023/03/17/Apache-Hive-A-History-on-Hadoop/&t=Apache Hive: A History on Hadoop"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

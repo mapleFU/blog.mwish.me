@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="Type 和 Array 是 Columnar System 最底层的东西之一了。因为本身任何列存系统无时无刻都要和它们打交道。作为系统的 Building Block，存储到 Runtime 都有 Type System，同时处理的数据大部分时候都是 Columnar 的。 Type &amp; Array System 本身不是很有花头的东西，主要考量的是某个编程语言下的：  直接的平坦非变长">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Type and Array in Columnar System">
+<meta property="og:url" content="http://blog.mwish.me/2023/05/04/Type-and-Array-in-Columnar-System/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="Type 和 Array 是 Columnar System 最底层的东西之一了。因为本身任何列存系统无时无刻都要和它们打交道。作为系统的 Building Block，存储到 Runtime 都有 Type System，同时处理的数据大部分时候都是 Columnar 的。 Type &amp; Array System 本身不是很有花头的东西，主要考量的是某个编程语言下的：  直接的平坦非变长">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/D113AFDFF7CD13071A3A407B9CED5CC3.png">
+<meta property="article:published_time" content="2023-05-04T15:40:00.000Z">
+<meta property="article:modified_time" content="2023-05-04T15:48:44.478Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/D113AFDFF7CD13071A3A407B9CED5CC3.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>Type and Array in Columnar System</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2023/05/27/Arrow-Compute/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2023/04/16/Column-Sketches-a-index-for-OLAP-workload/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2023/05/04/Type-and-Array-in-Columnar-System/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2023/05/04/Type-and-Array-in-Columnar-System/&text=Type and Array in Columnar System"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2023/05/04/Type-and-Array-in-Columnar-System/&title=Type and Array in Columnar System"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2023/05/04/Type-and-Array-in-Columnar-System/&is_video=false&description=Type and Array in Columnar System"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Type and Array in Columnar System&body=Check out this article: http://blog.mwish.me/2023/05/04/Type-and-Array-in-Columnar-System/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2023/05/04/Type-and-Array-in-Columnar-System/&title=Type and Array in Columnar System"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2023/05/04/Type-and-Array-in-Columnar-System/&title=Type and Array in Columnar System"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2023/05/04/Type-and-Array-in-Columnar-System/&title=Type and Array in Columnar System"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2023/05/04/Type-and-Array-in-Columnar-System/&title=Type and Array in Columnar System"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2023/05/04/Type-and-Array-in-Columnar-System/&name=Type and Array in Columnar System&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2023/05/04/Type-and-Array-in-Columnar-System/&t=Type and Array in Columnar System"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Arrow"><span class="toc-number">1.</span> <span class="toc-text">Arrow</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Physical-Layer"><span class="toc-number">1.1.</span> <span class="toc-text">Physical Layer</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#The-one-dimensional-layer"><span class="toc-number">1.2.</span> <span class="toc-text">The one-dimensional layer</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Velox"><span class="toc-number">2.</span> <span class="toc-text">Velox</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#ClickHouse"><span class="toc-number">3.</span> <span class="toc-text">ClickHouse</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Reference"><span class="toc-number">4.</span> <span class="toc-text">Reference</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Type and Array in Columnar System
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2023-05-04T15:40:00.000Z" itemprop="datePublished">2023-05-04</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>Type 和 Array 是 Columnar System 最底层的东西之一了。因为本身任何列存系统无时无刻都要和它们打交道。作为系统的 Building Block，存储到 Runtime 都有 Type System，同时处理的数据大部分时候都是 Columnar 的。</p>
+<p>Type &amp; Array System 本身不是很有花头的东西，主要考量的是某个编程语言下的：</p>
+<ol>
+<li>直接的平坦非变长数据的实现（这是最简单的一层，可能需要关注 alignas、内存管理等）、Null 的处理、读/写的接口</li>
+<li>String（等变长） 类型的处理</li>
+<li>Struct / Map / Array 等变长/嵌套类型的处理<ol>
+<li>nullable / nonnull 的逻辑的处理（这个逻辑并不简单，想象一下 <code>nullable struct&lt;list&lt;nonnull int&gt;&gt;</code>，那么怎么表示这样的结构</li>
+</ol>
+</li>
+<li>Union 等数据的处理（本质上其实有点类似变长 / 嵌套结构）</li>
+<li>各种编码的格式，比如 Dictionary / RLE 等 format。这里要考虑的是编码格式本身的抽象之类的。</li>
+</ol>
+<h2 id="Arrow"><a href="#Arrow" class="headerlink" title="Arrow"></a>Arrow</h2><p>Apache Arrow 将系统分为了好几层（ <a target="_blank" rel="noopener" href="https://arrow.apache.org/docs/cpp/overview.html">https://arrow.apache.org/docs/cpp/overview.html</a> ）：</p>
+<h3 id="Physical-Layer"><a href="#Physical-Layer" class="headerlink" title="Physical Layer"></a>Physical Layer</h3><p>Memory Management 物理的内存管理，涉及 <code>MemoryPool</code> , <code>Buffer</code> 系统</p>
+<ol>
+<li>Memory Pool 支持 JeMalloc MiMalloc 等 backend，也允许用户自己在上面包一层，比如用 <code>std::alloctor</code> 来当作系统的内存申请者，申请的内存<strong>默认 64B alignas</strong><ol>
+<li>Jemalloc, MiMalloc 有对应的 Pool，可以直接使用 Jemalloc 等 Pool 管理</li>
+<li>Memory Pool 接口类似 <code>std::allocator</code>，甚至有直接适配的，这两个还能互相适配，笑嘻了。反正 calloc 之类的是没有的，Free 和 <code>free</code> 也不完全对应，知道就行</li>
+<li>默认甚至是 System Allocator，就丢给 OS 了</li>
+</ol>
+</li>
+<li><code>MemoryManager</code> / <code>Device</code>:<ol>
+<li><code>Device</code> 是对专有内存和设备的抽象，目前只支持了 CPU Memory</li>
+<li><code>MemoryManager</code> 感觉也是在某个设备上的抽象，允许把内存 dump 到另外的 mm 中 (然而 <code>CPUMemoryManager</code> 包了一层 pool，真是惊人的大黑暗)</li>
+<li>上述的内容在这个 patch 中被引入：<a target="_blank" rel="noopener" href="https://github.com/apache/arrow/commit/9f0c70c8337b1a8c75df5cc9410b54e97351bfc0">https://github.com/apache/arrow/commit/9f0c70c8337b1a8c75df5cc9410b54e97351bfc0</a></li>
+<li>这个 Patch 提到了一些 GPU 内存的管理 <a target="_blank" rel="noopener" href="https://github.com/apache/arrow/pull/34972">https://github.com/apache/arrow/pull/34972</a></li>
+</ol>
+</li>
+<li><code>Buffer</code>: Arrow 的内存系统，有着一套类型树。<ol>
+<li><code>Buffer</code> 本身: 包含 <code>is_cpu</code> , <code>MemoryManager</code>, <code>is_mutable</code>, <code>data</code>, <code>capacity</code>, <code>parent</code>. 本身不管理内存，作为基类存在。Buffer 本身不关心 64B 对齐，但是 <code>MemoryPool</code> 造出来的可以当成是 64B 对齐的<ol>
+<li>认为 <code>size</code> 和 <code>capacity</code> 中间的内容是 padding 部分，允许 zero padding</li>
+<li><code>is_cpu</code> 并不完全代表这是 CPU. 是 CPU 的可以用 <code>data()</code> 拿到 <code>u8 pointer</code> ，否则只能用 <code>address</code> 拿到 <code>uintptr</code></li>
+<li>允许有一个 <code>shared_ptr&lt;Buffer&gt;</code> 作为父级关系</li>
+</ol>
+</li>
+<li><code>MutableBuffer</code>: Buffer 的子类，标注了一下 <code>is_mutable = true</code>，其他啥都没做</li>
+<li><code>ResizableBuffer</code>: <code>MutableBuffer</code> 的子类，接口上允许 Resize</li>
+<li>上面几个都是外部的接口，实际上「本身并不管理内存」，下面还有几个内部的实现：<ol>
+<li><code>PoolBuffer</code>: 和 <code>MemoryPool</code> 绑定的 Buffer<ol>
+<li>其实产生出来的，因为绑定了 <code>PoolBuffer</code>，所以事实上全是 Resizable 的</li>
+</ol>
+</li>
+<li><code>StlStringBuffer</code>: 包了一层 string</li>
+</ol>
+</li>
+<li>String 本身允许包一层 <code>shared_ptr</code> 然后丢给儿子，这样单层的继承关系，但是不允许多层的关系</li>
+</ol>
+</li>
+</ol>
+<h3 id="The-one-dimensional-layer"><a href="#The-one-dimensional-layer" class="headerlink" title="The one-dimensional layer"></a>The one-dimensional layer</h3><p>在我的这篇博客（ <a href="https://blog.mwish.me/2022/10/04/Parquet-Part2-arrow-Parquet-code-path/#Arrow-cheatsheet">https://blog.mwish.me/2022/10/04/Parquet-Part2-arrow-Parquet-code-path/#Arrow-cheatsheet</a> ） 贴了很多 arrow 的图，当时一直在解释这套东西，现在来看，我当时贴的图还是挺有质量的。后来 arrow 的一些进展我也可以补充到这篇博客里来。</p>
+<p><img src="https://image.mwish.me/blog-image/D113AFDFF7CD13071A3A407B9CED5CC3.png" alt="arrowType"></p>
+<p>除了上图，在一些新的提案中，arrow 也增加了新的类型，eg:</p>
+<ol>
+<li>REE: <a target="_blank" rel="noopener" href="https://arrow.apache.org/docs/format/Columnar.html#run-end-encoded-layout">https://arrow.apache.org/docs/format/Columnar.html#run-end-encoded-layout</a></li>
+<li>(提案中) ListView  <a target="_blank" rel="noopener" href="https://github.com/apache/arrow/pull/35345">https://github.com/apache/arrow/pull/35345</a></li>
+</ol>
+<p>我们先简短介绍一下这里的类型系统和对应的限制：</p>
+<ol>
+<li><code>DataType</code>: 类型系统，包含嵌套等方式</li>
+<li><code>Array</code>: 目前可以当作 POD 之类的东西的包装器，大部分是没有对象语义的</li>
+<li>(Extension) 扩展的类型系统和 Array</li>
+<li><strong>Chunked arrays</strong>: 物理不连续，逻辑上连续的 Array 序列。</li>
+<li>Scalar: (Typed) 单个类型的值</li>
+</ol>
+<p>我们简短介绍一下这些系统：</p>
+<p>DataType 包含 <code>DataType</code> ( 一个类型系统树 ) 和 <code>Schema</code> （具名，允许额外信息的 Schema）</p>
+<ol>
+<li><code>DataTypeLayout</code>: 递归的包含 Layout (定长、变长、全 NULL、Bitmap)</li>
+<li><code>DataType</code>: 可以是树形的、带有 PhysicalType (比如 Timestamp 实际使用 Int64) 的 array，子节点是 <code>Field</code><ol>
+<li>Arrow 的 Type 不包含 Nullable，并且 <strong>关联实际物理的 Layout</strong>，比如 <code>Dictionary</code> 甚至被抽了一个类型出来。然后可以用 Visitor 模式来访问类型树</li>
+<li><code>FixedWidthType is DataType</code> , <code>PrimitiveCType is FixedWidthType</code>，这里有一套对应的链路，然后 FP, Integer 什么的都是它</li>
+<li><code>NullType</code> 用来表示全 null 的</li>
+<li><code>BaseBinaryType is DataType</code>, 其余类型继承了它。注意我们之前说的，<code>LargeBinary</code> 和 <code>Binary</code> 之类的 offset 长度不同的，属于两个类型，<code>FixedSized</code> 也有自己的类型</li>
+<li>令人唏嘘的是，<code>DecimalType</code> 是 <code>FixedSizeBinaryType</code> 的子类…然后它还有 <code>Decimal128</code> 和 <code>Decimal256</code> 两个子类</li>
+<li><code>ParametricType</code> 是一个奇怪的类型标记，我现在还不知道这玩意有什么用</li>
+<li><code>NestedType</code> 是 <code>DataType</code> 和 <code>ParametricType</code> 的子类。儿子包含 <code>List</code> <code>Map</code> <code>Struct</code> 之类的</li>
+<li><code>Union</code> 也是 <code>NestedType</code></li>
+<li><code>DictionaryType</code> 是一种 <code>FixedWidthType</code>, 而 <code>RunEndEncodedType</code> 是一种 <code>NestedType</code></li>
+</ol>
+</li>
+<li><code>Field</code>: <code>(name, type, nullable, key-value metadata)</code>. 允许带子类型和 Flatten。嵌套的 <code>DataType</code> 儿子都是 <code>Field</code>.<ol>
+<li><code>FieldPath</code>: 一组 <code>schema-&gt;field(5)-&gt;type()-&gt;field(9)-&gt;type()-&gt;field(3)</code> 这样构成的 <code>&#123;5, 9, 3&#125;</code> 的 schema 上的路径</li>
+<li><code>FieldRef</code>: 相对于 <code>FieldPath</code>，还多一个 <code>FieldName</code> 用名称来寻址的语义</li>
+</ol>
+</li>
+<li><code>Schema</code>: 可以看作 <code>Endianness, &#123;Fields&#125;</code>, endianness 是为了读另一种 endian 的 Schema。一般结构的 Root 就是一个 Schema。<ol>
+<li>可以通过 Schema Builder 来构建 Schema</li>
+</ol>
+</li>
+</ol>
+<p>顺带一提这个 Layout 接口真的很直观，比如下面是 Binary 的 Layout</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">DataTypeLayout <span class="title">layout</span><span class="params">()</span> <span class="type">const</span> <span class="keyword">override</span> </span>&#123;</span><br><span class="line">  <span class="keyword">return</span> <span class="built_in">DataTypeLayout</span>(&#123;DataTypeLayout::<span class="built_in">Bitmap</span>(),</span><br><span class="line">                         DataTypeLayout::<span class="built_in">FixedWidth</span>(<span class="built_in">sizeof</span>(offset_type)),</span><br><span class="line">                         DataTypeLayout::<span class="built_in">VariableWidth</span>()&#125;);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>Array 的系统类似 Type，不过我老实说 Array 的 Mutable 还是挺蛋疼的，思考一个问题就是，Primitive Type 可以比较简单，平坦的搞出来，但是 Binary / List 之类的其实不太好搞。</p>
+<p>Array 本身的核心是 <code>ArrayData</code>, 它也是一个可以递归的类型，以组合的形式内嵌在 <code>Array</code> 中，Buffer 按照 Type 对应的 Layout 来排布。一般 <code>[0]</code> 是 validity bitmap，其他的随便。</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">  std::shared_ptr&lt;DataType&gt; type;</span><br><span class="line">  <span class="type">int64_t</span> length = <span class="number">0</span>;</span><br><span class="line">  <span class="keyword">mutable</span> std::atomic&lt;<span class="type">int64_t</span>&gt; null_count&#123;<span class="number">0</span>&#125;;</span><br><span class="line">  <span class="comment">// The logical start point into the physical buffers (in values, not bytes).</span></span><br><span class="line">  <span class="comment">// Note that, for child data, this must be *added* to the child data&#x27;s own offset.</span></span><br><span class="line">  <span class="type">int64_t</span> offset = <span class="number">0</span>;</span><br><span class="line">  std::vector&lt;std::shared_ptr&lt;Buffer&gt;&gt; buffers;</span><br><span class="line">  std::vector&lt;std::shared_ptr&lt;ArrayData&gt;&gt; child_data;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// The dictionary for this Array, if any. Only used for dictionary type</span></span><br><span class="line">  std::shared_ptr&lt;ArrayData&gt; dictionary;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p><code>Array</code> 基类是一个 <code>ArrayData</code> 的包装器，其他类型也不外如是，只是提供了很多相关的方法。或许我们需要额外关注 Flatten 的语义，这里子级别的 Validity 需要手动处理父级别的 Validity，这逻辑还是比较复杂的。</p>
+<p><code>Scalar</code> 和 <code>Array</code> 相反，语义上是一个单值，逻辑上差不多相当于用继承实现了一套 tagged enum，我感觉其实我不是很在意这一层的开销。</p>
+<p><code>Datum</code> 相当于一个泛用的类型，或许没有什么能比贴几行代码说的更清楚了：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// \class Datum</span></span><br><span class="line"><span class="comment">/// \brief Variant type for various Arrow C++ data structures</span></span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">ARROW_EXPORT</span> Datum &#123;</span><br><span class="line">  <span class="keyword">enum</span> <span class="title class_">Kind</span> &#123; NONE, SCALAR, ARRAY, CHUNKED_ARRAY, RECORD_BATCH, TABLE &#125;;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>就这样.</p>
+<h2 id="Velox"><a href="#Velox" class="headerlink" title="Velox"></a>Velox</h2><p>相对 Arrow 那套被很多地方用到的 Type，Velox 的 Type 一方面代码质量可能没那么读起来舒服，另一方面其实功能覆盖是广一些的。Velox 的内存管理 Hack 了一套 MemoryTracker，类型系统也更 “SQL”:</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// Velox type system supports a small set of SQL-compatible composeable types:</span></span><br><span class="line"><span class="comment">/// BOOLEAN, TINYINT, SMALLINT, INTEGER, BIGINT, REAL, DOUBLE, VARCHAR,</span></span><br><span class="line"><span class="comment">/// VARBINARY, TIMESTAMP, DATE, INTERVAL_DAY_TIME, ARRAY, MAP, ROW</span></span><br><span class="line"><span class="comment">///</span></span><br><span class="line"><span class="comment">/// This file has multiple C++ type definitions for each of these logical types.</span></span><br><span class="line"><span class="comment">/// These logical definitions each serve slightly different purposes.</span></span><br><span class="line"><span class="comment">/// These type sets are:</span></span><br><span class="line"><span class="comment">/// - TypeKind</span></span><br><span class="line"><span class="comment">/// - Type (RowType, BigIntType, ect.)</span></span><br><span class="line"><span class="comment">/// - Templated Types (Row&lt;T...&gt;, Map&lt;K, V&gt;, ...)</span></span><br><span class="line"><span class="comment">///     C++ templated classes. Never instantiated, used to pass limited type</span></span><br><span class="line"><span class="comment">///     information into template parameters.</span></span><br><span class="line"></span><br><span class="line"><span class="comment">/// Simple enum with type category.</span></span><br><span class="line"><span class="keyword">enum class</span> <span class="title class_">TypeKind</span> : <span class="type">int8_t</span> &#123;</span><br><span class="line">  BOOLEAN = <span class="number">0</span>,</span><br><span class="line">  TINYINT = <span class="number">1</span>,</span><br><span class="line">  SMALLINT = <span class="number">2</span>,</span><br><span class="line">  INTEGER = <span class="number">3</span>,</span><br><span class="line">  BIGINT = <span class="number">4</span>,</span><br><span class="line">  REAL = <span class="number">5</span>,</span><br><span class="line">  DOUBLE = <span class="number">6</span>,</span><br><span class="line">  VARCHAR = <span class="number">7</span>,</span><br><span class="line">  VARBINARY = <span class="number">8</span>,</span><br><span class="line">  TIMESTAMP = <span class="number">9</span>,</span><br><span class="line">  DATE = <span class="number">10</span>,</span><br><span class="line">  INTERVAL_DAY_TIME = <span class="number">11</span>,</span><br><span class="line">  SHORT_DECIMAL = <span class="number">12</span>,</span><br><span class="line">  LONG_DECIMAL = <span class="number">13</span>,</span><br><span class="line">  <span class="comment">// Enum values for ComplexTypes start after 30 to leave</span></span><br><span class="line">  <span class="comment">// some values space to accommodate adding new scalar/native</span></span><br><span class="line">  <span class="comment">// types above.</span></span><br><span class="line">  ARRAY = <span class="number">30</span>,</span><br><span class="line">  MAP = <span class="number">31</span>,</span><br><span class="line">  ROW = <span class="number">32</span>,</span><br><span class="line">  UNKNOWN = <span class="number">33</span>,</span><br><span class="line">  FUNCTION = <span class="number">34</span>,</span><br><span class="line">  OPAQUE = <span class="number">35</span>,</span><br><span class="line">  INVALID = <span class="number">36</span></span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>它的 Type 系统是一棵树，分别为 ScalarType 和别的复杂的复合类型：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// Abstract class hierarchy. Instances of these classes carry full</span></span><br><span class="line"><span class="comment">/// information about types, including for example field names.</span></span><br><span class="line"><span class="comment">/// Can be instantiated by factory methods, like INTEGER()</span></span><br><span class="line"><span class="comment">/// or MAP(INTEGER(), BIGINT()).</span></span><br><span class="line"><span class="comment">/// Instances of these classes form a tree, and are immutable.</span></span><br><span class="line"><span class="comment">/// For example, MAP&lt;INTEGER, ARRAY&lt;BIGINT&gt;&gt; will form a tree like:</span></span><br><span class="line"><span class="comment">///</span></span><br><span class="line"><span class="comment">///             MapType</span></span><br><span class="line"><span class="comment">///           /         \</span></span><br><span class="line"><span class="comment">///   IntegerType    ArrayType</span></span><br><span class="line"><span class="comment">///                     |</span></span><br><span class="line"><span class="comment">///                   BigintType</span></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">Type</span> : <span class="keyword">public</span> Tree&lt;<span class="type">const</span> std::shared_ptr&lt;<span class="type">const</span> Type&gt;&gt;,</span><br><span class="line">             <span class="keyword">public</span> velox::ISerializable &#123;</span><br></pre></td></tr></table></figure>
+<p>Velox 的 Buffer 自己做了一套侵入式的 RC，并由 MemoryTracker 记录内存，这套代码实现在 <code>velox/buffer/Buffer.h</code></p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">using</span> BufferPtr = boost::intrusive_ptr&lt;Buffer&gt;;</span><br></pre></td></tr></table></figure>
+<p>(一个有意思的 <code>intrusive_ptr</code> 使用，这里感觉上是节省了 <code>weak_ptr</code> 的内存开销)</p>
+<ol>
+<li>（在 <code>velox/buffer/Buffer.h</code>）Buffer: 可能由 MemoryTracker 来追溯内存的、允许 asMutable / <code>as&lt;T&gt;</code> 的 内存池，允许存放 non-pod type</li>
+<li>（内存管理的逻辑在 <code>velox/common/memory</code> 下面）MemoryPool: 可以有父级的树形结构，MemoryPool 分为 Leaf （具体的叶子结点）和 Aggregate（汇总节点）。这里并发上 children 由 <code>folly::SharedMutex</code> 维护，<code>parent_</code> 是不会变的，内存永远按照 alignas 申请。<strong>这段逻辑最近在重构，变动比较大，我这版本理解基于 <a target="_blank" rel="noopener" href="https://github.com/facebookincubator/velox/commit/c82d9f9bd335c6411fcc1f1f99c5d82796535733">https://github.com/facebookincubator/velox/commit/c82d9f9bd335c6411fcc1f1f99c5d82796535733</a></strong> <ol>
+<li><code>MemoryPoolImpl</code> 是 <code>MemoryPool</code> 实际使用的逻辑，它的内存添加会走一把锁（还是 <code>std::mutex</code>，我日）。它自己有一组统计信息，同时绑定了一个 <code>MemoryManager</code></li>
+<li><code>MemoryManager</code> 几乎是类似单例的全局内存分配器，它有一个单例，然后可以根据他产生 <code>MemoryPool</code> 和绑定 <code>MemoryPool</code></li>
+<li><code>MemoryArbitrator</code> 是一个 <code>MemoryManager</code> 中的怪东西，感觉上类似一个 burst 内存处理器。当内存不够的时候，可以根据 <code>MemoryArbitrator</code> 去向别的地方租借内存</li>
+<li><code>MemoryReclaimer</code> 是 <code>MemoryArbitrator</code> 的 RAII 包装器，负责借/还内存的管理</li>
+</ol>
+</li>
+</ol>
+<p>这里有个 Hacking 的地方是，MemoryPool 自己和父级别 allocate 一遍还要去 MemoryManager 搞一遍，感觉是因为各种地方的上限不是简单硬从父亲那里分配多少，而是每个级别有一些内存，然后允许去 steal。</p>
+<p>和 Arrow 不一样，Velox 的 Vector 和类型和物理的 Layout 没有直接对应。</p>
+<p>这里给 Vector 提供了不同的 Encoding 方式：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * Provides an enumeration of vector encoding types.</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="keyword">enum class</span> <span class="title class_">Simple</span> &#123;</span><br><span class="line">  BIASED,</span><br><span class="line">  CONSTANT,</span><br><span class="line">  DICTIONARY,</span><br><span class="line">  FLAT,</span><br><span class="line">  SEQUENCE,</span><br><span class="line">  ROW,</span><br><span class="line">  MAP,</span><br><span class="line">  ARRAY,</span><br><span class="line">  LAZY,</span><br><span class="line">  FUNCTION</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>Velox 的 null 也是个 bitmap。值得一提的是，Velox 代码中 <code>BaseVector</code> 都快有 1000 行了，我们先看点简单的内容：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">const</span> TypePtr type_;</span><br><span class="line"><span class="type">const</span> TypeKind typeKind_;</span><br><span class="line"><span class="type">const</span> VectorEncoding::Simple encoding_;</span><br><span class="line">BufferPtr nulls_;</span><br><span class="line"><span class="comment">// Caches raw pointer to &#x27;nulls-&gt;as&lt;uint64_t&gt;().</span></span><br><span class="line"><span class="type">const</span> <span class="type">uint64_t</span>* rawNulls_ = <span class="literal">nullptr</span>;</span><br><span class="line">velox::memory::MemoryPool* pool_;</span><br><span class="line"><span class="type">vector_size_t</span> length_ = <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * Holds the number of nulls in the vector. If the number of nulls</span></span><br><span class="line"><span class="comment"> * is not available, it is set to std::nullopt. Setting the value to</span></span><br><span class="line"><span class="comment"> * zero does have implications (SIMD operations need null count to be</span></span><br><span class="line"><span class="comment"> * zero) and is not the same as std::nullopt.</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line">std::optional&lt;<span class="type">vector_size_t</span>&gt; nullCount_;</span><br><span class="line">std::optional&lt;<span class="type">vector_size_t</span>&gt; distinctValueCount_;</span><br><span class="line">std::optional&lt;ByteCount&gt; representedByteCount_;</span><br><span class="line">std::optional&lt;ByteCount&gt; storageByteCount_;</span><br><span class="line">ByteCount inMemoryBytes_ = <span class="number">0</span>;</span><br></pre></td></tr></table></figure>
+<p>这些是它的成员，这里没有处理数据，但是包装了很多 <code>wrap</code> 之类的反解方法。这里上面再套了一层 <code>SimpleVector</code>:</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// This class abstracts over various Columnar Storage Formats such that Velox</span></span><br><span class="line"><span class="comment">// can select the most appropriate one on a per field / per block basis.</span></span><br><span class="line"><span class="comment">// The goal is to use the most appropriate type to optimize for:</span></span><br><span class="line"><span class="comment">//   - Lazy deserialization if desired.</span></span><br><span class="line"><span class="comment">//   - serialization / rehydration cost, ideally we use a smart view into the</span></span><br><span class="line"><span class="comment">//     data without fully rehydrating.</span></span><br><span class="line"><span class="comment">//   - serialized bytes</span></span><br><span class="line"><span class="comment">//   - cpu cost of filtering</span></span><br><span class="line"><span class="comment">//   - optimize aggregation of sequential values</span></span><br><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T&gt;</span><br><span class="line"><span class="keyword">class</span> <span class="title class_">SimpleVector</span> : <span class="keyword">public</span> BaseVector &#123;</span><br><span class="line"> <span class="keyword">public</span>:</span><br><span class="line">  <span class="built_in">SimpleVector</span>(</span><br><span class="line">      velox::memory::MemoryPool* pool,</span><br><span class="line">      TypePtr type,</span><br><span class="line">      VectorEncoding::Simple encoding,</span><br><span class="line">      BufferPtr nulls,</span><br><span class="line">      <span class="type">size_t</span> length,</span><br><span class="line">      <span class="type">const</span> SimpleVectorStats&lt;T&gt;&amp; stats,</span><br><span class="line">      std::optional&lt;<span class="type">vector_size_t</span>&gt; distinctValueCount,</span><br><span class="line">      std::optional&lt;<span class="type">vector_size_t</span>&gt; nullCount,</span><br><span class="line">      std::optional&lt;<span class="type">bool</span>&gt; isSorted,</span><br><span class="line">      std::optional&lt;ByteCount&gt; representedByteCount,</span><br><span class="line">      std::optional&lt;ByteCount&gt; storageByteCount = std::<span class="literal">nullopt</span>)</span><br><span class="line">      : <span class="built_in">BaseVector</span>(</span><br><span class="line">            pool,</span><br><span class="line">            std::<span class="built_in">move</span>(type),</span><br><span class="line">            encoding,</span><br><span class="line">            std::<span class="built_in">move</span>(nulls),</span><br><span class="line">            length,</span><br><span class="line">            distinctValueCount,</span><br><span class="line">            nullCount,</span><br><span class="line">            representedByteCount,</span><br><span class="line">            storageByteCount),</span><br><span class="line">        <span class="built_in">isSorted_</span>(isSorted),</span><br><span class="line">        <span class="built_in">elementSize_</span>(<span class="built_in">sizeof</span>(T)),</span><br><span class="line">        <span class="built_in">stats_</span>(stats) &#123;&#125;</span><br></pre></td></tr></table></figure>
+<p>SimpleVector 有几个不同的子类，对应文档里的编码：</p>
+<ol>
+<li>Constant</li>
+<li>Bias (Delta + Base)</li>
+<li>Dictionary</li>
+<li>Flat (啥都没有)</li>
+<li>Sequence (RLE)</li>
+</ol>
+<p>复杂类型的处理逻辑和 Arrow 差别很大，见：<a target="_blank" rel="noopener" href="https://facebookincubator.github.io/velox/develop/vectors.html#flat-vectors-complex-types">https://facebookincubator.github.io/velox/develop/vectors.html#flat-vectors-complex-types</a></p>
+<p>对 Null 处理而言，区别有：</p>
+<p>Struct</p>
+<blockquote>
+<p>Child vectors may include nulls buffers of their own, therefore, it is possible to have a non-null top-level struct value with some or all child fields being null. A null struct is not the same as a struct with all its fields being null. Values of child fields for rows where the top-level struct is null are undefined.</p>
+</blockquote>
+<p>Map:</p>
+<blockquote>
+<p>Null map and empty map are not the same.</p>
+<p>Keys and values vectors may have nulls buffer independent of each other and of the nulls buffer of the map vector itself. This allows us to specify non-null maps with some or all values being null. Technically speaking a map may have a null key as well, although this may not be very useful in practice. Null map and a map with all values being null are not the same.</p>
+<p>Map vector layout does not guarantee or require that keys of individual maps are unique. However, in practice, places which create maps, e.g. ORC and Parquet readers, <a target="_blank" rel="noopener" href="https://facebookincubator.github.io/velox/functions/presto/map.html#id0"><code>map()</code></a> function, etc., ensure that map keys are unique.</p>
+</blockquote>
+<p>Array:</p>
+<blockquote>
+<p>Null array and empty array are not the same.</p>
+<p>Elements vector may have a nulls buffer independent of the nulls buffer of the array vector itself. This allows us to specify non-null arrays with some or all null elements. Null array and array of all null elements are not the same.</p>
+</blockquote>
+<p>总之，这块语义本身也需要一定 checking。</p>
+<h2 id="ClickHouse"><a href="#ClickHouse" class="headerlink" title="ClickHouse"></a>ClickHouse</h2><p>内存见  <a target="_blank" rel="noopener" href="https://www.jianshu.com/p/4b15fae5d400">https://www.jianshu.com/p/4b15fae5d400</a> ，比较值得借鉴的地方是各种 Hook</p>
+<p>相关的 Doris 也可以见 <a target="_blank" rel="noopener" href="https://cwiki.apache.org/confluence/display/DORIS/DSIP-002%3A+Refactor+memory+tracker+on+BE">https://cwiki.apache.org/confluence/display/DORIS/DSIP-002%3A+Refactor+memory+tracker+on+BE</a></p>
+<h2 id="Reference"><a href="#Reference" class="headerlink" title="Reference"></a>Reference</h2><ol>
+<li>Arrow 的介绍：<a target="_blank" rel="noopener" href="https://arrow.apache.org/docs/cpp/arrays.html">https://arrow.apache.org/docs/cpp/arrays.html</a></li>
+<li>向量化的查询引擎里使用Bitmap还是Select Vectors表示过滤后的结果更优？ - 码上DX3906的回答 - 知乎 <a target="_blank" rel="noopener" href="https://www.zhihu.com/question/546231083/answer/2601582280">https://www.zhihu.com/question/546231083/answer/2601582280</a></li>
+<li>ClickHouse 的内存管理: <a target="_blank" rel="noopener" href="https://www.jianshu.com/p/4b15fae5d400">https://www.jianshu.com/p/4b15fae5d400</a></li>
+<li>Jemalloc: <a target="_blank" rel="noopener" href="https://jemalloc.net/jemalloc.3.html">https://jemalloc.net/jemalloc.3.html</a> (<code>sallocx</code> 等)</li>
+<li>Doris 内存管理：<a target="_blank" rel="noopener" href="https://cwiki.apache.org/confluence/display/DORIS/DSIP-002%3A+Refactor+memory+tracker+on+BE">https://cwiki.apache.org/confluence/display/DORIS/DSIP-002%3A+Refactor+memory+tracker+on+BE</a></li>
+</ol>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Arrow"><span class="toc-number">1.</span> <span class="toc-text">Arrow</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Physical-Layer"><span class="toc-number">1.1.</span> <span class="toc-text">Physical Layer</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#The-one-dimensional-layer"><span class="toc-number">1.2.</span> <span class="toc-text">The one-dimensional layer</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Velox"><span class="toc-number">2.</span> <span class="toc-text">Velox</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#ClickHouse"><span class="toc-number">3.</span> <span class="toc-text">ClickHouse</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Reference"><span class="toc-number">4.</span> <span class="toc-text">Reference</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2023/05/04/Type-and-Array-in-Columnar-System/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2023/05/04/Type-and-Array-in-Columnar-System/&text=Type and Array in Columnar System"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2023/05/04/Type-and-Array-in-Columnar-System/&title=Type and Array in Columnar System"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2023/05/04/Type-and-Array-in-Columnar-System/&is_video=false&description=Type and Array in Columnar System"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Type and Array in Columnar System&body=Check out this article: http://blog.mwish.me/2023/05/04/Type-and-Array-in-Columnar-System/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2023/05/04/Type-and-Array-in-Columnar-System/&title=Type and Array in Columnar System"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2023/05/04/Type-and-Array-in-Columnar-System/&title=Type and Array in Columnar System"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2023/05/04/Type-and-Array-in-Columnar-System/&title=Type and Array in Columnar System"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2023/05/04/Type-and-Array-in-Columnar-System/&title=Type and Array in Columnar System"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2023/05/04/Type-and-Array-in-Columnar-System/&name=Type and Array in Columnar System&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2023/05/04/Type-and-Array-in-Columnar-System/&t=Type and Array in Columnar System"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

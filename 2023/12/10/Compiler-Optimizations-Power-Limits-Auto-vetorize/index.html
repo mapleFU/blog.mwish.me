@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="本文是系列文章的第三篇，前两篇文章：  x86 and SIMD programming Part0: Background https:&#x2F;&#x2F;blog.mwish.me&#x2F;2022&#x2F;11&#x2F;05&#x2F;x86-and-SIMD-programming&#x2F; Part0.5: https:&#x2F;&#x2F;blog.mwish.me&#x2F;2023&#x2F;11&#x2F;15&#x2F;Fast-Scalar-Code-and-Compiler&#x2F;  本篇其实">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Compiler Optimizations: Power, Limits, Auto-vetorize">
+<meta property="og:url" content="http://blog.mwish.me/2023/12/10/Compiler-Optimizations-Power-Limits-Auto-vetorize/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="本文是系列文章的第三篇，前两篇文章：  x86 and SIMD programming Part0: Background https:&#x2F;&#x2F;blog.mwish.me&#x2F;2022&#x2F;11&#x2F;05&#x2F;x86-and-SIMD-programming&#x2F; Part0.5: https:&#x2F;&#x2F;blog.mwish.me&#x2F;2023&#x2F;11&#x2F;15&#x2F;Fast-Scalar-Code-and-Compiler&#x2F;  本篇其实">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/5232900845989570722.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/1919209245906864678.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/147086212116536191.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/3046202342352512391.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/1492060510279710289.png">
+<meta property="article:published_time" content="2023-12-10T15:36:29.000Z">
+<meta property="article:modified_time" content="2023-12-30T12:21:00.905Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/5232900845989570722.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>Compiler Optimizations: Power, Limits, Auto-vetorize</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2023/12/30/Strict-Alias-and-Type-Punning/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2023/11/15/Fast-Scalar-Code-and-Compiler/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2023/12/10/Compiler-Optimizations-Power-Limits-Auto-vetorize/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2023/12/10/Compiler-Optimizations-Power-Limits-Auto-vetorize/&text=Compiler Optimizations: Power, Limits, Auto-vetorize"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2023/12/10/Compiler-Optimizations-Power-Limits-Auto-vetorize/&title=Compiler Optimizations: Power, Limits, Auto-vetorize"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2023/12/10/Compiler-Optimizations-Power-Limits-Auto-vetorize/&is_video=false&description=Compiler Optimizations: Power, Limits, Auto-vetorize"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Compiler Optimizations: Power, Limits, Auto-vetorize&body=Check out this article: http://blog.mwish.me/2023/12/10/Compiler-Optimizations-Power-Limits-Auto-vetorize/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2023/12/10/Compiler-Optimizations-Power-Limits-Auto-vetorize/&title=Compiler Optimizations: Power, Limits, Auto-vetorize"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2023/12/10/Compiler-Optimizations-Power-Limits-Auto-vetorize/&title=Compiler Optimizations: Power, Limits, Auto-vetorize"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2023/12/10/Compiler-Optimizations-Power-Limits-Auto-vetorize/&title=Compiler Optimizations: Power, Limits, Auto-vetorize"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2023/12/10/Compiler-Optimizations-Power-Limits-Auto-vetorize/&title=Compiler Optimizations: Power, Limits, Auto-vetorize"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2023/12/10/Compiler-Optimizations-Power-Limits-Auto-vetorize/&name=Compiler Optimizations: Power, Limits, Auto-vetorize&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2023/12/10/Compiler-Optimizations-Power-Limits-Auto-vetorize/&t=Compiler Optimizations: Power, Limits, Auto-vetorize"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BC%96%E8%AF%91%E5%99%A8%E7%9A%84%E4%BC%98%E5%8C%96%E5%92%8C%E9%99%90%E5%88%B6"><span class="toc-number">1.</span> <span class="toc-text">编译器的优化和限制</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#LLVM-Auto-Vectorization"><span class="toc-number">2.</span> <span class="toc-text">LLVM Auto-Vectorization</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#References"><span class="toc-number">3.</span> <span class="toc-text">References</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Compiler Optimizations: Power, Limits, Auto-vetorize
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2023-12-10T15:36:29.000Z" itemprop="datePublished">2023-12-10</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>本文是系列文章的第三篇，前两篇文章：</p>
+<ul>
+<li><strong>x86 and SIMD programming Part0: Background</strong> <a href="https://blog.mwish.me/2022/11/05/x86-and-SIMD-programming/">https://blog.mwish.me/2022/11/05/x86-and-SIMD-programming/</a></li>
+<li>Part0.5: <a href="https://blog.mwish.me/2023/11/15/Fast-Scalar-Code-and-Compiler/">https://blog.mwish.me/2023/11/15/Fast-Scalar-Code-and-Compiler/</a></li>
+</ul>
+<p>本篇其实还没到 Part 1，估计算是 0.8 了。本篇文章会介绍编译器能够做的一些优化和优化的限制，然后介绍 LLVM 的 Auto-vectorize。下一期会开始介绍 AVX2。</p>
+<p>在 part-0.5 中，我们介绍了使用手写 Fast-Scalar 代码的例子和代码。实际上，在 llvm 需要复现类似的测试结果，需要关掉 LLVM Auto-vectorize，因为后者可能会帮助生成一些相似的代码。这就是编译器的魅力。但是你会发现，开不开对于浮点数都是没有区别的，我们之后会介绍，浮点数的计算因为受到精度之类的东西的影响，在没有 <code>-ffast-math</code> 的情况下，很多优化浮点数是不让做的。（说个和本题无关的，昨天看 patch 的时候竟然发现 C++20 之前 unsigned 整数转 signed 是<strong>实现定义</strong>的…而且实现定义和 ub 还不是一回事，这个震撼我心了）</p>
+<p>这篇的主要材料来源于 Matt Godbolt 的博客和 Ethz / CMU 的课件. 本文本来11月就该写完了，因为我加班加的有点烦，中间摆烂了很长一阵子，这两天回家缓了缓才觉得应该干活了。拖了很久实在不好意思…</p>
+<h2 id="编译器的优化和限制"><a href="#编译器的优化和限制" class="headerlink" title="编译器的优化和限制"></a>编译器的优化和限制</h2><p>编译器能够进行很多有效的优化，但是其中也有很多限制。「意识」到编译器能够进行的优化有助于我们写出快速的代码，同时，也让我们不至于因为性能搞得代码看上去特别搓。</p>
+<p>简单的说，我个人总结就是：</p>
+<ul>
+<li>编译器会尝试替换昂贵的操作</li>
+<li>编译器知道的比较多就能更好作出优化（参考 LTO、PGO）</li>
+</ul>
+<p>具体可见： <a target="_blank" rel="noopener" href="https://dl.acm.org/doi/10.1145/3371595.3372264">https://dl.acm.org/doi/10.1145/3371595.3372264</a></p>
+<p>有个比较好玩的，作者写的关于 LTO 的话：</p>
+<blockquote>
+<p>Despite being a relatively established technology (I used LTCG in the early 2000s on the original Xbox), I’ve been surprised how few projects use LTO. In part this may be because programmers unintentionally rely on undefined behavior that becomes apparent only when the compiler gets more visibility: I know I’ve been guilty of this.</p>
+</blockquote>
+<p>只能说 Godbolt 中肯。function call 通常是阻碍优化的部分，这个可能包括的部分有很多，你得知道函数是不是 <code>pure</code> 的，参数是否是 <code>const</code> 的，会不会修改你的参数。里面是否有原子操作之类的东西，会有那种禁止你 ordering 的东西。inline 之类的。这方面有 LTO 的话会方便很多（毕竟你自己优化能优化到哪去呢？）</p>
+<p>这里还是建议直接看原帖，原帖重要部分是给了几个优化的实际例子，我还是比较建议通读完的，这里还有个重点是浮点数：</p>
+<blockquote>
+<p>This does rely on the fact that separating the totals into individual subtotals and then summing at the end is equivalent to adding them in the order the program specified. For integers, this is trivially true; but for floating-point data types this is not the case. Floating point operations are not associative: (a+b)+c is not the same as a+(b+c), as—among other things—the precision of the result of an addition depends on the relative magnitude of the two inputs.</p>
+</blockquote>
+<p>浮点数的操作都和很多东西相关，不开 <code>-ffast-math</code> 之类的其实不好优化的。因为编译器还是<strong>在不修改程序的语义下进行优化</strong>的。</p>
+<p>文章中还有几个比较重要的部分：</p>
+<ul>
+<li>乘法、除法的优化</li>
+<li>de-virtualization (用好 <code>final</code> ) ，这个也可见博客 [4] ( <a target="_blank" rel="noopener" href="https://quuxplusone.github.io/blog/2021/02/15/devirtualization/">https://quuxplusone.github.io/blog/2021/02/15/devirtualization/</a>  )</li>
+</ul>
+<p>当然，乱优化浮点数可能会产生非预期的结果，比如 NaN 的处理可能会产生一些非预期的行为。</p>
+<p>此外，影响优化的一点包括 memory alias:</p>
+<p><img src="https://image.mwish.me/blog-image/5232900845989570722.png" alt="img"></p>
+<p>这种不确定 alias 的情况下，可能不是特别好优化，可能编译器会加上一些 flag 或者 Runtime Flag，但我理解有来自用户的先验知识，能够帮助编译器没有负担的产生更快的代码。</p>
+<p><img src="https://image.mwish.me/blog-image/1919209245906864678.png" alt="img"></p>
+<p>当然，你有一些宏可以用上，这里可能也可以帮助你来展开循环，比如 <code>#pragma ivdep</code></p>
+<p><img src="https://image.mwish.me/blog-image/147086212116536191.png" alt="img"></p>
+<h2 id="LLVM-Auto-Vectorization"><a href="#LLVM-Auto-Vectorization" class="headerlink" title="LLVM Auto-Vectorization"></a>LLVM Auto-Vectorization</h2><p>15-721 的课件有一张比较有意思的图，但这张图实际上是错误的，编译器在这方面其实还是蛮聪明的：</p>
+<p><img src="https://image.mwish.me/blog-image/3046202342352512391.png" alt="img"></p>
+<p>LLVM 有一种 Runtime checks of pointers 的能力，它会编码一个 Runtime 的 checking，如下。</p>
+<p><a target="_blank" rel="noopener" href="https://llvm.org/docs/Vectorizers.html#runtime-checks-of-pointers">https://llvm.org/docs/Vectorizers.html#runtime-checks-of-pointers</a></p>
+<p>我希望我们能回忆起来上一节的优化内容，上一节里面我们展示了一个手动的对非向量化代码的优化：<a href="https://blog.mwish.me/2023/11/15/Fast-Scalar-Code-and-Compiler/#Parquet-BYTE-STREAM-SPLIT-%E5%8A%A0%E9%80%9F">https://blog.mwish.me/2023/11/15/Fast-Scalar-Code-and-Compiler/#Parquet-BYTE-STREAM-SPLIT-%E5%8A%A0%E9%80%9F</a></p>
+<p>我们可以看到上述优化的代码的一些思路：</p>
+<ol>
+<li>拆分计算，把 vectorize 的计算拆分成为一组计算 Load 一大组 —&gt; 对这组数据进行计算 —&gt; Store 内存</li>
+<li>如果是 SIMD 或者利用指令级并行，那么计算出某个核心的计算逻辑对应的 port 数，然后去并行执行它们</li>
+<li>上述操作如果是在 TP 点查操作中其实不一定划得来，因为没几个操作跟你并行，即使是 TableScan -&gt; Filter 这种也是。但是可能 AP 这种 workload 本身就有一大批数据需要计算的，所以可以拆分成这样每个 batch 批量执行的计算。这个批量大小和 CPU、Port、访存操作有关。如果输入数 % batchSize 还有剩余的话，可能会需要接一个 non-vectorize 的 epilogue</li>
+</ol>
+<p>比较有趣的事，LLVM 自动向量化会尝试产生一个类似下列的结构：</p>
+<ul>
+<li>Vectorize Body</li>
+<li>Vector Epilogue</li>
+<li>Scalar Epilogue</li>
+</ul>
+<p><img src="https://image.mwish.me/blog-image/1492060510279710289.png" alt="img"></p>
+<p>LLVM 会按照上述内容来优化。知道这个之后，我们去看看 LLVM 官方的 Vectorize 文档：<a target="_blank" rel="noopener" href="https://llvm.org/docs/Vectorizers.html#features">https://llvm.org/docs/Vectorizers.html#features</a></p>
+<p>下列的代码是可以 vectorize 的</p>
+<ul>
+<li>Loops with unknown trip count</li>
+</ul>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">bar</span><span class="params">(<span class="type">float</span> *A, <span class="type">float</span>* B, <span class="type">float</span> K, <span class="type">int</span> start, <span class="type">int</span> end)</span> </span>&#123;  </span><br><span class="line">    <span class="keyword">for</span> (<span class="type">int</span> i = start; i &lt; end; ++i)    </span><br><span class="line">        A[i] *= B[i] + K;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<ul>
+<li>Reductions</li>
+</ul>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">int</span> <span class="title">foo</span><span class="params">(<span class="type">int</span> *A, <span class="type">int</span> n)</span> </span>&#123;</span><br><span class="line">  <span class="type">unsigned</span> sum = <span class="number">0</span>;</span><br><span class="line">  <span class="keyword">for</span> (<span class="type">int</span> i = <span class="number">0</span>; i &lt; n; ++i)</span><br><span class="line">    sum += A[i] + <span class="number">5</span>;</span><br><span class="line">  <span class="keyword">return</span> sum;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这里如果是 Reductions ，那么 add, xor 之类的操作，它会抽出一个 vectorize 组（类似 <code>unsigned[dop] sum</code> )，然后在上面操作的时候，避免操作同一个值。注意这里对浮点数是不能这样操作的（除非开了 <code>-ffast-math</code>）</p>
+<ul>
+<li>Inductions</li>
+</ul>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">bar</span><span class="params">(<span class="type">float</span> *A, <span class="type">int</span> n)</span> </span>&#123;</span><br><span class="line">  <span class="keyword">for</span> (<span class="type">int</span> i = <span class="number">0</span>; i &lt; n; ++i)</span><br><span class="line">    A[i] = i;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这种能向量化（好像很合理）</p>
+<ul>
+<li>If Conversion</li>
+</ul>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">int</span> <span class="title">foo</span><span class="params">(<span class="type">int</span> *A, <span class="type">int</span> *B, <span class="type">int</span> n)</span> </span>&#123;</span><br><span class="line">  <span class="type">unsigned</span> sum = <span class="number">0</span>;</span><br><span class="line">  <span class="keyword">for</span> (<span class="type">int</span> i = <span class="number">0</span>; i &lt; n; ++i)</span><br><span class="line">    <span class="keyword">if</span> (A[i] &gt; B[i])</span><br><span class="line">      sum += A[i] + <span class="number">5</span>;</span><br><span class="line">  <span class="keyword">return</span> sum;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>control flow in the innermost loop 这里可以 vectorize，这里可以参考博客：<a target="_blank" rel="noopener" href="https://sbaziotis.com/performance/a-beginners-guide-to-vectorization-by-hand-part-3.html">https://sbaziotis.com/performance/a-beginners-guide-to-vectorization-by-hand-part-3.html</a></p>
+<ul>
+<li>Pointer Induction Variables</li>
+</ul>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">int</span> <span class="title">baz</span><span class="params">(<span class="type">int</span> *A, <span class="type">int</span> n)</span> </span>&#123;</span><br><span class="line">  <span class="keyword">return</span> std::<span class="built_in">accumulate</span>(A, A + n, <span class="number">0</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>对指针和标准库能很好处理</p>
+<ul>
+<li>Reverse Iterators</li>
+</ul>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">foo</span><span class="params">(<span class="type">int</span> *A, <span class="type">int</span> n)</span> </span>&#123;</span><br><span class="line">  <span class="keyword">for</span> (<span class="type">int</span> i = n; i &gt; <span class="number">0</span>; --i)</span><br><span class="line">    A[i] +=<span class="number">1</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>对反向操作很好处理(跟 rsy 聊的时候他还告诉我 reverse 方向的 prefetch 可能不如正向的 prefetch，学到很多）</p>
+<ul>
+<li>Scatter / Gatter</li>
+</ul>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">foo</span><span class="params">(<span class="type">int</span> * A, <span class="type">int</span> * B, <span class="type">int</span> n)</span> </span>&#123;</span><br><span class="line">  <span class="keyword">for</span> (<span class="type">intptr_t</span> i = <span class="number">0</span>; i &lt; n; ++i)</span><br><span class="line">    A[i] += B[i * <span class="number">4</span>];</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p><code>-mllvm -force-vector-width=#</code> 的情况下这里才会开启，因为它可能发现 cost 划不来</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://llvm.org/docs/Vectorizers.html#vectorization-of-mixed-types">https://llvm.org/docs/Vectorizers.html#vectorization-of-mixed-types</a></li>
+</ul>
+<p>多种类型的混合会根据代价来估计</p>
+<ul>
+<li>Partial unrolling during vectorization</li>
+</ul>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">int</span> <span class="title">foo</span><span class="params">(<span class="type">int</span> *A, <span class="type">int</span> n)</span> </span>&#123;</span><br><span class="line">  <span class="type">unsigned</span> sum = <span class="number">0</span>;</span><br><span class="line">  <span class="keyword">for</span> (<span class="type">int</span> i = <span class="number">0</span>; i &lt; n; ++i)</span><br><span class="line">    sum += A[i];</span><br><span class="line">  <span class="keyword">return</span> sum;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这个长得和前面 Reduction 很像，但这里是说，会按照 port 的数量，来拆分并行度。</p>
+<p>这些只是我选了想记住的一部分，需要知道具体细节可以浏览原来的文档。</p>
+<h2 id="References"><a href="#References" class="headerlink" title="References"></a>References</h2><ul>
+<li>Matt Godbolt 的 C++ Optimizations <a target="_blank" rel="noopener" href="https://dl.acm.org/doi/10.1145/3371595.3372264">https://dl.acm.org/doi/10.1145/3371595.3372264</a> 和大佬的翻译 <a target="_blank" rel="noopener" href="https://fuzhe1989.github.io/2020/01/22/optimizations-in-cpp-compilers/">https://fuzhe1989.github.io/2020/01/22/optimizations-in-cpp-compilers/</a> . 这一篇的介绍非常好</li>
+<li>Ethz Fastcode 05: <a target="_blank" rel="noopener" href="https://acl.inf.ethz.ch/teaching/fastcode/2023/slides/05-compiler-limitations.pdf">https://acl.inf.ethz.ch/teaching/fastcode/2023/slides/05-compiler-limitations.pdf</a></li>
+<li>CMU 15-721 2023 <a target="_blank" rel="noopener" href="https://15721.courses.cs.cmu.edu/spring2023/slides/08-vectorization.pdf">https://15721.courses.cs.cmu.edu/spring2023/slides/08-vectorization.pdf</a></li>
+<li><a target="_blank" rel="noopener" href="https://quuxplusone.github.io/blog/2021/02/15/devirtualization/">https://quuxplusone.github.io/blog/2021/02/15/devirtualization/</a> Author 的去虚拟化博客</li>
+<li><a target="_blank" rel="noopener" href="https://llvm.org/docs/Vectorizers.html#features">https://llvm.org/docs/Vectorizers.html#features</a> LLVM Vectorize</li>
+<li><a target="_blank" rel="noopener" href="https://sbaziotis.com/">https://sbaziotis.com/</a></li>
+</ul>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BC%96%E8%AF%91%E5%99%A8%E7%9A%84%E4%BC%98%E5%8C%96%E5%92%8C%E9%99%90%E5%88%B6"><span class="toc-number">1.</span> <span class="toc-text">编译器的优化和限制</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#LLVM-Auto-Vectorization"><span class="toc-number">2.</span> <span class="toc-text">LLVM Auto-Vectorization</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#References"><span class="toc-number">3.</span> <span class="toc-text">References</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2023/12/10/Compiler-Optimizations-Power-Limits-Auto-vetorize/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2023/12/10/Compiler-Optimizations-Power-Limits-Auto-vetorize/&text=Compiler Optimizations: Power, Limits, Auto-vetorize"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2023/12/10/Compiler-Optimizations-Power-Limits-Auto-vetorize/&title=Compiler Optimizations: Power, Limits, Auto-vetorize"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2023/12/10/Compiler-Optimizations-Power-Limits-Auto-vetorize/&is_video=false&description=Compiler Optimizations: Power, Limits, Auto-vetorize"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Compiler Optimizations: Power, Limits, Auto-vetorize&body=Check out this article: http://blog.mwish.me/2023/12/10/Compiler-Optimizations-Power-Limits-Auto-vetorize/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2023/12/10/Compiler-Optimizations-Power-Limits-Auto-vetorize/&title=Compiler Optimizations: Power, Limits, Auto-vetorize"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2023/12/10/Compiler-Optimizations-Power-Limits-Auto-vetorize/&title=Compiler Optimizations: Power, Limits, Auto-vetorize"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2023/12/10/Compiler-Optimizations-Power-Limits-Auto-vetorize/&title=Compiler Optimizations: Power, Limits, Auto-vetorize"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2023/12/10/Compiler-Optimizations-Power-Limits-Auto-vetorize/&title=Compiler Optimizations: Power, Limits, Auto-vetorize"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2023/12/10/Compiler-Optimizations-Power-Limits-Auto-vetorize/&name=Compiler Optimizations: Power, Limits, Auto-vetorize&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2023/12/10/Compiler-Optimizations-Power-Limits-Auto-vetorize/&t=Compiler Optimizations: Power, Limits, Auto-vetorize"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

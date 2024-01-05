@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="ORM 和 SQL 备忘今天被上头派去写 SQL, 发现自己把 SQL 忘光了，把以前做的笔记翻出来看了一遍。 这篇文章写的很丢人，纯当作备忘了… MySQL &amp; SQLAlchemy: 查询1概念基础查询查询可以从mysql查询出一个或多个列 可以多列，甚至用 * 指定多列查询 用SELECT DISTINCT col FROM table 指定不同的行 用limit指定搜索的结果, 可">
+<meta property="og:type" content="article">
+<meta property="og:title" content="SQL &amp; ORM notes">
+<meta property="og:url" content="http://blog.mwish.me/2020/07/17/SQL-ORM-notes/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="ORM 和 SQL 备忘今天被上头派去写 SQL, 发现自己把 SQL 忘光了，把以前做的笔记翻出来看了一遍。 这篇文章写的很丢人，纯当作备忘了… MySQL &amp; SQLAlchemy: 查询1概念基础查询查询可以从mysql查询出一个或多个列 可以多列，甚至用 * 指定多列查询 用SELECT DISTINCT col FROM table 指定不同的行 用limit指定搜索的结果, 可">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2020-07-17T12:45:11.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.565Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>SQL &amp; ORM notes</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2020/07/22/Notes-on-Consistency-Raft-ZooKeeper-and-Potpourri/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2020/07/15/Inside-C-Object-Model-%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0-Part2/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/07/17/SQL-ORM-notes/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/07/17/SQL-ORM-notes/&text=SQL &amp; ORM notes"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/07/17/SQL-ORM-notes/&title=SQL &amp; ORM notes"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/07/17/SQL-ORM-notes/&is_video=false&description=SQL &amp; ORM notes"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=SQL &amp; ORM notes&body=Check out this article: http://blog.mwish.me/2020/07/17/SQL-ORM-notes/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/07/17/SQL-ORM-notes/&title=SQL &amp; ORM notes"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/07/17/SQL-ORM-notes/&title=SQL &amp; ORM notes"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/07/17/SQL-ORM-notes/&title=SQL &amp; ORM notes"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/07/17/SQL-ORM-notes/&title=SQL &amp; ORM notes"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/07/17/SQL-ORM-notes/&name=SQL &amp; ORM notes&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/07/17/SQL-ORM-notes/&t=SQL &amp; ORM notes"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#ORM-%E5%92%8C-SQL-%E5%A4%87%E5%BF%98"><span class="toc-number">1.</span> <span class="toc-text">ORM 和 SQL 备忘</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#MySQL-amp-SQLAlchemy-%E6%9F%A5%E8%AF%A21"><span class="toc-number">2.</span> <span class="toc-text">MySQL &amp; SQLAlchemy: 查询1</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E6%A6%82%E5%BF%B5"><span class="toc-number">3.</span> <span class="toc-text">概念</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9F%BA%E7%A1%80%E6%9F%A5%E8%AF%A2"><span class="toc-number">3.1.</span> <span class="toc-text">基础查询</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%8E%92%E5%BA%8F%E6%9F%A5%E8%AF%A2"><span class="toc-number">3.2.</span> <span class="toc-text">排序查询</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%BF%87%E6%BB%A4%E6%9F%A5%E8%AF%A2"><span class="toc-number">3.3.</span> <span class="toc-text">过滤查询</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E5%AE%9E%E6%93%8D"><span class="toc-number">4.</span> <span class="toc-text">实操</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%BF%94%E5%9B%9E%E5%93%AA%E4%BA%9B"><span class="toc-number">4.0.1.</span> <span class="toc-text">返回哪些</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#SQLAlchemy-amp-MySQL%E5%A4%87%E5%BF%98%EF%BC%9A%E5%9F%BA%E6%9C%AC%E6%93%8D%E4%BD%9C-CUD-%E4%B8%8E%E5%AE%8C%E6%95%B4%E6%80%A7%E7%BA%A6%E6%9D%9F"><span class="toc-number">4.1.</span> <span class="toc-text">SQLAlchemy&amp;MySQL备忘：基本操作(CUD)与完整性约束</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E5%88%9B%E5%BB%BA-Create-%E3%80%81%E6%9B%B4%E6%96%B0-Update-%E4%B8%8E%E5%88%A0%E9%99%A4-Delete"><span class="toc-number">5.</span> <span class="toc-text">创建(Create)、更新(Update)与删除(Delete)</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BB%8F%E5%B8%B8%E8%A6%81%E5%81%9A%E7%9A%84%E6%8F%92%E5%85%A5%E6%93%8D%E4%BD%9C"><span class="toc-number">5.1.</span> <span class="toc-text">经常要做的插入操作</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%93%8D%E4%BD%9C"><span class="toc-number">5.2.</span> <span class="toc-text">操作</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%8F%92%E5%85%A5%E6%9F%A5%E6%89%BE%E7%9A%84%E7%BB%93%E6%9E%9C"><span class="toc-number">5.3.</span> <span class="toc-text">插入查找的结果</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E6%9B%B4%E6%96%B0"><span class="toc-number">6.</span> <span class="toc-text">更新</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BB%93%E6%9E%84"><span class="toc-number">6.1.</span> <span class="toc-text">结构</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%93%8D%E4%BD%9C-1"><span class="toc-number">6.2.</span> <span class="toc-text">操作</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E5%88%A0%E9%99%A4"><span class="toc-number">7.</span> <span class="toc-text">删除</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%93%8D%E4%BD%9C-2"><span class="toc-number">7.1.</span> <span class="toc-text">操作</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E5%88%9B%E5%BB%BA%E8%A1%A8"><span class="toc-number">8.</span> <span class="toc-text">创建表</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BB%93%E6%9E%84-1"><span class="toc-number">8.1.</span> <span class="toc-text">结构</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BA%A6%E6%9D%9F"><span class="toc-number">8.2.</span> <span class="toc-text">约束</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#NOT-NULL"><span class="toc-number">8.2.1.</span> <span class="toc-text">NOT NULL</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#AUTOINCREMENT"><span class="toc-number">8.2.2.</span> <span class="toc-text">AUTOINCREMENT</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#DEFAULT"><span class="toc-number">8.2.3.</span> <span class="toc-text">DEFAULT</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#PRIMARY-KEY"><span class="toc-number">8.2.4.</span> <span class="toc-text">PRIMARY KEY</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#UNIQUE"><span class="toc-number">8.2.5.</span> <span class="toc-text">UNIQUE</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#CHECK"><span class="toc-number">8.2.6.</span> <span class="toc-text">CHECK</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#FOREIGN-KEY-%E5%A4%96%E9%94%AE%E7%BA%A6%E6%9D%9F"><span class="toc-number">8.2.7.</span> <span class="toc-text">FOREIGN KEY 外键约束</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#CASCADE-%E7%BA%A7%E8%81%94"><span class="toc-number">8.2.7.1.</span> <span class="toc-text">CASCADE(级联)</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9B%B4%E6%96%B0%E8%A1%A8"><span class="toc-number">8.3.</span> <span class="toc-text">更新表</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%A1%A8%E7%BA%A6%E6%9D%9F%E7%9A%84%E4%BF%AE%E6%94%B9"><span class="toc-number">8.3.1.</span> <span class="toc-text">表约束的修改</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%88%A0%E9%99%A4-1"><span class="toc-number">8.4.</span> <span class="toc-text">删除</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#SQLAlchemy-MySQL-%E5%A4%87%E5%BF%98-%E8%AE%A1%E7%AE%97%E5%AD%97%E6%AE%B5%E5%92%8C%E5%88%86%E7%BB%84%E6%9F%A5%E8%AF%A2"><span class="toc-number">8.5.</span> <span class="toc-text">SQLAlchemy-MySQL-备忘-计算字段和分组查询</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#MYSQL%E5%92%8C%E7%90%86%E8%AE%BA%E9%83%A8%E5%88%86"><span class="toc-number">9.</span> <span class="toc-text">MYSQL和理论部分</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%AE%A1%E7%AE%97%E5%AD%97%E6%AE%B5"><span class="toc-number">9.1.</span> <span class="toc-text">计算字段</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%B1%87%E6%80%BB%E6%95%B0%E6%8D%AE%E4%B8%8Eaggregate-function"><span class="toc-number">9.2.</span> <span class="toc-text">汇总数据与aggregate function</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%81%9A%E9%9B%86%E5%87%BD%E6%95%B0"><span class="toc-number">9.2.1.</span> <span class="toc-text">聚集函数</span></a></li></ol></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E5%88%86%E7%BB%84"><span class="toc-number">10.</span> <span class="toc-text">分组</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%88%86%E7%BB%84%E6%93%8D%E4%BD%9C"><span class="toc-number">10.1.</span> <span class="toc-text">分组操作</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%BF%87%E6%BB%A4"><span class="toc-number">10.1.1.</span> <span class="toc-text">过滤</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%BF%87%E6%BB%A4%E7%9B%B8%E5%85%B3%E7%90%86%E8%AE%BA-%E7%9B%B8%E5%BD%93%E9%87%8D%E8%A6%81%EF%BC%81%EF%BC%81%EF%BC%81"><span class="toc-number">10.2.</span> <span class="toc-text">过滤相关理论(相当重要！！！)</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E5%AE%9E%E6%93%8D-1"><span class="toc-number">11.</span> <span class="toc-text">实操</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#SQLAlchemy-amp-MySQL-%E5%A4%87%E5%BF%98-%E7%BB%84%E5%90%88%E6%9F%A5%E8%AF%A2"><span class="toc-number">12.</span> <span class="toc-text">SQLAlchemy &amp; MySQL 备忘: 组合查询</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E7%BB%84%E5%90%88-Union-%E6%9F%A5%E8%AF%A2"><span class="toc-number">13.</span> <span class="toc-text">组合(Union)查询</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%9B%AE%E7%9A%84"><span class="toc-number">13.1.</span> <span class="toc-text">目的</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9F%BA%E7%A1%80"><span class="toc-number">13.2.</span> <span class="toc-text">基础</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%87%8D%E5%A4%8D%E7%9A%84%E8%A1%8C"><span class="toc-number">13.3.</span> <span class="toc-text">重复的行</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%8E%92%E5%BA%8F"><span class="toc-number">13.4.</span> <span class="toc-text">排序</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BB%84%E5%90%88%E4%B8%8D%E5%90%8C%E8%A1%A8"><span class="toc-number">13.5.</span> <span class="toc-text">组合不同表</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#SQLAlchemy-amp-MySQL-%E5%A4%87%E5%BF%98-%E5%85%B3%E7%B3%BB-relationship-%E4%B8%8E%E8%BF%9E%E6%8E%A5-join"><span class="toc-number">14.</span> <span class="toc-text">SQLAlchemy &amp; MySQL 备忘: 关系(relationship)与连接(join)</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E9%87%8D%E7%82%B9"><span class="toc-number">15.</span> <span class="toc-text">重点</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A6%82%E5%BF%B5-1"><span class="toc-number">15.1.</span> <span class="toc-text">概念</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%AD%89%E5%80%BC%E8%81%94%E7%BB%93-equijoin"><span class="toc-number">15.2.</span> <span class="toc-text">等值联结(equijoin)</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%86%85%E9%83%A8%E8%81%94%E7%BB%93-Inner-Join"><span class="toc-number">15.3.</span> <span class="toc-text">内部联结(Inner Join)</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%A4%9A%E8%A1%A8%E8%81%94%E7%BB%93"><span class="toc-number">15.4.</span> <span class="toc-text">多表联结</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%A1%A8%E7%9A%84%E5%88%AB%E5%90%8D"><span class="toc-number">15.5.</span> <span class="toc-text">表的别名</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%87%AA%E8%81%94%E7%BB%93"><span class="toc-number">15.6.</span> <span class="toc-text">自联结</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%87%AA%E7%84%B6%E8%81%94%E7%BB%93"><span class="toc-number">15.7.</span> <span class="toc-text">自然联结</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%A4%96%E9%83%A8%E8%81%94%E7%BB%93"><span class="toc-number">15.8.</span> <span class="toc-text">外部联结</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%B8%A6%E8%81%9A%E9%9B%86%E5%87%BD%E6%95%B0%E7%9A%84%E8%81%94%E7%BB%93"><span class="toc-number">15.9.</span> <span class="toc-text">带聚集函数的联结</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#SQLAlchemy"><span class="toc-number">16.</span> <span class="toc-text">SQLAlchemy</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%80%E5%AF%B9%E4%B8%80%E5%85%B3%E7%B3%BB"><span class="toc-number">16.1.</span> <span class="toc-text">一对一关系</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%A4%9A%E5%AF%B9%E5%A4%9A%E5%85%B3%E7%B3%BB"><span class="toc-number">16.2.</span> <span class="toc-text">多对多关系</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#SQLAlchemy-%E5%85%B3%E7%B3%BB%E6%93%8D%E4%BD%9C"><span class="toc-number">17.</span> <span class="toc-text">SQLAlchemy : 关系操作</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#es"><span class="toc-number">17.1.</span> <span class="toc-text">es</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#join%E6%93%8D%E4%BD%9C"><span class="toc-number">17.2.</span> <span class="toc-text">join操作</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%A4%9A%E4%B8%AAentity%E7%9A%84%E8%BF%94%E5%9B%9E%E5%80%BC%E7%A1%AE%E5%AE%9A"><span class="toc-number">17.2.1.</span> <span class="toc-text">多个entity的返回值确定</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#SQLAlchemy-MySQL%E5%A4%87%E5%BF%98%EF%BC%9A%E5%AD%90%E6%9F%A5%E8%AF%A2"><span class="toc-number">17.3.</span> <span class="toc-text">SQLAlchemy-MySQL备忘：子查询</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A6%82%E5%BF%B5-2"><span class="toc-number">17.4.</span> <span class="toc-text">概念</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BD%BF%E7%94%A8%E6%B3%A8%E6%84%8F"><span class="toc-number">17.5.</span> <span class="toc-text">使用注意</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%9B%B8%E5%85%B3%E5%AD%90%E6%9F%A5%E8%AF%A2"><span class="toc-number">17.6.</span> <span class="toc-text">相关子查询</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%9B%86%E5%90%88%E7%9A%84%E6%AF%94%E8%BE%83-some-any-all%E2%80%A6"><span class="toc-number">17.7.</span> <span class="toc-text">集合的比较: some, any, all…</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%A9%BA%E5%85%B3%E7%B3%BB%E6%9F%A5%E6%89%BE%E4%B8%8E%E5%88%A4%E6%96%AD%EF%BC%9A-exists"><span class="toc-number">17.8.</span> <span class="toc-text">空关系查找与判断： exists</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%87%8D%E5%A4%8D%E8%A1%8C%E7%9A%84%E5%AD%98%E5%9C%A8%E6%80%A7%E6%B5%8B%E8%AF%95"><span class="toc-number">17.9.</span> <span class="toc-text">重复行的存在性测试</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#from-%E5%AD%90%E5%8F%A5%E4%B8%AD%E7%9A%84%E5%AD%90%E6%9F%A5%E8%AF%A2"><span class="toc-number">17.10.</span> <span class="toc-text">from 子句中的子查询</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#with-%E5%AD%90%E5%8F%A5%E7%9A%84%E4%BD%BF%E7%94%A8"><span class="toc-number">17.11.</span> <span class="toc-text">with 子句的使用</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#SQLAlchemy-amp-MySQL%E5%A4%87%E5%BF%98%EF%BC%9A%E4%BA%8B%E5%8A%A1%E5%92%8C%E8%A7%86%E5%9B%BE%E7%9A%84%E4%BD%BF%E7%94%A8"><span class="toc-number">17.12.</span> <span class="toc-text">SQLAlchemy&amp;MySQL备忘：事务和视图的使用</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E8%A7%86%E5%9B%BE"><span class="toc-number">18.</span> <span class="toc-text">视图</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A6%82%E5%BF%B5%E7%9B%AE%E7%9A%84"><span class="toc-number">18.1.</span> <span class="toc-text">概念目的</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9A%E4%B9%89%E4%B8%8E%E4%BD%BF%E7%94%A8"><span class="toc-number">18.2.</span> <span class="toc-text">定义与使用</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#materialized-view"><span class="toc-number">18.3.</span> <span class="toc-text">materialized view</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#SQLAlchemy-use"><span class="toc-number">18.4.</span> <span class="toc-text">SQLAlchemy use</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E5%BA%93%E4%BA%8B%E5%8A%A1-transaction"><span class="toc-number">19.</span> <span class="toc-text">数据库事务(transaction)</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        SQL &amp; ORM notes
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2020-07-17T12:45:11.000Z" itemprop="datePublished">2020-07-17</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <h1 id="ORM-和-SQL-备忘"><a href="#ORM-和-SQL-备忘" class="headerlink" title="ORM 和 SQL 备忘"></a>ORM 和 SQL 备忘</h1><p>今天被上头派去写 SQL, 发现自己把 SQL 忘光了，把以前做的笔记翻出来看了一遍。</p>
+<p>这篇文章写的很丢人，纯当作备忘了…</p>
+<h1 id="MySQL-amp-SQLAlchemy-查询1"><a href="#MySQL-amp-SQLAlchemy-查询1" class="headerlink" title="MySQL &amp; SQLAlchemy: 查询1"></a>MySQL &amp; SQLAlchemy: 查询1</h1><h1 id="概念"><a href="#概念" class="headerlink" title="概念"></a>概念</h1><h2 id="基础查询"><a href="#基础查询" class="headerlink" title="基础查询"></a>基础查询</h2><p>查询可以从mysql查询出一个或<strong>多个</strong>列</p>
+<p>可以多列，甚至用 * 指定多列查询</p>
+<p>用<code>SELECT DISTINCT col FROM table</code> 指定<strong>不同的行</strong></p>
+<p>用limit指定搜索的结果, 可以<code>LIMIT BEGIN, END</code>也可以 <code>LIMIT NUMS</code>。注意从0行开始。</p>
+<p>SQL 形式类似于<code>LIMIT &lt;COUNT&gt; offset</code></p>
+<p><code>SELECT tablename.column</code>SELECT后可以跟着表名</p>
+<h2 id="排序查询"><a href="#排序查询" class="headerlink" title="排序查询"></a>排序查询</h2><p>直接查询返回的是没有排序的结果，建议<code>order_by</code><br>(排序被称为是<strong>子句</strong> clause)</p>
+<p>order_by 可以指定多个列，按顺序排序(like 字符串)。</p>
+<p>如 <code>ORDER BY c1 DESC, c2</code></p>
+<p>指定DESC可以反序查询，完成美妙的操作</p>
+<h2 id="过滤查询"><a href="#过滤查询" class="headerlink" title="过滤查询"></a>过滤查询</h2><p>MYSQL中可以对查询指定条件</p>
+<p>具体可以看看<a target="_blank" rel="noopener" href="http://blog.csdn.net/haibo0668/article/details/52539880">这里</a></p>
+<ol>
+<li>WHERE子句<br><code>SELECT ... FROM ... WHERE x = a</code><br>做相等性测试，这里支持的操作很多<br>ORDER_BY 在where之后</li>
+<li><code>BETWEEN a AND b</code>可以做范围检查。必须指定低值到高端值。</li>
+<li>AND OR 支持多个条件的逻辑运算，可以括号联系起来，在where后指定 NOT否定。关于计算持续可以用括号做自己的一些制定</li>
+<li><strong>Like clause</strong> Like 可以指定WILECARD(通配符)。<code>%</code>表示任意匹配(任意长度，任意词)，<code>jet%</code>表示jet开头所有，大小写敏感<code>_</code>匹配任意单个字符。</li>
+<li>SQL 定义了 substring, upper, concat 之类的算子，可以帮用户完成操作。不过在各种 sql 实现里可能不一样/</li>
+<li><strong>REGEX搜索</strong> <code>WHERE COLUMN REGEXP ‘a|b’</code></li>
+<li><code>IS NULL</code>做空值查询。</li>
+<li>IN 操作是做条件匹配，<code>IN (v1, v2, ...)</code> 相当于在里面的都是valid的操作。</li>
+</ol>
+<h1 id="实操"><a href="#实操" class="headerlink" title="实操"></a>实操</h1><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">&gt;&gt;&gt; </span><span class="keyword">for</span> instance <span class="keyword">in</span> session.query(User).order_by(User.<span class="built_in">id</span>):</span><br><span class="line"><span class="meta">... </span>    <span class="built_in">print</span>(instance.name, instance.fullname)</span><br></pre></td></tr></table></figure>
+<p>query()会创建对象，帮助做查询，用order_by表顺序维持，返回一个tuple</p>
+<p>也可以对专门的字段进行查询</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">&gt;&gt;&gt; </span><span class="keyword">for</span> row <span class="keyword">in</span> session.query(User, User.name).<span class="built_in">all</span>():</span><br><span class="line"><span class="meta">... </span>   <span class="built_in">print</span>(row.User, row.name)</span><br></pre></td></tr></table></figure>
+<p>结果是显然的</p>
+<p>query对象通常返回一个新的query对象，可以用.filter().filter()… 等实现and操作的逻辑</p>
+<p>filter的过滤操作可见此中的<a target="_blank" rel="noopener" href="https://github.com/linux-wang/sqlalchemy-docs-CN/blob/master/SQLAlchemyORM/Object-Relational-Tutorial.md">常用过滤操作</a>(有equal unequal like ilike in isnull 等)</p>
+<ul>
+<li><p>用text对象包装SQL</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">&gt;&gt;&gt; </span>stmt = text(<span class="string">&quot;SELECT name, id, fullname, password &quot;</span></span><br><span class="line"><span class="meta">... </span>            <span class="string">&quot;FROM users where name=:name&quot;</span>)</span><br><span class="line"><span class="meta">&gt;&gt;&gt; </span>stmt = stmt.columns(User.name, User.<span class="built_in">id</span>, User.fullname, User.password)</span><br><span class="line">SQL&gt;&gt;&gt; session.query(User).from_statement(stmt).params(name=<span class="string">&#x27;ed&#x27;</span>).<span class="built_in">all</span>()</span><br><span class="line">[&lt;User(name=<span class="string">&#x27;ed&#x27;</span>, fullname=<span class="string">&#x27;Ed Jones&#x27;</span>, password=<span class="string">&#x27;f8s7ccs&#x27;</span>)&gt;]</span><br></pre></td></tr></table></figure>
+</li>
+</ul>
+<p>text可写入原生的SQL语句查询</p>
+<h3 id="返回哪些"><a href="#返回哪些" class="headerlink" title="返回哪些"></a>返回哪些</h3><p>有<code>.first()</code> <code>.all()</code>两个常用, 有的 ORM 也定义了 <code>single</code></p>
+<p><code>.one()</code>返回一个，没有会抛出异常，<code>.one_or_none()</code>没有时会返回无</p>
+<h2 id="SQLAlchemy-amp-MySQL备忘：基本操作-CUD-与完整性约束"><a href="#SQLAlchemy-amp-MySQL备忘：基本操作-CUD-与完整性约束" class="headerlink" title="SQLAlchemy&amp;MySQL备忘：基本操作(CUD)与完整性约束"></a>SQLAlchemy&amp;MySQL备忘：基本操作(CUD)与完整性约束</h2><h1 id="创建-Create-、更新-Update-与删除-Delete"><a href="#创建-Create-、更新-Update-与删除-Delete" class="headerlink" title="创建(Create)、更新(Update)与删除(Delete)"></a>创建(Create)、更新(Update)与删除(Delete)</h1><p>Create, read, update and delete 简称CRUD，表示我们常做的操作。</p>
+<p>下面来讲插入，这里就不介绍目的了…大家都能理解的，对吧…</p>
+<h2 id="经常要做的插入操作"><a href="#经常要做的插入操作" class="headerlink" title="经常要做的插入操作"></a>经常要做的插入操作</h2><ol>
+<li>插入完整的行</li>
+<li>插入行的一部分(???)</li>
+<li>插入多行</li>
+<li>插入查询的结果</li>
+</ol>
+<h2 id="操作"><a href="#操作" class="headerlink" title="操作"></a>操作</h2><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">INSERT INTO tables VALUES(...)</span><br></pre></td></tr></table></figure>
+<p>INSERT 语句一般不会产生输出，对每个列提供一个值。</p>
+<p><code>INSERT INTO table(c1, c2, ..., cn) VALUES(c1r, c2r, ..., cnr)</code> 更加的安全</p>
+<p>给出列名的可改变文本中列的顺序</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">INTO table(...) VALURS (), ()</span><br></pre></td></tr></table></figure>
+<p>VALUES 后可跟多个tuple</p>
+<h2 id="插入查找的结果"><a href="#插入查找的结果" class="headerlink" title="插入查找的结果"></a>插入查找的结果</h2><p><code>INSERT INTO table ... SELECT cols FROM ...</code></p>
+<p>可以让你插入查找的结果。</p>
+<h1 id="更新"><a href="#更新" class="headerlink" title="更新"></a>更新</h1><h2 id="结构"><a href="#结构" class="headerlink" title="结构"></a>结构</h2><ol>
+<li>表名</li>
+<li>更新操作</li>
+<li>过滤条件</li>
+</ol>
+<h2 id="操作-1"><a href="#操作-1" class="headerlink" title="操作"></a>操作</h2><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">UPDATE table </span><br><span class="line">SET c1 = , c2 = ,...</span><br><span class="line">WHERE conds</span><br></pre></td></tr></table></figure>
+<p>注意更新如果失败，前面所有操作CANCEL, 若希望继续执行，则用<code>UPDATE IGNORE</code></p>
+<h1 id="删除"><a href="#删除" class="headerlink" title="删除"></a>删除</h1><h2 id="操作-2"><a href="#操作-2" class="headerlink" title="操作"></a>操作</h2><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">DELETE table WHERE conds</span><br></pre></td></tr></table></figure>
+<p>想删除所有数据用<code>TRUNCATE TABLE</code></p>
+<h1 id="创建表"><a href="#创建表" class="headerlink" title="创建表"></a>创建表</h1><h2 id="结构-1"><a href="#结构-1" class="headerlink" title="结构"></a>结构</h2><p>注意狗屎编码问题，UTF-8天下第一</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">CREATE TABLE tablename (</span><br><span class="line">    (colname type constraint,)*</span><br><span class="line">)</span><br></pre></td></tr></table></figure>
+<h2 id="约束"><a href="#约束" class="headerlink" title="约束"></a><a target="_blank" rel="noopener" href="https://segmentfault.com/a/1190000006671061">约束</a></h2><p>约束可能要满足参照完整性(referential integrity) 或者 单个关系的完整性约束。</p>
+<p>约束的<a target="_blank" rel="noopener" href="https://www.ibm.com/support/knowledgecenter/zh/SSEPGG_9.5.0/com.ibm.db2.luw.admin.dbobj.doc/doc/c0020114.html">类型</a></p>
+<p><strong>注意：约束可以是联合的</strong>，在 SQLAlchemy 中设置联合可以参照<a target="_blank" rel="noopener" href="http://www.pythondoc.com/flask-sqlalchemy/models.html">这里</a>: 比如设置多个primary_key = True即可。</p>
+<h3 id="NOT-NULL"><a href="#NOT-NULL" class="headerlink" title="NOT NULL"></a><code>NOT NULL</code></h3><p>需要指定</p>
+<h3 id="AUTOINCREMENT"><a href="#AUTOINCREMENT" class="headerlink" title="AUTOINCREMENT"></a><code>AUTOINCREMENT</code></h3><p>自增</p>
+<h3 id="DEFAULT"><a href="#DEFAULT" class="headerlink" title="DEFAULT"></a><code>DEFAULT</code></h3><p>制定默认值</p>
+<h3 id="PRIMARY-KEY"><a href="#PRIMARY-KEY" class="headerlink" title="PRIMARY KEY"></a><code>PRIMARY KEY</code></h3><p>主键</p>
+<p>有可能出现联合主键这样的情况,格式如下：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">CREATE TABLE student(       </span><br><span class="line">          name VARCHAR(20),</span><br><span class="line">          class VARCHAR(20),</span><br><span class="line">         CONSTRAINT PK_STUD_ID PRIMARY KEY(name,class)       </span><br><span class="line">          )</span><br></pre></td></tr></table></figure>
+<h3 id="UNIQUE"><a href="#UNIQUE" class="headerlink" title="UNIQUE"></a><code>UNIQUE</code></h3><p>UNIQUE KEY</p>
+<h3 id="CHECK"><a href="#CHECK" class="headerlink" title="CHECK"></a><code>CHECK</code></h3><p>检查</p>
+<p>MySQL没有这玩意。应用于关系声明时<code>check(P)</code>指定谓词P，每个被插入的数据都要满足P</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">CREATE TABLE table (</span><br><span class="line">	attr1 type ...,</span><br><span class="line">	...,</span><br><span class="line">	check (attr1 in (&#x27;老司机&#x27;, &#x27;马老爷&#x27;, &#x27;付垃圾&#x27;, &#x27;天阳哥&#x27;))</span><br><span class="line">)</span><br></pre></td></tr></table></figure>
+<p>check允许对子集加以限制。</p>
+<h3 id="FOREIGN-KEY-外键约束"><a href="#FOREIGN-KEY-外键约束" class="headerlink" title="FOREIGN KEY 外键约束"></a><code>FOREIGN KEY</code> 外键约束</h3><p>我们在从表中可以设置对父表的外键</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">CONSTRAINT fk_class_id FOREIGN KEY(classe_id) REFERENCES classes(id)</span><br></pre></td></tr></table></figure>
+<p>没有References，默认是PRIMARY KEY</p>
+<h4 id="CASCADE-级联"><a href="#CASCADE-级联" class="headerlink" title="CASCADE(级联)"></a>CASCADE(级联)</h4><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">FOREIGN KEY(student) REFERENCE dorm403</span><br><span class="line">	on delete cascade</span><br><span class="line">	on update cascade,</span><br></pre></td></tr></table></figure>
+<p>也可以选择<code>set null</code>, <code>set default</code>。cascade 在从表中设置，表示当你更新或删除主键表时，那么外键表也会跟随一起更新或删除。student对应属性的删除、更新会传播到整个链中。</p>
+<h2 id="更新表"><a href="#更新表" class="headerlink" title="更新表"></a>更新表</h2><p>希望在表的层面增加操作(针对列)</p>
+<p><code>ALTER TABLE table OPERATIONS</code>是需要用到的语法</p>
+<p>一般使用<code>ADD</code>, <code>DROP</code>操作并写上列。</p>
+<p><code>DROP TABLE</code>删除整个表，不仅仅是删除其内容。</p>
+<h3 id="表约束的修改"><a href="#表约束的修改" class="headerlink" title="表约束的修改"></a>表约束的修改</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">//删除主键约束  </span><br><span class="line">ALTER TABLE 表名 DROP PRIMARY KEY;    </span><br><span class="line">//添加主键  </span><br><span class="line">ALTER TABLE 表名 ADD PRIMARY KEY(列名);    </span><br><span class="line">//修改列为主键</span><br><span class="line">ALTER TABLE 表名 MODIFY 列名 数据类型 PRIMARY KEY;</span><br></pre></td></tr></table></figure>
+<h2 id="删除-1"><a href="#删除-1" class="headerlink" title="删除"></a>删除</h2><p><a target="_blank" rel="noopener" href="https://www.quora.com/What-is-the-main-difference-between-Truncate-Delete-and-Drop-in-a-database">https://www.quora.com/What-is-the-main-difference-between-Truncate-Delete-and-Drop-in-a-database</a></p>
+<p><a target="_blank" rel="noopener" href="http://blog.csdn.net/hanxuemin12345/article/details/7818662">http://blog.csdn.net/hanxuemin12345/article/details/7818662</a></p>
+<p>DELETE TRUNCATE DROP等操作</p>
+<h2 id="SQLAlchemy-MySQL-备忘-计算字段和分组查询"><a href="#SQLAlchemy-MySQL-备忘-计算字段和分组查询" class="headerlink" title="SQLAlchemy-MySQL-备忘-计算字段和分组查询"></a>SQLAlchemy-MySQL-备忘-计算字段和分组查询</h2><h1 id="MYSQL和理论部分"><a href="#MYSQL和理论部分" class="headerlink" title="MYSQL和理论部分"></a>MYSQL和理论部分</h1><h2 id="计算字段"><a href="#计算字段" class="headerlink" title="计算字段"></a>计算字段</h2><p>(这里根据我的理解更像对搜索出的数据函数调用)<br>不同于直接存储的数据</p>
+<p>计算字段搜索的结果是按你在计算字段编写的逻辑显示的，比如说你编写的指定是<code>MAN(money)</code>, 显示出来就是<code>FXW(-100)</code>.</p>
+<p>Concat可以在形式上合并多个字段，进行操作<br><code>SELECT Concat(col1, &#39;(&#39;, cow2, &#39;)&#39;) FROM table ORDER BY ...</code><br>输出的形式是col1(col2)，同时也可以对选定的算术运算。</p>
+<p>实际上说是函数，但是 + - * 都是可以直接写的，函数更多指的是文本处理等方面。</p>
+<p>可以使用文本处理函数，比如DATE等(实际上需要日期使用Date，Time指的实际上比Date更细一层)</p>
+<p>也有time对象，但是推荐使用日期是必定用Date</p>
+<h2 id="汇总数据与aggregate-function"><a href="#汇总数据与aggregate-function" class="headerlink" title="汇总数据与aggregate function"></a>汇总数据与aggregate function</h2><p>有的时候不需要完整数据 只需要单行单列的信息，这个时候可以用汇总数据获得</p>
+<h3 id="聚集函数"><a href="#聚集函数" class="headerlink" title="聚集函数"></a>聚集函数</h3><p>运行在行组上，返回单个值，我们希望能够</p>
+<ol>
+<li>获得表中的行数</li>
+<li>获得表中行组(按你定义的规则分组)</li>
+<li>获得表中一列的统计量</li>
+</ol>
+<p>有AVG，SUM，COUNT等函数。对<strong>一列</strong>操作，也可以对多列的计算字段操作。</p>
+<p>注意这些东西一般都会忽略值为null的行</p>
+<p>需注意COUNT：</p>
+<ol>
+<li>COUNT(<em>) 返回行数<br>`SELECT COUNT(</em>) AS cow1 FROM table`<br>输出table表行数</li>
+<li>上面改成<code>COUNT(cow)</code>改成一列的和，<strong>忽略null</strong></li>
+</ol>
+<p>DISTINCT指定：上述操作是对ALL的指定，也就是对所有非null字段计算</p>
+<p><strong>在aggregete中指定DISTINCT对不等值汇总</strong>，相当于一个数据子走一趟=&gt;<code>SELECT COUNT(DISTINCT id) from ...</code>这个distinct可能不同。</p>
+<p>SUM 可以对多个值计算，指定适当的指定的结果。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">SELECT COUNT(*) AS all, MIN(prod) as min FROM ...</span><br></pre></td></tr></table></figure>
+<p>允许对多个行列进行操作。</p>
+<h1 id="分组"><a href="#分组" class="headerlink" title="分组"></a>分组</h1><p>希望把大量的，所有的数据分成几个逻辑组，对每个组计算。</p>
+<h2 id="分组操作"><a href="#分组操作" class="headerlink" title="分组操作"></a>分组操作</h2><p>计算字段很有用，更多在于和分组结合以后。对每个小组进行计算</p>
+<p>多个字段的存储很多有相同的vent_id, 统计每个vent_id的数目</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">SELECT vent_id, COUNT(*) from table GROUP BY vent_id</span><br></pre></td></tr></table></figure>
+<p>这个操作针对 vent_id 来分组，得到vent_id对应的数目。</p>
+<p>关于GROUP BY的坑</p>
+<ol>
+<li>可以包含任意数目的 Row，能让分组更加的细致</li>
+<li>所有列一起计算。</li>
+<li>使用的都是列或者有效的表达式，在<code>SELECT</code>选定表达式<code>(c1 * c2)</code> 在 <code>GROUP BY</code>一样使用同样的expr.</li>
+<li>NULL 值被当成一个单独的分组返回</li>
+<li>必须在where , order by 之间</li>
+</ol>
+<h3 id="过滤"><a href="#过滤" class="headerlink" title="过滤"></a>过滤</h3><p>对于这样的分组，我们有的时候需要过滤，此时用<code>HAVING</code> 子句，它的用法同<code>WHERE</code>。</p>
+<p>但是<code>WHERE</code>指定的是行，只有<code>HAVING</code>子句相对的指定的是分组，能够让我们对分组进行一定程度的过滤。可以把where当成分组前过滤，事实上where中排除的值不再会出现在分组中。</p>
+<p>(Having对分组过滤，例如上一个例子加上<code>HAVING COUNT(*) &gt;= 2</code>)</p>
+<p>GROUP BY 只负责分组不负责排序，所以尽量使用之后sort把</p>
+<p><strong>HAVING子句经常和SUM等聚集函数结合</strong>，又如</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">SELECT val1, SUM(val2*val3) AS val23 FROM table ORDER BY val23 HAVING SUM(val2*val3) &gt;= 50</span><br></pre></td></tr></table></figure>
+<h2 id="过滤相关理论-相当重要！！！"><a href="#过滤相关理论-相当重要！！！" class="headerlink" title="过滤相关理论(相当重要！！！)"></a>过滤相关理论(相当重要！！！)</h2><ol>
+<li>先用<code>from</code>计算关系</li>
+<li>出现<code>where</code>子句，filter 1的结果</li>
+<li><code>group by</code> 进行分组，分出新的组们</li>
+<li><code>having</code> 进行过滤</li>
+<li><code>SELECT</code> 追踪查询</li>
+</ol>
+<h1 id="实操-1"><a href="#实操-1" class="headerlink" title="实操"></a>实操</h1><p>.group_by实现分组查询</p>
+<p><code>from sqlalchemy import func</code>在func中有很多有用的包。比如func.count(<em>), 相当于COUNT(</em>)。同理又恨多别的这样的库函数。以下参考SQLAlchemy的文档</p>
+<blockquote>
+<p>Using the Query, we build a statement like this from the inside out. The statement accessor returns a SQL expression representing the statement generated by a particular Query - this is an instance of a select() construct, which are described in SQL Expression Language Tutorial:</p>
+</blockquote>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">&gt;&gt;&gt; from sqlalchemy.sql import func</span><br><span class="line">&gt;&gt;&gt; stmt = session.query(Address.user_id, func.count(&#x27;*&#x27;).\</span><br><span class="line">...         label(&#x27;address_count&#x27;)).\</span><br><span class="line">...         group_by(Address.user_id).subquery()</span><br></pre></td></tr></table></figure>
+<h1 id="SQLAlchemy-amp-MySQL-备忘-组合查询"><a href="#SQLAlchemy-amp-MySQL-备忘-组合查询" class="headerlink" title="SQLAlchemy &amp; MySQL 备忘: 组合查询"></a>SQLAlchemy &amp; MySQL 备忘: 组合查询</h1><h1 id="组合-Union-查询"><a href="#组合-Union-查询" class="headerlink" title="组合(Union)查询"></a>组合(Union)查询</h1><h2 id="目的"><a href="#目的" class="headerlink" title="目的"></a>目的</h2><p>执行多个查询，并当成单个查询返回</p>
+<p>实际上任何拥有多个<code>WHERE</code>条件的查询都可以当成组合查询</p>
+<h2 id="基础"><a href="#基础" class="headerlink" title="基础"></a>基础</h2><p>组合查询可以用关键字UNION，来组合多个查询</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">SELECT</span> c1, c2, c3 <span class="keyword">FROM</span> <span class="keyword">table</span> <span class="keyword">WHERE</span> cond1</span><br><span class="line"><span class="keyword">UNION</span></span><br><span class="line"><span class="keyword">SELECT</span> c1, c2, c3 <span class="keyword">FROM</span> <span class="keyword">table</span> <span class="keyword">WHERE</span> cond2</span><br></pre></td></tr></table></figure>
+<p>相当于<code>WHERE cond1 OR cond2</code></p>
+<ol>
+<li>UNION 在每两个相邻的 SELECT 中</li>
+<li>每个 SELECT 查询的数据相同</li>
+<li>列的数据类型必须是兼容的</li>
+</ol>
+<h2 id="重复的行"><a href="#重复的行" class="headerlink" title="重复的行"></a>重复的行</h2><p>两个查询的条件都满足却 UNION ，重复的行会被 UNIQUE，但是 如果使用<code>UNION ALL</code>, 则不取消重复的行。</p>
+<h2 id="排序"><a href="#排序" class="headerlink" title="排序"></a>排序</h2><p>再最后一个SELECT后，链式用 <code>ORDER BY</code>排序</p>
+<h2 id="组合不同表"><a href="#组合不同表" class="headerlink" title="组合不同表"></a>组合不同表</h2><p>实际上我们可以看到，UNION是把搜索的结果做一个交集，同样我们也可使用不同的表，但是需要同样的 schema，例如：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">Select</span> Col1, Col2, Col3, Col4, Col5 <span class="keyword">from</span> Table1</span><br><span class="line"><span class="keyword">Union</span></span><br><span class="line"><span class="keyword">Select</span> Col1, Col2, Col3, <span class="keyword">Null</span> <span class="keyword">as</span> Col4, <span class="keyword">Null</span> <span class="keyword">as</span> Col5 <span class="keyword">from</span> Table2</span><br></pre></td></tr></table></figure>
+<p>Python:</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">from</span> sqlalchemy.orm <span class="keyword">import</span> aliased</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">Part</span>(<span class="title class_ inherited__">Base</span>):</span><br><span class="line">    __tablename__ = <span class="string">&#x27;part&#x27;</span></span><br><span class="line">    part = Column(String, primary_key=<span class="literal">True</span>)</span><br><span class="line">    sub_part = Column(String, primary_key=<span class="literal">True</span>)</span><br><span class="line">    quantity = Column(Integer)</span><br><span class="line"></span><br><span class="line">included_parts = session.query(</span><br><span class="line">                Part.sub_part,</span><br><span class="line">                Part.part,</span><br><span class="line">                Part.quantity).\</span><br><span class="line">                    <span class="built_in">filter</span>(Part.part==<span class="string">&quot;our part&quot;</span>).\</span><br><span class="line">                    cte(name=<span class="string">&quot;included_parts&quot;</span>, recursive=<span class="literal">True</span>)</span><br><span class="line"></span><br><span class="line">incl_alias = aliased(included_parts, name=<span class="string">&quot;pr&quot;</span>)</span><br><span class="line">parts_alias = aliased(Part, name=<span class="string">&quot;p&quot;</span>)</span><br><span class="line">included_parts = included_parts.union_all(</span><br><span class="line">    session.query(</span><br><span class="line">        parts_alias.sub_part,</span><br><span class="line">        parts_alias.part,</span><br><span class="line">        parts_alias.quantity).\</span><br><span class="line">            <span class="built_in">filter</span>(parts_alias.part==incl_alias.c.sub_part)</span><br><span class="line">    )</span><br><span class="line"></span><br><span class="line">q = session.query(</span><br><span class="line">        included_parts.c.sub_part,</span><br><span class="line">        func.<span class="built_in">sum</span>(included_parts.c.quantity).</span><br><span class="line">            label(<span class="string">&#x27;total_quantity&#x27;</span>)</span><br><span class="line">    ).\</span><br><span class="line">    group_by(included_parts.c.sub_part)</span><br></pre></td></tr></table></figure>
+<p>其中：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">included_parts = session.query(</span><br><span class="line">                Part.sub_part,</span><br><span class="line">                Part.part,</span><br><span class="line">                Part.quantity).\</span><br><span class="line">                    <span class="built_in">filter</span>(Part.part==<span class="string">&quot;our part&quot;</span>).\</span><br><span class="line">                    cte(name=<span class="string">&quot;included_parts&quot;</span>, recursive=<span class="literal">True</span>)</span><br></pre></td></tr></table></figure>
+<p>和</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">included_parts = included_parts.union_all(</span><br><span class="line">    session.query(</span><br><span class="line">        parts_alias.sub_part,</span><br><span class="line">        parts_alias.part,</span><br><span class="line">        parts_alias.quantity).\</span><br><span class="line">            <span class="built_in">filter</span>(parts_alias.part==incl_alias.c.sub_part)</span><br><span class="line">    )</span><br></pre></td></tr></table></figure>
+<p>使用了<code>UNION ALL</code></p>
+<blockquote>
+<p>当然，这个我觉得很大程度上和使用<code>WHERE</code> + <code>AND</code>/<code>OR</code> 等是等价的。</p>
+</blockquote>
+<h1 id="SQLAlchemy-amp-MySQL-备忘-关系-relationship-与连接-join"><a href="#SQLAlchemy-amp-MySQL-备忘-关系-relationship-与连接-join" class="headerlink" title="SQLAlchemy &amp; MySQL 备忘: 关系(relationship)与连接(join)"></a>SQLAlchemy &amp; MySQL 备忘: 关系(relationship)与连接(join)</h1><p>设计良好，能够不犯太多事的情况下好好添加的数据库称之为 可伸缩性好(scale well).</p>
+<h1 id="重点"><a href="#重点" class="headerlink" title="重点"></a>重点</h1><ol>
+<li>子表类用foreign key引用父表类, 外键定义了两张表的关系。</li>
+<li><code>students = db.relationship(&#39;Student&#39;, backref=&#39;_class&#39;, lazy=&quot;select&quot;)</code> STUDENTS是子对象的列表。</li>
+</ol>
+<h2 id="概念-1"><a href="#概念-1" class="headerlink" title="概念"></a>概念</h2><p><strong>目标：我们希望储存在多个表，相关联的数据能被一个查询找出来。</strong></p>
+<p>显然我们已经知道每个表有唯一标识，被称为主键。</p>
+<p>外键是一个表中的一列，包含了另一个表单的主键，定义了数据库的表间的关系</p>
+<p>联结是一种机制，在一条<code>select</code>语句中处理关联表。它并不在数据库中实际存在，而是一种操作。</p>
+<h2 id="等值联结-equijoin"><a href="#等值联结-equijoin" class="headerlink" title="等值联结(equijoin)"></a>等值联结(equijoin)</h2><p>这里只用到了SELECT FROM WHERE，不过有两张表，并且在where中详细标注了(完全限定列名)。</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> col <span class="keyword">from</span> tables <span class="keyword">where</span> table1 x table2 <span class="operator">=</span> ... <span class="keyword">order</span> <span class="keyword">by</span> ...</span><br></pre></td></tr></table></figure>
+<p>可以 成功在两张表中搜索</p>
+<p>没有where的话你会很兴奋的看到笛卡尔积。作为保证我们希望所有子句都含有where.</p>
+<h2 id="内部联结-Inner-Join"><a href="#内部联结-Inner-Join" class="headerlink" title="内部联结(Inner Join)"></a>内部联结(Inner Join)</h2><p>关键字是 <code>INNER JOIN</code> 和 <code>ON</code>。</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">SELECT</span> cols <span class="keyword">FROM</span> table1 <span class="keyword">INNER</span> <span class="keyword">JOIN</span> table2 <span class="keyword">ON</span> cond</span><br></pre></td></tr></table></figure>
+<p>事实上首选是 <code>Inner Join</code></p>
+<h2 id="多表联结"><a href="#多表联结" class="headerlink" title="多表联结"></a>多表联结</h2><p>选择的表数目没有限制，但是表的数量越多，数据库查找速度下降越快。</p>
+<p>也可以选择select from多个表，然后where处指定条件</p>
+<p>在A字段定义B的relationship完成了A有多个B的关系</p>
+<h2 id="表的别名"><a href="#表的别名" class="headerlink" title="表的别名"></a>表的别名</h2><p><code>FROM table1 as t1, table2 as t2</code> 允许你在查询中使用别名并不反馈到列中。</p>
+<h2 id="自联结"><a href="#自联结" class="headerlink" title="自联结"></a>自联结</h2><p>一个表里有所有科目的所有成绩(不要问我为什么这么设计)，我们想找到高等数学挂科的人，看看他的概率统计是不是也挂了.</p>
+<p>可以利用表别名, 给同一个表多个别名，完成查询操作。</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">SELECT</span> p1.mathgrade, p2.xxx <span class="keyword">FROM</span> students <span class="keyword">as</span> p1, students <span class="keyword">AS</span> p2 <span class="keyword">WHERE</span> p1.(cond) <span class="keyword">AND</span> p2.(cond)</span><br></pre></td></tr></table></figure>
+<h2 id="自然联结"><a href="#自然联结" class="headerlink" title="自然联结"></a>自然联结</h2><p>目的：至少有一个列(字段)出现在不止一个表中，自然联结让每个列返回一次。事实上我们做的都是自然联结。</p>
+<p>R S中，如果R中的一行r和S中的一行s在$R\cap S$ 中的值相等，则将其连接</p>
+<h2 id="外部联结"><a href="#外部联结" class="headerlink" title="外部联结"></a>外部联结</h2><p>联结把有外键关联的行联结。但是有的时候我们希望统计没关联的行。</p>
+<p>有的时候也希望关联没有关联的行，这里口述不是很能说清，大概相当于左／右联结的时候，如果另一侧没有联结的<code>ON ...</code>数据，则为<code>本侧 | null</code> 的形式。</p>
+<p>可以瞅一眼<a target="_blank" rel="noopener" href="http://www.cnblogs.com/youzhangjin/archive/2009/05/22/1486982.html">这里的DEMO</a></p>
+<p>使用 <code>LEFT OUTER JOIN</code> <code>RIGHT OUTER JOIN</code> 表示这种外部联结。</p>
+<h2 id="带聚集函数的联结"><a href="#带聚集函数的联结" class="headerlink" title="带聚集函数的联结"></a>带聚集函数的联结</h2><p>目的：希望对联结后得到的那张表进行分组</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">SELECT ..., COUNT(,,,) AS ... FROM table1 INNER JOIN table2 GROUP BY ...;</span><br></pre></td></tr></table></figure>
+<p>WORKFLOW：<br>内联结 – &gt; 分组 – &gt; 筛选出来</p>
+<h1 id="SQLAlchemy"><a href="#SQLAlchemy" class="headerlink" title="SQLAlchemy"></a>SQLAlchemy</h1><p>relationship第一个字段基于类名，可以与backref等合起来构成反向索引</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line">&gt;&gt;&gt; from sqlalchemy import ForeignKey</span><br><span class="line">&gt;&gt;&gt; from sqlalchemy.orm import relationship</span><br><span class="line"></span><br><span class="line">&gt;&gt;&gt; class Address(Base):</span><br><span class="line">...     __tablename__ = &#x27;addresses&#x27;</span><br><span class="line">...     id = Column(Integer, primary_key=True)</span><br><span class="line">...     email_address = Column(String, nullable=False)</span><br><span class="line">...     user_id = Column(Integer, ForeignKey(&#x27;users.id&#x27;))</span><br><span class="line">...</span><br><span class="line">...     user = relationship(&quot;User&quot;, back_populates=&quot;addresses&quot;)</span><br><span class="line">...</span><br><span class="line">...     def __repr__(self):</span><br><span class="line">...         return &quot;&lt;Address(email_address=&#x27;%s&#x27;)&gt;&quot; % self.email_address</span><br><span class="line"></span><br><span class="line">&gt;&gt;&gt; User.addresses = relationship(</span><br><span class="line">...     &quot;Address&quot;, order_by=Address.id, back_populates=&quot;user&quot;)</span><br></pre></td></tr></table></figure>
+<p>ForeignKey约束指col被约束为其他地方应当存在的值。foreignkey参数指定的事table name</p>
+<p>Address.user是多对一关系。以上市制定了back_populates的情况，并且互相标清出了字段的名称，backref只能在子表定义foreign_ky</p>
+<p>在一对多关系中，子表ForeignKey应用父表参考字段。</p>
+<h2 id="一对一关系"><a href="#一对一关系" class="headerlink" title="一对一关系"></a>一对一关系</h2><p><code>child = relationship(&quot;Child&quot;, uselist=False, back_populates=&quot;parent&quot;)</code><br>uselist = false，设置一对一关系</p>
+<p>也可以<br><code>child = relationship(&quot;Child&quot;, backref=backref(&quot;parent&quot;, uselist=False))</code></p>
+<blockquote>
+<p>注意在应用关系的过程中，ORM模型可以通过<code>Father.child</code>表示对应的对象，但是这个对象是靠foreigning key存储在referencing table中的。</p>
+<p>因为以上的愿意，所以有lazy = “xxx” 的属性，来表示这个属性是否是</p>
+</blockquote>
+<h2 id="多对多关系"><a href="#多对多关系" class="headerlink" title="多对多关系"></a>多对多关系</h2><p>比如人-关注-人<br>采用一张中间表</p>
+<h1 id="SQLAlchemy-关系操作"><a href="#SQLAlchemy-关系操作" class="headerlink" title="SQLAlchemy : 关系操作"></a>SQLAlchemy : 关系操作</h1><ul>
+<li>join操作作用在query对象上</li>
+<li>对关系操作，返回是对象</li>
+</ul>
+<h2 id="es"><a href="#es" class="headerlink" title="es"></a>es</h2><p>一对多的多，调用字段(对象的字段/属性)查询会返回列表。</p>
+<h2 id="join操作"><a href="#join操作" class="headerlink" title="join操作"></a>join操作</h2><p>指定了<br>join指定条件，两表连接查询。</p>
+<blockquote>
+<p>对应了SQL中的联结的关系</p>
+</blockquote>
+<p>以下隐式的指定id为相同 key 来进行查询</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">&gt;&gt;&gt; </span>session.query(User).join(Address).\</span><br><span class="line"><span class="meta">... </span>        <span class="built_in">filter</span>(Address.email_address==<span class="string">&#x27;jack@google.com&#x27;</span>).\</span><br><span class="line"><span class="meta">... </span>        <span class="built_in">all</span>()</span><br><span class="line">[&lt;User(name=<span class="string">&#x27;jack&#x27;</span>, fullname=<span class="string">&#x27;Jack Bean&#x27;</span>, password=<span class="string">&#x27;gjffdd&#x27;</span>)&gt;]</span><br></pre></td></tr></table></figure>
+<p>Query.join() knows how to join between User and Address because there’s only one foreign key between them. If there were no foreign keys, or several, Query.join() works better when one of the following forms are used:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">query.join(User.addresses)                       </span><br><span class="line"># specify relationship from left to right</span><br><span class="line">query.join(Address, User.addresses)              # same, with explicit target</span><br><span class="line">query.join(&#x27;addresses&#x27;)                          # same, using a string</span><br></pre></td></tr></table></figure>
+<p>join操作指的是对于两张或者多张表，给定共同的条件并且对于共同的条件来进行查询</p>
+<p>因为查询的是join, 所以查询的顺序是(A对象, B对象)</p>
+<p>在这里通过对query对象操作来产生新的 query对象，可以指定</p>
+<ol>
+<li><p>明确的条件</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">query.join(Address, User.id==Address.user_id)   </span><br><span class="line"># explicit condition</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>一个键的关联</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">query.join(User.addresses)</span><br><span class="line"># pecify relationship from left to right</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>被关联的字段-关联字段外键</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">query.join(Address, User.addresses)</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>字段字符串名</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">query.join(&#x27;addresses&#x27;)                          </span><br><span class="line"># same, using a string</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>outerjoin<code>query.outerjoin(User.addresses)</code></p>
+</li>
+</ol>
+<h3 id="多个entity的返回值确定"><a href="#多个entity的返回值确定" class="headerlink" title="多个entity的返回值确定"></a>多个entity的返回值确定</h3><p><code>query = session.query(User, Address).select_from(Address).join(User)</code><br>select_from指定了查询返回值的类型，否则join最左侧的项</p>
+<h2 id="SQLAlchemy-MySQL备忘：子查询"><a href="#SQLAlchemy-MySQL备忘：子查询" class="headerlink" title="SQLAlchemy-MySQL备忘：子查询"></a>SQLAlchemy-MySQL备忘：子查询</h2><p>#SQLAlchemy-MySQL备忘：子查询和集合</p>
+<h2 id="概念-2"><a href="#概念-2" class="headerlink" title="概念"></a>概念</h2><p>任何SQL语句都是查询，虽然一般查询指的是select</p>
+<p>SQL允许创建子查询(subquery)</p>
+<p>子查询指的是相当于查询套查询。一般我们是希望处理多个表中的数据（比方说某g开头的老司机想黑我的号，就调用豆瓣 github 的数据库所有邮箱为 1506118561@qq.com的号。）</p>
+<p>编写时建议向下方这样分成多行。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">SELECT col FROM table1 WHERE col2 IN (</span><br><span class="line">    SELECT ...</span><br><span class="line">)</span><br></pre></td></tr></table></figure>
+<h2 id="使用注意"><a href="#使用注意" class="headerlink" title="使用注意"></a>使用注意</h2><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">WHERE v1, v2 IN (SELECT r1, r2 FROM TABLE)</span><br></pre></td></tr></table></figure>
+<p>最常见的子查询是在 WHERE 和 IN 中，在限定的tuple（行）中做查询。</p>
+<p>SELECT返回的是选出行数据的tuple，需要拥有相同的列</p>
+<p>子查询效果不一定比的上联结</p>
+<p>子查询需要<strong>完全比较列名</strong>，因为可能有多义性，比方说一定要执行<code>a.x = b.x</code></p>
+<p>需要对所有成员计算(比方说对条件中的成员用COUNT(*)计算总数目)，可以采用子查询。</p>
+<h2 id="相关子查询"><a href="#相关子查询" class="headerlink" title="相关子查询"></a>相关子查询</h2><p>涉及外部列的子查询。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">(SELECT r1 form TABLE_IN WHERE TABLE_IN.name = TABLE_OUT.name)</span><br></pre></td></tr></table></figure>
+<p>需要我们限制有歧义的列名。</p>
+<p>可以在以下的链接查看子查询相关理论。</p>
+<p><a target="_blank" rel="noopener" href="http://blog.csdn.net/raptor/article/details/48735159">http://blog.csdn.net/raptor/article/details/48735159</a></p>
+<p>也可以使用一组tuple表示相关的内容</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">SELECT COUNT(DISTINCT id)</span><br><span class="line">FROM takes</span><br><span class="line">WHERE (attr1, attr2, attr3) in</span><br><span class="line">(</span><br><span class="line">    SELECT attr1, attr2, attr3</span><br><span class="line">    FROM ...</span><br><span class="line">    WHERE</span><br><span class="line">)</span><br></pre></td></tr></table></figure>
+<h2 id="集合的比较-some-any-all…"><a href="#集合的比较-some-any-all…" class="headerlink" title="集合的比较: some, any, all…"></a>集合的比较: some, any, all…</h2><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">SELECT name </span><br><span class="line">FROM table</span><br><span class="line">WHERE table.attr1 &gt; SOME (</span><br><span class="line">    SELECT attr2...</span><br><span class="line">    FROM ..</span><br><span class="line">)</span><br></pre></td></tr></table></figure>
+<p>从table中找出name，然后使其大于之查询的某一个(只要找到一个即可).</p>
+<p>同时，<code>&lt;some</code>, <code>&gt;=some</code> 等比较操作在这里也是受支持的。</p>
+<p>有<code>all</code>等操作，表示每一个</p>
+<h2 id="空关系查找与判断：-exists"><a href="#空关系查找与判断：-exists" class="headerlink" title="空关系查找与判断： exists"></a>空关系查找与判断： exists</h2><ul>
+<li>首先我们得明确一点，之查询的外界的值可以代入子查询内。使用了外层查询相关的叫相关子查询</li>
+</ul>
+<p>找出符合两个条件的</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">SELECT value1</span><br><span class="line">FROM table as T</span><br><span class="line">WHERE value1 = &quot;&quot; and value2=&quot;&quot;</span><br><span class="line">and EXISTS (</span><br><span class="line">    SELECT * FROM table as S</span><br><span class="line">    where T.name = S.name</span><br><span class="line">)</span><br></pre></td></tr></table></figure>
+<p>以上找到v1 = v2, 而且满足内部条件的行</p>
+<p>再给出一个范例：对于学生选修的课程，看看哪些学生选修的课程包含生物系的课程。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">SELECT S.ID, S.name</span><br><span class="line">FROM students AS S  // 学生的表</span><br><span class="line">WHERE NOT EXISTS (</span><br><span class="line">    (SELECT ... )</span><br><span class="line">    EXCEPT</span><br><span class="line">    (SELECT ... )</span><br><span class="line">)</span><br></pre></td></tr></table></figure>
+<p><code>NOT EXISTS (B EXCEPT A)</code> –&gt; 关系A包含关系B，即B - A = 空集, 实际上表示B包含于A。</p>
+<p>这个可以用于一定的复杂的逻辑，以上是包含生物系课程，以下的逻辑表示：此人选课包括了生物系的所有课程</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">SELECT S.ID, S.name</span><br><span class="line">FROM students AS S  // 学生的表</span><br><span class="line">WHERE NOT EXISTS (</span><br><span class="line">    (</span><br><span class="line">        SELECT course_id</span><br><span class="line">        FROM classes JOIN take USING(class_id)</span><br><span class="line">        WHERE </span><br><span class="line">    )</span><br><span class="line">    EXCEPT</span><br><span class="line">    (SELECT ... )</span><br><span class="line">)</span><br></pre></td></tr></table></figure>
+<h2 id="重复行的存在性测试"><a href="#重复行的存在性测试" class="headerlink" title="重复行的存在性测试"></a>重复行的存在性测试</h2><p>对“是否存在”这个特征进行判断。<br>例子：2009年至少开设两次的课程</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">SELECT course_name, course_id </span><br><span class="line">FROM courses</span><br><span class="line">WHERE not unique (</span><br><span class="line">    SELECT C1.course_id</span><br><span class="line">    FROM courses as C1,</span><br><span class="line">        courses as C2</span><br><span class="line">    WHERE C1.course_id = C2.course_id</span><br><span class="line">    AND C1.year = 2009</span><br><span class="line">)</span><br></pre></td></tr></table></figure>
+<h2 id="from-子句中的子查询"><a href="#from-子句中的子查询" class="headerlink" title="from 子句中的子查询"></a>from 子句中的子查询</h2><p>把from的内容当成一个子查询返回的表。</p>
+<p>例子：选出工资大于42000的系的成员的平均工资</p>
+<p>–&gt; 总感觉跟分组查询没什么很大的区别…</p>
+<h2 id="with-子句的使用"><a href="#with-子句的使用" class="headerlink" title="with 子句的使用"></a>with 子句的使用</h2><p>功能：定义临时关系，只对这句话有效。和from select子查询是等价的，但是相当于语法糖，能够表现的更加清晰。</p>
+<p>（总觉得有点像视图，视图过会儿讲）</p>
+<h2 id="SQLAlchemy-amp-MySQL备忘：事务和视图的使用"><a href="#SQLAlchemy-amp-MySQL备忘：事务和视图的使用" class="headerlink" title="SQLAlchemy&amp;MySQL备忘：事务和视图的使用"></a>SQLAlchemy&amp;MySQL备忘：事务和视图的使用</h2><h1 id="视图"><a href="#视图" class="headerlink" title="视图"></a>视图</h1><h2 id="概念目的"><a href="#概念目的" class="headerlink" title="概念目的"></a>概念目的</h2><p>视图相当于把一个SQL的查找等过程存储为一张伪表，它并不实际上创建一张表、不存储数据，而是作为<strong>“虚关系”</strong>。同时，底层数据发生变化的时候，视图的结果仍然是符合要求的。</p>
+<p>希望能够重用SQL语句并且一定程度上能够保护数据。</p>
+<p>许多时候用于检索而非更新。</p>
+<h2 id="定义与使用"><a href="#定义与使用" class="headerlink" title="定义与使用"></a>定义与使用</h2><p><code>CREATE VIEW</code> <code>DROP VIEW</code>完成视图的创建删除。</p>
+<p><code>SHOW CREATE VIEW</code>查看：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">CREATE VIEW faculty AS</span><br><span class="line">SELECT ID, name, dept_name</span><br><span class="line">FROM instructor	;</span><br></pre></td></tr></table></figure>
+<p>AS查询语句，得到这里的view。</p>
+<p>查询到的是视图，可以类似table使用</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">SELECT ID FROM faculty </span><br><span class="line">WHERE cond</span><br></pre></td></tr></table></figure>
+<p>视图这里相当于子查询。</p>
+<p><strong>注意，视图不允许使用recursive.</strong></p>
+<h2 id="materialized-view"><a href="#materialized-view" class="headerlink" title="materialized view"></a>materialized view</h2><p><a target="_blank" rel="noopener" href="https://blog.csdn.net/joshua_peng1985/article/details/6213593">物化视图</a></p>
+<p>特定的数据库允许存储视图关系，并且定义的关系改变，这个视图也跟着改变，这样的视图被称为：materialized view。</p>
+<p>同时，一般对视图只能进行查询，但是有限的情况下，允许对视图关系进行修改，不同数据库对这个提供了不同的支持。</p>
+<p>对视图更新一般是不允许的…但是…有的数据库系统制定了允许更新的关旭，一般来说：</p>
+<ul>
+<li>from 自由一个数据库关系</li>
+<li>select 只含关系，没有表达式、聚集、DISTINCT等</li>
+<li>没有出现在select的属性可以空</li>
+<li>无having或group by</li>
+</ul>
+<h2 id="SQLAlchemy-use"><a href="#SQLAlchemy-use" class="headerlink" title="SQLAlchemy use"></a>SQLAlchemy use</h2><blockquote>
+<p><em>out of the box</em>: 开箱即用的，即已经封装好的，缩写为OOTB</p>
+</blockquote>
+<p>关于read-only un-materialized view, 似乎没有直接的支持，可以看看<a target="_blank" rel="noopener" href="https://stackoverflow.com/questions/9766940/how-to-create-an-sql-view-with-sqlalchemy">这里</a></p>
+<p>对于materialized views, 可以参考<a target="_blank" rel="noopener" href="https://stackoverflow.com/questions/21469184/sqlalchemy-materialized-relationships">这里</a>，和这个用<a target="_blank" rel="noopener" href="http://www.jeffwidman.com/blog/847/using-sqlalchemy-to-create-and-manage-postgresql-materialized-views/">PostgreSQL的例子</a>似乎要用到比较多的高级属性？</p>
+<h1 id="数据库事务-transaction"><a href="#数据库事务-transaction" class="headerlink" title="数据库事务(transaction)"></a>数据库事务(transaction)</h1><p>可以设置commit, rollback. 可以设置多个点便于提交/回滚。</p>
+<p>事务有着ACID的特性，请看<a target="_blank" rel="noopener" href="https://www.cnblogs.com/fjdingsd/p/5273008.html">老哥博客</a></p>
+<p>这里暂时简单提一下<code>transaction</code>，以后会详细介绍。</p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#ORM-%E5%92%8C-SQL-%E5%A4%87%E5%BF%98"><span class="toc-number">1.</span> <span class="toc-text">ORM 和 SQL 备忘</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#MySQL-amp-SQLAlchemy-%E6%9F%A5%E8%AF%A21"><span class="toc-number">2.</span> <span class="toc-text">MySQL &amp; SQLAlchemy: 查询1</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E6%A6%82%E5%BF%B5"><span class="toc-number">3.</span> <span class="toc-text">概念</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9F%BA%E7%A1%80%E6%9F%A5%E8%AF%A2"><span class="toc-number">3.1.</span> <span class="toc-text">基础查询</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%8E%92%E5%BA%8F%E6%9F%A5%E8%AF%A2"><span class="toc-number">3.2.</span> <span class="toc-text">排序查询</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%BF%87%E6%BB%A4%E6%9F%A5%E8%AF%A2"><span class="toc-number">3.3.</span> <span class="toc-text">过滤查询</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E5%AE%9E%E6%93%8D"><span class="toc-number">4.</span> <span class="toc-text">实操</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%BF%94%E5%9B%9E%E5%93%AA%E4%BA%9B"><span class="toc-number">4.0.1.</span> <span class="toc-text">返回哪些</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#SQLAlchemy-amp-MySQL%E5%A4%87%E5%BF%98%EF%BC%9A%E5%9F%BA%E6%9C%AC%E6%93%8D%E4%BD%9C-CUD-%E4%B8%8E%E5%AE%8C%E6%95%B4%E6%80%A7%E7%BA%A6%E6%9D%9F"><span class="toc-number">4.1.</span> <span class="toc-text">SQLAlchemy&amp;MySQL备忘：基本操作(CUD)与完整性约束</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E5%88%9B%E5%BB%BA-Create-%E3%80%81%E6%9B%B4%E6%96%B0-Update-%E4%B8%8E%E5%88%A0%E9%99%A4-Delete"><span class="toc-number">5.</span> <span class="toc-text">创建(Create)、更新(Update)与删除(Delete)</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BB%8F%E5%B8%B8%E8%A6%81%E5%81%9A%E7%9A%84%E6%8F%92%E5%85%A5%E6%93%8D%E4%BD%9C"><span class="toc-number">5.1.</span> <span class="toc-text">经常要做的插入操作</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%93%8D%E4%BD%9C"><span class="toc-number">5.2.</span> <span class="toc-text">操作</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%8F%92%E5%85%A5%E6%9F%A5%E6%89%BE%E7%9A%84%E7%BB%93%E6%9E%9C"><span class="toc-number">5.3.</span> <span class="toc-text">插入查找的结果</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E6%9B%B4%E6%96%B0"><span class="toc-number">6.</span> <span class="toc-text">更新</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BB%93%E6%9E%84"><span class="toc-number">6.1.</span> <span class="toc-text">结构</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%93%8D%E4%BD%9C-1"><span class="toc-number">6.2.</span> <span class="toc-text">操作</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E5%88%A0%E9%99%A4"><span class="toc-number">7.</span> <span class="toc-text">删除</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%93%8D%E4%BD%9C-2"><span class="toc-number">7.1.</span> <span class="toc-text">操作</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E5%88%9B%E5%BB%BA%E8%A1%A8"><span class="toc-number">8.</span> <span class="toc-text">创建表</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BB%93%E6%9E%84-1"><span class="toc-number">8.1.</span> <span class="toc-text">结构</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BA%A6%E6%9D%9F"><span class="toc-number">8.2.</span> <span class="toc-text">约束</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#NOT-NULL"><span class="toc-number">8.2.1.</span> <span class="toc-text">NOT NULL</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#AUTOINCREMENT"><span class="toc-number">8.2.2.</span> <span class="toc-text">AUTOINCREMENT</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#DEFAULT"><span class="toc-number">8.2.3.</span> <span class="toc-text">DEFAULT</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#PRIMARY-KEY"><span class="toc-number">8.2.4.</span> <span class="toc-text">PRIMARY KEY</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#UNIQUE"><span class="toc-number">8.2.5.</span> <span class="toc-text">UNIQUE</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#CHECK"><span class="toc-number">8.2.6.</span> <span class="toc-text">CHECK</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#FOREIGN-KEY-%E5%A4%96%E9%94%AE%E7%BA%A6%E6%9D%9F"><span class="toc-number">8.2.7.</span> <span class="toc-text">FOREIGN KEY 外键约束</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#CASCADE-%E7%BA%A7%E8%81%94"><span class="toc-number">8.2.7.1.</span> <span class="toc-text">CASCADE(级联)</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9B%B4%E6%96%B0%E8%A1%A8"><span class="toc-number">8.3.</span> <span class="toc-text">更新表</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%A1%A8%E7%BA%A6%E6%9D%9F%E7%9A%84%E4%BF%AE%E6%94%B9"><span class="toc-number">8.3.1.</span> <span class="toc-text">表约束的修改</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%88%A0%E9%99%A4-1"><span class="toc-number">8.4.</span> <span class="toc-text">删除</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#SQLAlchemy-MySQL-%E5%A4%87%E5%BF%98-%E8%AE%A1%E7%AE%97%E5%AD%97%E6%AE%B5%E5%92%8C%E5%88%86%E7%BB%84%E6%9F%A5%E8%AF%A2"><span class="toc-number">8.5.</span> <span class="toc-text">SQLAlchemy-MySQL-备忘-计算字段和分组查询</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#MYSQL%E5%92%8C%E7%90%86%E8%AE%BA%E9%83%A8%E5%88%86"><span class="toc-number">9.</span> <span class="toc-text">MYSQL和理论部分</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%AE%A1%E7%AE%97%E5%AD%97%E6%AE%B5"><span class="toc-number">9.1.</span> <span class="toc-text">计算字段</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%B1%87%E6%80%BB%E6%95%B0%E6%8D%AE%E4%B8%8Eaggregate-function"><span class="toc-number">9.2.</span> <span class="toc-text">汇总数据与aggregate function</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%81%9A%E9%9B%86%E5%87%BD%E6%95%B0"><span class="toc-number">9.2.1.</span> <span class="toc-text">聚集函数</span></a></li></ol></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E5%88%86%E7%BB%84"><span class="toc-number">10.</span> <span class="toc-text">分组</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%88%86%E7%BB%84%E6%93%8D%E4%BD%9C"><span class="toc-number">10.1.</span> <span class="toc-text">分组操作</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%BF%87%E6%BB%A4"><span class="toc-number">10.1.1.</span> <span class="toc-text">过滤</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%BF%87%E6%BB%A4%E7%9B%B8%E5%85%B3%E7%90%86%E8%AE%BA-%E7%9B%B8%E5%BD%93%E9%87%8D%E8%A6%81%EF%BC%81%EF%BC%81%EF%BC%81"><span class="toc-number">10.2.</span> <span class="toc-text">过滤相关理论(相当重要！！！)</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E5%AE%9E%E6%93%8D-1"><span class="toc-number">11.</span> <span class="toc-text">实操</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#SQLAlchemy-amp-MySQL-%E5%A4%87%E5%BF%98-%E7%BB%84%E5%90%88%E6%9F%A5%E8%AF%A2"><span class="toc-number">12.</span> <span class="toc-text">SQLAlchemy &amp; MySQL 备忘: 组合查询</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E7%BB%84%E5%90%88-Union-%E6%9F%A5%E8%AF%A2"><span class="toc-number">13.</span> <span class="toc-text">组合(Union)查询</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%9B%AE%E7%9A%84"><span class="toc-number">13.1.</span> <span class="toc-text">目的</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9F%BA%E7%A1%80"><span class="toc-number">13.2.</span> <span class="toc-text">基础</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%87%8D%E5%A4%8D%E7%9A%84%E8%A1%8C"><span class="toc-number">13.3.</span> <span class="toc-text">重复的行</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%8E%92%E5%BA%8F"><span class="toc-number">13.4.</span> <span class="toc-text">排序</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BB%84%E5%90%88%E4%B8%8D%E5%90%8C%E8%A1%A8"><span class="toc-number">13.5.</span> <span class="toc-text">组合不同表</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#SQLAlchemy-amp-MySQL-%E5%A4%87%E5%BF%98-%E5%85%B3%E7%B3%BB-relationship-%E4%B8%8E%E8%BF%9E%E6%8E%A5-join"><span class="toc-number">14.</span> <span class="toc-text">SQLAlchemy &amp; MySQL 备忘: 关系(relationship)与连接(join)</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E9%87%8D%E7%82%B9"><span class="toc-number">15.</span> <span class="toc-text">重点</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A6%82%E5%BF%B5-1"><span class="toc-number">15.1.</span> <span class="toc-text">概念</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%AD%89%E5%80%BC%E8%81%94%E7%BB%93-equijoin"><span class="toc-number">15.2.</span> <span class="toc-text">等值联结(equijoin)</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%86%85%E9%83%A8%E8%81%94%E7%BB%93-Inner-Join"><span class="toc-number">15.3.</span> <span class="toc-text">内部联结(Inner Join)</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%A4%9A%E8%A1%A8%E8%81%94%E7%BB%93"><span class="toc-number">15.4.</span> <span class="toc-text">多表联结</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%A1%A8%E7%9A%84%E5%88%AB%E5%90%8D"><span class="toc-number">15.5.</span> <span class="toc-text">表的别名</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%87%AA%E8%81%94%E7%BB%93"><span class="toc-number">15.6.</span> <span class="toc-text">自联结</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%87%AA%E7%84%B6%E8%81%94%E7%BB%93"><span class="toc-number">15.7.</span> <span class="toc-text">自然联结</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%A4%96%E9%83%A8%E8%81%94%E7%BB%93"><span class="toc-number">15.8.</span> <span class="toc-text">外部联结</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%B8%A6%E8%81%9A%E9%9B%86%E5%87%BD%E6%95%B0%E7%9A%84%E8%81%94%E7%BB%93"><span class="toc-number">15.9.</span> <span class="toc-text">带聚集函数的联结</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#SQLAlchemy"><span class="toc-number">16.</span> <span class="toc-text">SQLAlchemy</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%80%E5%AF%B9%E4%B8%80%E5%85%B3%E7%B3%BB"><span class="toc-number">16.1.</span> <span class="toc-text">一对一关系</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%A4%9A%E5%AF%B9%E5%A4%9A%E5%85%B3%E7%B3%BB"><span class="toc-number">16.2.</span> <span class="toc-text">多对多关系</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#SQLAlchemy-%E5%85%B3%E7%B3%BB%E6%93%8D%E4%BD%9C"><span class="toc-number">17.</span> <span class="toc-text">SQLAlchemy : 关系操作</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#es"><span class="toc-number">17.1.</span> <span class="toc-text">es</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#join%E6%93%8D%E4%BD%9C"><span class="toc-number">17.2.</span> <span class="toc-text">join操作</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%A4%9A%E4%B8%AAentity%E7%9A%84%E8%BF%94%E5%9B%9E%E5%80%BC%E7%A1%AE%E5%AE%9A"><span class="toc-number">17.2.1.</span> <span class="toc-text">多个entity的返回值确定</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#SQLAlchemy-MySQL%E5%A4%87%E5%BF%98%EF%BC%9A%E5%AD%90%E6%9F%A5%E8%AF%A2"><span class="toc-number">17.3.</span> <span class="toc-text">SQLAlchemy-MySQL备忘：子查询</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A6%82%E5%BF%B5-2"><span class="toc-number">17.4.</span> <span class="toc-text">概念</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BD%BF%E7%94%A8%E6%B3%A8%E6%84%8F"><span class="toc-number">17.5.</span> <span class="toc-text">使用注意</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%9B%B8%E5%85%B3%E5%AD%90%E6%9F%A5%E8%AF%A2"><span class="toc-number">17.6.</span> <span class="toc-text">相关子查询</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%9B%86%E5%90%88%E7%9A%84%E6%AF%94%E8%BE%83-some-any-all%E2%80%A6"><span class="toc-number">17.7.</span> <span class="toc-text">集合的比较: some, any, all…</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%A9%BA%E5%85%B3%E7%B3%BB%E6%9F%A5%E6%89%BE%E4%B8%8E%E5%88%A4%E6%96%AD%EF%BC%9A-exists"><span class="toc-number">17.8.</span> <span class="toc-text">空关系查找与判断： exists</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%87%8D%E5%A4%8D%E8%A1%8C%E7%9A%84%E5%AD%98%E5%9C%A8%E6%80%A7%E6%B5%8B%E8%AF%95"><span class="toc-number">17.9.</span> <span class="toc-text">重复行的存在性测试</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#from-%E5%AD%90%E5%8F%A5%E4%B8%AD%E7%9A%84%E5%AD%90%E6%9F%A5%E8%AF%A2"><span class="toc-number">17.10.</span> <span class="toc-text">from 子句中的子查询</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#with-%E5%AD%90%E5%8F%A5%E7%9A%84%E4%BD%BF%E7%94%A8"><span class="toc-number">17.11.</span> <span class="toc-text">with 子句的使用</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#SQLAlchemy-amp-MySQL%E5%A4%87%E5%BF%98%EF%BC%9A%E4%BA%8B%E5%8A%A1%E5%92%8C%E8%A7%86%E5%9B%BE%E7%9A%84%E4%BD%BF%E7%94%A8"><span class="toc-number">17.12.</span> <span class="toc-text">SQLAlchemy&amp;MySQL备忘：事务和视图的使用</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E8%A7%86%E5%9B%BE"><span class="toc-number">18.</span> <span class="toc-text">视图</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A6%82%E5%BF%B5%E7%9B%AE%E7%9A%84"><span class="toc-number">18.1.</span> <span class="toc-text">概念目的</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9A%E4%B9%89%E4%B8%8E%E4%BD%BF%E7%94%A8"><span class="toc-number">18.2.</span> <span class="toc-text">定义与使用</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#materialized-view"><span class="toc-number">18.3.</span> <span class="toc-text">materialized view</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#SQLAlchemy-use"><span class="toc-number">18.4.</span> <span class="toc-text">SQLAlchemy use</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E5%BA%93%E4%BA%8B%E5%8A%A1-transaction"><span class="toc-number">19.</span> <span class="toc-text">数据库事务(transaction)</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/07/17/SQL-ORM-notes/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/07/17/SQL-ORM-notes/&text=SQL &amp; ORM notes"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/07/17/SQL-ORM-notes/&title=SQL &amp; ORM notes"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/07/17/SQL-ORM-notes/&is_video=false&description=SQL &amp; ORM notes"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=SQL &amp; ORM notes&body=Check out this article: http://blog.mwish.me/2020/07/17/SQL-ORM-notes/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/07/17/SQL-ORM-notes/&title=SQL &amp; ORM notes"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/07/17/SQL-ORM-notes/&title=SQL &amp; ORM notes"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/07/17/SQL-ORM-notes/&title=SQL &amp; ORM notes"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/07/17/SQL-ORM-notes/&title=SQL &amp; ORM notes"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/07/17/SQL-ORM-notes/&name=SQL &amp; ORM notes&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/07/17/SQL-ORM-notes/&t=SQL &amp; ORM notes"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

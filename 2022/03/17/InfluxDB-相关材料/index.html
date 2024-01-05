@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="InfluxDB 分为这里所列的版本：https:&#x2F;&#x2F;www.influxdata.com&#x2F;products&#x2F;editions&#x2F;  数据模型和查询参考：https:&#x2F;&#x2F;docs.influxdata.com&#x2F;influxdb&#x2F;v2.1&#x2F;reference&#x2F;key-concepts&#x2F;data-elements&#x2F; 和 https:&#x2F;&#x2F;docs.influxdata.com&#x2F;enterprise_inf">
+<meta property="og:type" content="article">
+<meta property="og:title" content="InfluxDB 模型和存储引擎入门">
+<meta property="og:url" content="http://blog.mwish.me/2022/03/17/InfluxDB-%E7%9B%B8%E5%85%B3%E6%9D%90%E6%96%99/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="InfluxDB 分为这里所列的版本：https:&#x2F;&#x2F;www.influxdata.com&#x2F;products&#x2F;editions&#x2F;  数据模型和查询参考：https:&#x2F;&#x2F;docs.influxdata.com&#x2F;influxdb&#x2F;v2.1&#x2F;reference&#x2F;key-concepts&#x2F;data-elements&#x2F; 和 https:&#x2F;&#x2F;docs.influxdata.com&#x2F;enterprise_inf">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/DBBF4749-218C-493E-A56E-4A6060E21AC7.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/31928802-5350-4AE7-844F-AF8F1049115A.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/A06BB0EF-D68C-491A-85C1-574E0DFCAC6F.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/5F759A4F-F31C-4855-9FAF-4F1A691E36D8.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/20200716_Timescale_Blog_InfluxBenchmarks.jpeg">
+<meta property="og:image" content="https://image.mwish.me/blog-image/F0977952-F7E5-464A-9002-58D8C328A9CB.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/A9DA7AAC-234A-4AEE-BA33-85EE761211A9.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/A5A862C7-9674-4364-82D2-E122BF5F644A.png">
+<meta property="article:published_time" content="2022-03-17T05:05:32.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.569Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/DBBF4749-218C-493E-A56E-4A6060E21AC7.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>InfluxDB 模型和存储引擎入门</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2022/03/21/Notes-BigTable/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2022/03/02/Dapper-and-Tracing/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2022/03/17/InfluxDB-%E7%9B%B8%E5%85%B3%E6%9D%90%E6%96%99/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2022/03/17/InfluxDB-%E7%9B%B8%E5%85%B3%E6%9D%90%E6%96%99/&text=InfluxDB 模型和存储引擎入门"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2022/03/17/InfluxDB-%E7%9B%B8%E5%85%B3%E6%9D%90%E6%96%99/&title=InfluxDB 模型和存储引擎入门"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2022/03/17/InfluxDB-%E7%9B%B8%E5%85%B3%E6%9D%90%E6%96%99/&is_video=false&description=InfluxDB 模型和存储引擎入门"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=InfluxDB 模型和存储引擎入门&body=Check out this article: http://blog.mwish.me/2022/03/17/InfluxDB-%E7%9B%B8%E5%85%B3%E6%9D%90%E6%96%99/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2022/03/17/InfluxDB-%E7%9B%B8%E5%85%B3%E6%9D%90%E6%96%99/&title=InfluxDB 模型和存储引擎入门"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2022/03/17/InfluxDB-%E7%9B%B8%E5%85%B3%E6%9D%90%E6%96%99/&title=InfluxDB 模型和存储引擎入门"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2022/03/17/InfluxDB-%E7%9B%B8%E5%85%B3%E6%9D%90%E6%96%99/&title=InfluxDB 模型和存储引擎入门"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2022/03/17/InfluxDB-%E7%9B%B8%E5%85%B3%E6%9D%90%E6%96%99/&title=InfluxDB 模型和存储引擎入门"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2022/03/17/InfluxDB-%E7%9B%B8%E5%85%B3%E6%9D%90%E6%96%99/&name=InfluxDB 模型和存储引擎入门&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2022/03/17/InfluxDB-%E7%9B%B8%E5%85%B3%E6%9D%90%E6%96%99/&t=InfluxDB 模型和存储引擎入门"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E6%A8%A1%E5%9E%8B%E5%92%8C%E6%9F%A5%E8%AF%A2"><span class="toc-number">1.</span> <span class="toc-text">数据模型和查询</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Line-Protocol"><span class="toc-number">1.1.</span> <span class="toc-text">Line Protocol</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#query-amp-latency"><span class="toc-number">1.2.</span> <span class="toc-text">query &amp; latency</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Shard"><span class="toc-number">2.</span> <span class="toc-text">Shard</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Compaction-amp-Deletion"><span class="toc-number">2.1.</span> <span class="toc-text">Compaction &amp; Deletion</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%80%E4%BA%9B-Schema-%E7%9B%B8%E5%85%B3%E7%9A%84%E8%AE%A8%E8%AE%BA"><span class="toc-number">3.</span> <span class="toc-text">一些 Schema 相关的讨论</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AD%98%E5%82%A8%E5%BC%95%E6%93%8E-TSM-Time-Structured-Merge-Tree"><span class="toc-number">4.</span> <span class="toc-text">存储引擎: TSM(Time-Structured Merge Tree)</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#WAL"><span class="toc-number">4.1.</span> <span class="toc-text">WAL</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Cache"><span class="toc-number">4.2.</span> <span class="toc-text">Cache</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#TSM-%E6%96%87%E4%BB%B6"><span class="toc-number">4.3.</span> <span class="toc-text">TSM 文件</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Compaction"><span class="toc-number">4.4.</span> <span class="toc-text">Compaction</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Write-Update-Delete-Query"><span class="toc-number">4.5.</span> <span class="toc-text">Write &#x2F; Update &#x2F; Delete &#x2F; Query</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%85%B3%E9%94%AE%E8%B7%AF%E5%BE%84%E4%BB%A3%E7%A0%81"><span class="toc-number">4.6.</span> <span class="toc-text">关键路径代码</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%B4%A2%E5%BC%95-TSI-Time-Series-Index"><span class="toc-number">5.</span> <span class="toc-text">索引: TSI (Time Series Index)</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8F%82%E8%80%83"><span class="toc-number">6.</span> <span class="toc-text">参考</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        InfluxDB 模型和存储引擎入门
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2022-03-17T05:05:32.000Z" itemprop="datePublished">2022-03-17</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>InfluxDB 分为这里所列的版本：<a target="_blank" rel="noopener" href="https://www.influxdata.com/products/editions/">https://www.influxdata.com/products/editions/</a> </p>
+<h2 id="数据模型和查询"><a href="#数据模型和查询" class="headerlink" title="数据模型和查询"></a>数据模型和查询</h2><p>参考：<a target="_blank" rel="noopener" href="https://docs.influxdata.com/influxdb/v2.1/reference/key-concepts/data-elements/">https://docs.influxdata.com/influxdb/v2.1/reference/key-concepts/data-elements/</a> 和 <a target="_blank" rel="noopener" href="https://docs.influxdata.com/enterprise_influxdb/v1.9/concepts/glossary/">https://docs.influxdata.com/enterprise_influxdb/v1.9/concepts/glossary/</a></p>
+<p><img src="https://image.mwish.me/blog-image/DBBF4749-218C-493E-A56E-4A6060E21AC7.png" alt="DBBF4749-218C-493E-A56E-4A6060E21AC7"></p>
+<ul>
+<li>Database: 数据库</li>
+<li>Timestamp: 时间戳，</li>
+<li>Measurement: A measurement acts as a container for tags, fields, and timestamps.</li>
+<li>Field: 分为 <code>&lt;Field Key, Field Value&gt;</code>，Field Key 是名称字符串，Field Value 是只支持基本类型的值。所有的 Field 组成了一个 <strong>Field Set</strong>，<strong>Field 上的值是不会建索引的</strong>。</li>
+<li>Tags 是提供 <code>Point</code> 的元数据，有点类似 index，tags 按照 <code>string</code> 的方式存储. 所有的 tags 组成了 tag set。单个 Tag 包含 <code>Tag Key</code> 和 <code>Tag Value</code>. 对于每个 tag key, tag value 可以构成一个类似 Card 的概念<ul>
+<li>可以理解成，tag 本身都是 string 类型</li>
+<li>tag 可以构建索引</li>
+</ul>
+</li>
+</ul>
+<p>那么，如上所述，InfluxDB 的 Schema 如下表示：</p>
+<p><img src="https://image.mwish.me/blog-image/31928802-5350-4AE7-844F-AF8F1049115A.png" alt="31928802-5350-4AE7-844F-AF8F1049115A"></p>
+<p>理解了上面的东西之后，需要理解 <strong>Series</strong> 和 <strong>Series Key</strong> 这两个概念：</p>
+<p><img src="https://image.mwish.me/blog-image/A06BB0EF-D68C-491A-85C1-574E0DFCAC6F.png" alt="A06BB0EF-D68C-491A-85C1-574E0DFCAC6F"></p>
+<p>和 <strong>Series</strong>: 包含 <strong>timestamp</strong> 和</p>
+<p><img src="https://image.mwish.me/blog-image/5F759A4F-F31C-4855-9FAF-4F1A691E36D8.png" alt="5F759A4F-F31C-4855-9FAF-4F1A691E36D8"></p>
+<p>看到没有，这里相当于统计信息给抽出来了，一个 <code>Series Key</code> 对应一个 <code>Series</code>，而这个 <code>Series</code> 有着多个 <code>&lt;Timestamp, Field Value&gt;</code> 组下面才定义到具体的信息：</p>
+<p>Point: 对应的单个 <code>Series Key</code> + <code>&lt;Timestamp + Field Value&gt;</code>, 可以理解成数据库的「行」。</p>
+<p>最后，measurement 类似 RDBMS 的 <strong>表</strong>，而这里给出一个 <code>Bucket</code> 的概念，可以设置多个 <strong>measurement</strong>，并且设置一些 expire time 之类的条件。</p>
+<p>以上就是 InfluxDB 的基本概念，具体一些 Schema 定义可以看：<a target="_blank" rel="noopener" href="https://docs.influxdata.com/influxdb/v2.1/reference/key-concepts/data-schema/">https://docs.influxdata.com/influxdb/v2.1/reference/key-concepts/data-schema/</a></p>
+<h3 id="Line-Protocol"><a href="#Line-Protocol" class="headerlink" title="Line Protocol"></a>Line Protocol</h3><p>InfluxDB 可以使用 Line Protocol: <a target="_blank" rel="noopener" href="https://github.com/influxdata/influxdb/tree/master/tsdb#line-protocol">https://github.com/influxdata/influxdb/tree/master/tsdb#line-protocol</a></p>
+<h3 id="query-amp-latency"><a href="#query-amp-latency" class="headerlink" title="query &amp; latency"></a>query &amp; latency</h3><p>Timescale 给出了一个 benchmark，我觉得这种 benchmark 肯定都是自己吊打别人，但是对衡量数量级来说帮助很大，如下图：</p>
+<p><a target="_blank" rel="noopener" href="https://www.timescale.com/blog/content/images/2022/01/20200716_Timescale_Blog_InfluxBenchmarks.jpg">https://www.timescale.com/blog/content/images/2022/01/20200716_Timescale_Blog_InfluxBenchmarks.jpg</a></p>
+<p><img src="https://image.mwish.me/blog-image/20200716_Timescale_Blog_InfluxBenchmarks.jpeg" alt="20200716_Timescale_Blog_InfluxBenchmarks"></p>
+<p>可以看到，对这个的查询包含一些近实时的查询，而数据可能能在 ~100ms 左右的时间完成一些简单的 GroupBy。</p>
+<h2 id="Shard"><a href="#Shard" class="headerlink" title="Shard"></a>Shard</h2><blockquote>
+<p>Sharding is the horizontal partitioning of data in a database. Each partition is called shard. InfluxDB stores data in shard groups, which are organized by retention policy and store data with timestamps that fall within a specific time interval. </p>
+</blockquote>
+<p>因为时序数据库是一个偏分析的场景，所以按照时间分片是一个相对自然的策略。这个分片有一个 RP(Retention Policy)，是说保留具体内容的时间。我们都知道，Bucket 本身有一个过期时间配置，Shard Group 会按照 Bucket 的时间再切细一点，做过期时间配置：</p>
+<p><img src="https://image.mwish.me/blog-image/F0977952-F7E5-464A-9002-58D8C328A9CB.png" alt="F0977952-F7E5-464A-9002-58D8C328A9CB"></p>
+<p>再开源 InfluxDB 上，一个 Shard Group 只有一个 Shard，感觉很无力：</p>
+<p><img src="https://image.mwish.me/blog-image/A9DA7AAC-234A-4AEE-BA33-85EE761211A9.png" alt="A9DA7AAC-234A-4AEE-BA33-85EE761211A9"></p>
+<p><strong>InfluxDB Enterprise</strong>  则不一样，它可以配置 Shard 的复制等功能：<a target="_blank" rel="noopener" href="https://docs.influxdata.com/enterprise_influxdb/v1.9/features/clustering-features/#shard-movement">https://docs.influxdata.com/enterprise_influxdb/v1.9/features/clustering-features/#shard-movement</a> 。</p>
+<p>InfluxDB 的 Cluster 版本现在设计如下：<a target="_blank" rel="noopener" href="https://docs.influxdata.com/enterprise_influxdb/v1.8/concepts/clustering/">https://docs.influxdata.com/enterprise_influxdb/v1.8/concepts/clustering/</a></p>
+<p>replication factor 如果设置为 <code>X</code>，那么一个 <code>N</code> 个 Data Node 的集群会配置 <code>floor(N/X)</code> 个 <code>Shard</code>，然后这里会保证每个几乎机器都会被复制这些东西：</p>
+<blockquote>
+<p>For example we have a shard group for <code>2016-09-19</code> that has two shards <code>1</code> and <code>2</code>. Shard <code>1</code> is replicated to servers <code>A</code> and <code>B</code> while shard <code>2</code> is copied to servers <code>C</code> and <code>D</code>.</p>
+</blockquote>
+<p>(我也不知道为什么这么设计，有人可以告诉我吗？)</p>
+<p>这里会根据 <code>hash</code> 挑选写入的 shard，来做热点写打散：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// key is measurement + tagset</span></span><br><span class="line"><span class="comment">// shardGroup is the group for the values based on timestamp</span></span><br><span class="line"><span class="comment">// hash with fnv and then bucket</span></span><br><span class="line">shard := shardGroup.shards[fnv.New64a(key) % <span class="built_in">len</span>(shardGroup.Shards)]</span><br></pre></td></tr></table></figure>
+<p>写入的时候，可以配置 write-consistency，不过我感觉基本都是 RWN 都不算的简单同步复制的变种：<a target="_blank" rel="noopener" href="https://docs.influxdata.com/enterprise_influxdb/v1.8/concepts/clustering/#write-consistency">https://docs.influxdata.com/enterprise_influxdb/v1.8/concepts/clustering/#write-consistency</a></p>
+<p>这里还有个 hinted handoff，和 Dynamo 那套一样，都是故障时写顺延。</p>
+<h3 id="Compaction-amp-Deletion"><a href="#Compaction-amp-Deletion" class="headerlink" title="Compaction &amp; Deletion"></a>Compaction &amp; Deletion</h3><p>因为热点是写优化的，所以某个 ShardGroup 再不会写之后，相对来说会变成冷的，可以切成一些读优化、省空间的结构。而 Shard Group 本身也会过期，所以是需要删除的。</p>
+<h2 id="一些-Schema-相关的讨论"><a href="#一些-Schema-相关的讨论" class="headerlink" title="一些 Schema 相关的讨论"></a>一些 Schema 相关的讨论</h2><p><a target="_blank" rel="noopener" href="https://docs.influxdata.com/enterprise_influxdb/v1.9/concepts/schema_and_data_layout/">https://docs.influxdata.com/enterprise_influxdb/v1.9/concepts/schema_and_data_layout/</a></p>
+<p>基本上是在教你「怎么用我们的数据库」。</p>
+<h2 id="存储引擎-TSM-Time-Structured-Merge-Tree"><a href="#存储引擎-TSM-Time-Structured-Merge-Tree" class="headerlink" title="存储引擎: TSM(Time-Structured Merge Tree)"></a>存储引擎: TSM(Time-Structured Merge Tree)</h2><p>每一个 Shard 都包含着 WAL 和 TSM 文件，这类似 LSM 的 WSL 和 SSTable。TSM 存储引擎包含：</p>
+<ol>
+<li>内存索引：<strong>跨 Shards 共享</strong>，提供对 <code>measurements</code>、<code>tags</code> 和 <code>series</code> 的快速访问。<em>这个可能会持久化成下面的 TSI。</em></li>
+<li>WAL：Shard 的写入优化格式</li>
+<li>Cache：对 TSM 的 WAL 缓存，类似 LevelDB/RocksDB 的 MemTable（我一眼以为是 BlockCache）</li>
+<li>TSM Files: 类似 SSTable，但着重于列式、压缩的格式</li>
+<li>FileStore: TSM Files 的 Manager，控制文件层面的增删访</li>
+<li>Compactor/Compactor Planner: 压缩相关。这里是希望把数据转成更读友好的形式</li>
+<li>Compression: 因为是列式数据，所以需要特定的压缩。有的 Pattern 是固定的压缩方式，有的 Pattern 则是根据数据分布来压缩的。</li>
+</ol>
+<p>需要注意的是，对引擎的写入是 Batch 写入的，可能用户的客户端/agent会 Batch 采样数据过来，然后往热的 <code>Shard Group</code> 写数据。</p>
+<h3 id="WAL"><a href="#WAL" class="headerlink" title="WAL"></a>WAL</h3><p>当写入请求过来的时候，会先往 WAL 里面写入。WAL 以 10MB 为一个 <code>Segment</code>，然后批量压缩写入，格式如下：<a target="_blank" rel="noopener" href="https://github.com/influxdata/influxdb/blob/master/tsdb/engine/tsm1/wal.go#L705-L722">https://github.com/influxdata/influxdb/blob/master/tsdb/engine/tsm1/wal.go#L705-L722</a></p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line">// The entries values are encode as follows:</span><br><span class="line">//</span><br><span class="line">// For each key and slice of values, first a 1 byte type for the []Values</span><br><span class="line">// slice is written.  Following the type, the length and key bytes are written.</span><br><span class="line">// Following the key, a 4 byte count followed by each value as a 8 byte time</span><br><span class="line">// and N byte value.  The value is dependent on the type being encoded.  float64,</span><br><span class="line">// int64, use 8 bytes, boolean uses 1 byte, and string is similar to the key encoding,</span><br><span class="line">// except that string values have a 4-byte length, and keys only use 2 bytes.</span><br><span class="line">//</span><br><span class="line">// This structure is then repeated for each key an value slices.</span><br><span class="line">//</span><br><span class="line">// ┌────────────────────────────────────────────────────────────────────┐</span><br><span class="line">// │                           WriteWALEntry                            │</span><br><span class="line">// ├──────┬─────────┬────────┬───────┬─────────┬─────────┬───┬──────┬───┤</span><br><span class="line">// │ Type │ Key Len │   Key  │ Count │  Time   │  Value  │...│ Type │...│</span><br><span class="line">// │1 byte│ 2 bytes │ N bytes│4 bytes│ 8 bytes │ N bytes │   │1 byte│   │</span><br><span class="line">// └──────┴─────────┴────────┴───────┴─────────┴─────────┴───┴──────┴───┘</span><br></pre></td></tr></table></figure>
+<p>整个 Batch 在组织成如上格式之后，在写入的时候还会被 snappy 压缩：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">b, err := entry.Encode(bytes)</span><br><span class="line"><span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">	bytesPool.Put(bytes)</span><br><span class="line">	<span class="keyword">return</span> <span class="number">-1</span>, err</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">encBuf := bytesPool.Get(snappy.MaxEncodedLen(<span class="built_in">len</span>(b)))</span><br><span class="line"></span><br><span class="line">compressed := snappy.Encode(encBuf, b)</span><br></pre></td></tr></table></figure>
+<p>文档上显示，单台机器上，每个 <code>Shard</code> 都会有一个 WAL 流，InfluxDB 致力于将其改成同一个 WAL 流。</p>
+<h3 id="Cache"><a href="#Cache" class="headerlink" title="Cache"></a>Cache</h3><blockquote>
+<p>The Cache is an in-memory copy of all data points current stored in the WAL. The points are organized by the key, which is the measurement, <a target="_blank" rel="noopener" href="https://docs.influxdata.com/enterprise_influxdb/v1.9/concepts/glossary/#tag-set">tag set</a>, and unique <a target="_blank" rel="noopener" href="https://docs.influxdata.com/enterprise_influxdb/v1.9/concepts/glossary/#field">field</a>. Each field is kept as its own time-ordered range. The Cache data is not compressed while in memory.</p>
+</blockquote>
+<p>这里提供同一种类型的快速访问. 看实际代码，<code>Cache</code> 会把实际存储 dispatch 到一个叫 <code>ring</code> 的结构体上。这是一个 Bucket + Concurrency Hash Map，逻辑大概如下：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// ring is a structure that maps series keys to entries.</span></span><br><span class="line"><span class="comment">//</span></span><br><span class="line"><span class="comment">// ring is implemented as a crude hash ring, in so much that you can have</span></span><br><span class="line"><span class="comment">// variable numbers of members in the ring, and the appropriate member for a</span></span><br><span class="line"><span class="comment">// given series key can always consistently be found. Unlike a true hash ring</span></span><br><span class="line"><span class="comment">// though, this ring is not resizeable—there must be at most 16 members in the</span></span><br><span class="line"><span class="comment">// ring, and the number of members must always be a power of 2.</span></span><br><span class="line"><span class="comment">//</span></span><br><span class="line"><span class="comment">// ring works as follows: Each member of the ring contains a single store, which</span></span><br><span class="line"><span class="comment">// contains a map of series keys to entries. A ring always has 16 partitions,</span></span><br><span class="line"><span class="comment">// and a member takes up one or more of these partitions (depending on how many</span></span><br><span class="line"><span class="comment">// members are specified to be in the ring)</span></span><br><span class="line"><span class="comment">//</span></span><br><span class="line"><span class="comment">// To determine the partition that a series key should be added to, the series</span></span><br><span class="line"><span class="comment">// key is hashed and the first 8 bits are used as an index to the ring.</span></span><br><span class="line"><span class="comment">//</span></span><br><span class="line"><span class="keyword">type</span> ring <span class="keyword">struct</span> &#123;</span><br><span class="line">	<span class="comment">// The unique set of partitions in the ring.</span></span><br><span class="line">	<span class="comment">// len(partitions) &lt;= len(continuum)</span></span><br><span class="line">	partitions []*partition</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(r *ring)</span></span> split(n <span class="type">int</span>) []storer &#123;</span><br><span class="line">	storers := <span class="built_in">make</span>([]storer, n)</span><br><span class="line">	<span class="keyword">for</span> i := <span class="number">0</span>; i &lt; n; i++ &#123;</span><br><span class="line">		storers[i], _ = newring(<span class="built_in">len</span>(r.partitions))</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">for</span> i, p := <span class="keyword">range</span> r.partitions &#123;</span><br><span class="line">		r := storers[i%n].(*ring)</span><br><span class="line">		r.partitions[i] = p</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">return</span> storers</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// partition provides safe access to a map of series keys to entries.</span></span><br><span class="line"><span class="keyword">type</span> partition <span class="keyword">struct</span> &#123;</span><br><span class="line">	mu    sync.RWMutex</span><br><span class="line">	store <span class="keyword">map</span>[<span class="type">string</span>]*entry</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>注意 <code>store</code> 存储的 <code>map[string]*entry</code>，这里实际上是：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// entry is a set of values and some metadata.</span></span><br><span class="line"><span class="keyword">type</span> entry <span class="keyword">struct</span> &#123;</span><br><span class="line">	mu     sync.RWMutex</span><br><span class="line">	values Values <span class="comment">// All stored values.</span></span><br><span class="line"></span><br><span class="line">	<span class="comment">// The type of values stored. Read only so doesn&#x27;t need to be protected by</span></span><br><span class="line">	<span class="comment">// mu.</span></span><br><span class="line">	vtype <span class="type">byte</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这个 <code>Values</code> 就是前面 WAL 写的时候那个，是不是一切都连起来了！</p>
+<h3 id="TSM-文件"><a href="#TSM-文件" class="headerlink" title="TSM 文件"></a>TSM 文件</h3><p>TSM 文件类似 LSM 的 SSTable，包含下面几个区域：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line">+--------+------------------------------------+-------------+--------------+</span><br><span class="line">| Header |               Blocks               |    Index    |    Footer    |</span><br><span class="line">|5 bytes |              N bytes               |   N bytes   |   4 bytes    |</span><br><span class="line">+--------+------------------------------------+-------------+--------------+</span><br><span class="line"></span><br><span class="line">+--------------------------------------------------------------------+</span><br><span class="line">│                           Blocks                                   │</span><br><span class="line">+---------------------+-----------------------+----------------------+</span><br><span class="line">|       Block 1       |        Block 2        |       Block N        |</span><br><span class="line">+---------------------+-----------------------+----------------------+</span><br><span class="line">|   CRC    |  Data    |    CRC    |   Data    |   CRC    |   Data    |</span><br><span class="line">| 4 bytes  | N bytes  |  4 bytes  | N bytes   | 4 bytes  |  N bytes  |</span><br><span class="line">+---------------------+-----------------------+----------------------+</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">+-----------------------------------------------------------------------------+</span><br><span class="line">│                                   Index                                     │</span><br><span class="line">+-----------------------------------------------------------------------------+</span><br><span class="line">│ Key Len │   Key   │ Type │ Count │Min Time │Max Time │ Offset │  Size  │...│</span><br><span class="line">│ 2 bytes │ N bytes │1 byte│2 bytes│ 8 bytes │ 8 bytes │8 bytes │4 bytes │   │</span><br><span class="line">+-----------------------------------------------------------------------------+</span><br><span class="line"></span><br><span class="line">+--------------------------------------------------+</span><br><span class="line">| Type  |  Len  |   Timestamps    |      Values    |</span><br><span class="line">|1 Byte | VByte |     N Bytes     |    N Bytes     │</span><br><span class="line">+--------------------------------------------------+</span><br></pre></td></tr></table></figure>
+<p>详细见：<a target="_blank" rel="noopener" href="https://docs.influxdata.com/influxdb/v1.8/concepts/storage_engine/">https://docs.influxdata.com/influxdb/v1.8/concepts/storage_engine/</a></p>
+<p>需要注意 TSM 和 SSTable 的区别：</p>
+<ol>
+<li>单个 Block 里面只有同一个 Series Key，里面的类型是相同的，可以用 Column Compression 来处理。除此之外，它还有 Timestamps 区段。</li>
+<li>不同的 Block 可能拥有相同的 Series Key</li>
+<li>Series Key 按顺序排放</li>
+</ol>
+<h3 id="Compaction"><a href="#Compaction" class="headerlink" title="Compaction"></a>Compaction</h3><ol>
+<li>内存拿到 Snapshot，然后 Compact 到文件上</li>
+<li>Level Compaction: 类似 LevelDB</li>
+<li>Index Optimization: engine 层好像不做这个，文档上写的是 Level4 大量堆积之后，拆分到一个存储/读均优化的结构。</li>
+<li>Full Compaction</li>
+</ol>
+<p>需要注意的是，这里很鸡贼，说是 Level Compaction，实际上是 Tiered Compaction. 热文件是多写少读的，可以理解，最后数据冷了应该可以 Full Compaction 或者 Index Optimization，做成读优化的结构。</p>
+<h3 id="Write-Update-Delete-Query"><a href="#Write-Update-Delete-Query" class="headerlink" title="Write / Update / Delete / Query"></a>Write / Update / Delete / Query</h3><p>这里着重需要理解 Delete。Write 这边会先进 Cache，然后等待 <code>WriteSnapshot</code> 进行。Update 就直接更新，等 Compaction 操作，因为这边会先读上面再读下面。Delete 的流程很诡异，这里会给内存删除，然后给每个有这个 key 的文件写一个 Tombstone 文件。读的时候做 Merge，感觉他这个对更新和删除就不是很友好。</p>
+<p>查询这边其实就类似 LevelDB 查询了。不过我好像没太看到一些算子下推的操作，感觉对 AP Workload 支持一般般？</p>
+<h3 id="关键路径代码"><a href="#关键路径代码" class="headerlink" title="关键路径代码"></a>关键路径代码</h3><p>写入入口, 会把请求分发到 <code>Cache</code> 和 <code>WAL</code></p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// WritePoints writes metadata and point data into the engine.</span></span><br><span class="line"><span class="comment">// It returns an error if new points are added to an existing key.</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(e *Engine)</span></span> WritePoints(ctx context.Context, points []models.Point) <span class="type">error</span></span><br></pre></td></tr></table></figure>
+<p><code>CompactCache</code> 会完成 WAL -&gt; TSM, 这里调用 <code>WriteSnapshot</code> 做 类似 Major Compaction 的操作：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// compactCache continually checks if the WAL cache should be written to disk.</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(e *Engine)</span></span> compactCache()</span><br><span class="line"></span><br><span class="line"><span class="comment">// WriteSnapshot writes a Cache snapshot to one or more new TSM files.</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(c *Compactor)</span></span> WriteSnapshot(cache *Cache, logger *zap.Logger) ([]<span class="type">string</span>, <span class="type">error</span>) </span><br></pre></td></tr></table></figure>
+<p>而下列会构建 TSM 具体的 Blocks, 也包含了相同类型列的 Compression。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(c *cacheKeyIterator)</span></span> encode()</span><br></pre></td></tr></table></figure>
+<p>Compact 关注：</p>
+<p>最上层触发在：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(e *Engine)</span></span> compact(wg *sync.WaitGroup)</span><br></pre></td></tr></table></figure>
+<p>下面逻辑：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// CompactFull writes multiple smaller TSM files into 1 or more larger files.</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(c *Compactor)</span></span> CompactFull(tsmFiles []<span class="type">string</span>, logger *zap.Logger) ([]<span class="type">string</span>, <span class="type">error</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment">// CompactFast writes multiple smaller TSM files into 1 or more larger files.</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(c *Compactor)</span></span> CompactFast(tsmFiles []<span class="type">string</span>, logger *zap.Logger) ([]<span class="type">string</span>, <span class="type">error</span>) </span><br><span class="line"></span><br><span class="line"><span class="comment">// writeNewFiles writes from the iterator into new TSM files, rotating</span></span><br><span class="line"><span class="comment">// to a new file once it has reached the max TSM file size.</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(c *Compactor)</span></span> writeNewFiles(generation, sequence <span class="type">int</span>, src []<span class="type">string</span>, iter KeyIterator, throttle <span class="type">bool</span>, logger *zap.Logger) ([]<span class="type">string</span>, <span class="type">error</span>)</span><br></pre></td></tr></table></figure>
+<h2 id="索引-TSI-Time-Series-Index"><a href="#索引-TSI-Time-Series-Index" class="headerlink" title="索引: TSI (Time Series Index)"></a>索引: TSI (Time Series Index)</h2><p>InfluxDB 有一个 <code>Series Cardinality</code> 的概念，其实很好理解。回顾一下，<code>Series Key</code> 组成是：</p>
+<p><img src="https://image.mwish.me/blog-image/A5A862C7-9674-4364-82D2-E122BF5F644A.png" alt="A5A862C7-9674-4364-82D2-E122BF5F644A"></p>
+<p>这里我们会发现，对于 <code>email</code> 和 <code>status</code> 这两个 tag，这个 tag 我们虽然支持一堆 string 形式的 key，但是它的选择空间可能不是很大，这里提供了一定的优化空间。同时，如果 <code>Series Key</code> 数量很多，那这个可能会生成过多需要查询的 Index，这给系统带来了很大开销。</p>
+<p>还有一种场景，如上，指定 <code>status = start</code>，不指定 email，也总得 AP 吧，这里处理就得扫一堆 TSM 的 Index 了。</p>
+<p>这个地方，这里提供了反向索引，它对 <code>&lt;measurement, tag set&gt;</code> 中 <code>measurement</code> 和 Tag 的任意一项到 Series Key 提供了映射。它也是一个有序结构。它的目的如下：</p>
+<blockquote>
+<p>The goal is that the number of series should be unbounded by the amount of memory on the server hardware. Importantly, the number of series that exist in the database will have a negligible impact on database startup time.</p>
+</blockquote>
+<p>可以看到，TSI 大概有这几种类型：</p>
+<ul>
+<li><strong>Index</strong>: TSI instance，单个 Shard 会有一个 Index</li>
+<li><strong>Partition</strong>: Index 内部会分成多个 <strong>Partition</strong>，来做 IO 和并发。每个 Partition 会对应不同的存储文件。</li>
+<li><strong>LogFile</strong>: TSI 的日志文件</li>
+<li><strong>IndexFile</strong>: TSI 最重要的部分之一，表示对应的实际索引</li>
+</ul>
+<p>Partition 这个概念很让人困惑。实际上这是个写入优化的措施。写入的时候，利用 Partition 来做并行化，读取的时候，需要从每个 Partition 来 PointGet，或者 Merge Partition 的结果。我个人感觉这东西稍微有点过度设计了…</p>
+<p>可以看到，它对外提供了下列接口（实际上是 <code>tsdb/index.go</code> 的 <code>Index</code> 这个 interface，TSM 内存那节有个类似的）：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// ForEachMeasurementName iterates over all measurement names in the index,</span></span><br><span class="line"><span class="comment">// applying fn. It returns the first error encountered, if any.</span></span><br><span class="line"><span class="comment">//</span></span><br><span class="line"><span class="comment">// ForEachMeasurementName does not call fn on each partition concurrently so the</span></span><br><span class="line"><span class="comment">// call may provide a non-goroutine safe fn.</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(i *Index)</span></span> ForEachMeasurementName(fn <span class="function"><span class="keyword">func</span><span class="params">(name []<span class="type">byte</span>)</span></span> <span class="type">error</span>) <span class="type">error</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// MeasurementExists returns true if a measurement exists.</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(i *Index)</span></span> MeasurementExists(name []<span class="type">byte</span>) (<span class="type">bool</span>, <span class="type">error</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment">// MeasurementHasSeries returns true if a measurement has non-tombstoned series.</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(i *Index)</span></span> MeasurementHasSeries(name []<span class="type">byte</span>) (<span class="type">bool</span>, <span class="type">error</span>)</span><br><span class="line"></span><br><span class="line">...</span><br></pre></td></tr></table></figure>
+<p>和写入：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// CreateSeriesIfNotExists creates a series if it doesn&#x27;t exist or is deleted.</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(i *Index)</span></span> CreateSeriesIfNotExists(key, name []<span class="type">byte</span>, tags models.Tags) <span class="type">error</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// CreateSeriesListIfNotExists creates a list of series if they doesn&#x27;t exist in bulk.</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(i *Index)</span></span> CreateSeriesListIfNotExists(keys [][]<span class="type">byte</span>, names [][]<span class="type">byte</span>, tagsSlice []models.Tags) <span class="type">error</span></span><br></pre></td></tr></table></figure>
+<p>对于任何写入，这边会内存有各种 mapping，写 WAL。最后构建成 TSI File，格式参照：<a target="_blank" rel="noopener" href="https://github.com/influxdata/influxdb/blob/master/tsdb/index/tsi1/doc.go#L65">https://github.com/influxdata/influxdb/blob/master/tsdb/index/tsi1/doc.go#L65</a> ，分为：</p>
+<ul>
+<li>Series Block: 存放了所有 Series Key，用 Hash Index 来加速</li>
+<li>Tag Block: 存放了 Tag Key, Tag Value 到 Series Key 的映射，可能有多个 Block</li>
+<li>Measurement Block: 存放 Measurement 的映射</li>
+</ul>
+<p>注意，这中间还有 key 的 HashMap，来加速查找。同时，这里有合并多个 TSI 的需求，这里会写入 HLL++，并记录 key 和删除的 key，当合并的时候，可以根据 HLL 计算出大概的结果和空间放大，来调度 Compaction。</p>
+<h2 id="参考"><a href="#参考" class="headerlink" title="参考"></a>参考</h2><p><a target="_blank" rel="noopener" href="https://github.com/influxdata/influxdb/tree/master/tsdb">https://github.com/influxdata/influxdb/tree/master/tsdb</a></p>
+<ul>
+<li>TSI： <a target="_blank" rel="noopener" href="https://github.com/influxdata/influxdb/tree/master/tsdb/index">https://github.com/influxdata/influxdb/tree/master/tsdb/index</a> <ul>
+<li>文档：<a target="_blank" rel="noopener" href="https://github.com/influxdata/influxdb/blob/master/tsdb/index/tsi1/doc.go">https://github.com/influxdata/influxdb/blob/master/tsdb/index/tsi1/doc.go</a></li>
+</ul>
+</li>
+<li>TSM：<a target="_blank" rel="noopener" href="https://github.com/influxdata/influxdb/tree/master/tsdb/engine">https://github.com/influxdata/influxdb/tree/master/tsdb/engine</a><ul>
+<li>文档：<a target="_blank" rel="noopener" href="https://github.com/influxdata/influxdb/blob/master/tsdb/engine/tsm1/DESIGN.md">https://github.com/influxdata/influxdb/blob/master/tsdb/engine/tsm1/DESIGN.md</a></li>
+</ul>
+</li>
+<li>一些协议：<a target="_blank" rel="noopener" href="https://github.com/influxdata/influxdb/blob/master/tsdb/internal/fieldsindex.proto">https://github.com/influxdata/influxdb/blob/master/tsdb/internal/fieldsindex.proto</a></li>
+<li>官方一些 detail 文档：<a target="_blank" rel="noopener" href="https://docs.influxdata.com/enterprise_influxdb/v1.9/concepts/time-series-index/">https://docs.influxdata.com/enterprise_influxdb/v1.9/concepts/time-series-index/</a></li>
+</ul>
+<p>博客：</p>
+<ul>
+<li>这里有一系列博客，简中大部分 InfluxDB 的二手文档基本都参考了这个： <a target="_blank" rel="noopener" href="http://hbasefly.com/2017/12/08/influxdb-1/">http://hbasefly.com/2017/12/08/influxdb-1/</a> </li>
+<li>Compaction 看代码看的我有点点晕，参考了：<a target="_blank" rel="noopener" href="https://www.jianshu.com/p/601d97507c0f">https://www.jianshu.com/p/601d97507c0f</a></li>
+</ul>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E6%A8%A1%E5%9E%8B%E5%92%8C%E6%9F%A5%E8%AF%A2"><span class="toc-number">1.</span> <span class="toc-text">数据模型和查询</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Line-Protocol"><span class="toc-number">1.1.</span> <span class="toc-text">Line Protocol</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#query-amp-latency"><span class="toc-number">1.2.</span> <span class="toc-text">query &amp; latency</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Shard"><span class="toc-number">2.</span> <span class="toc-text">Shard</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Compaction-amp-Deletion"><span class="toc-number">2.1.</span> <span class="toc-text">Compaction &amp; Deletion</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%80%E4%BA%9B-Schema-%E7%9B%B8%E5%85%B3%E7%9A%84%E8%AE%A8%E8%AE%BA"><span class="toc-number">3.</span> <span class="toc-text">一些 Schema 相关的讨论</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AD%98%E5%82%A8%E5%BC%95%E6%93%8E-TSM-Time-Structured-Merge-Tree"><span class="toc-number">4.</span> <span class="toc-text">存储引擎: TSM(Time-Structured Merge Tree)</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#WAL"><span class="toc-number">4.1.</span> <span class="toc-text">WAL</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Cache"><span class="toc-number">4.2.</span> <span class="toc-text">Cache</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#TSM-%E6%96%87%E4%BB%B6"><span class="toc-number">4.3.</span> <span class="toc-text">TSM 文件</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Compaction"><span class="toc-number">4.4.</span> <span class="toc-text">Compaction</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Write-Update-Delete-Query"><span class="toc-number">4.5.</span> <span class="toc-text">Write &#x2F; Update &#x2F; Delete &#x2F; Query</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%85%B3%E9%94%AE%E8%B7%AF%E5%BE%84%E4%BB%A3%E7%A0%81"><span class="toc-number">4.6.</span> <span class="toc-text">关键路径代码</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%B4%A2%E5%BC%95-TSI-Time-Series-Index"><span class="toc-number">5.</span> <span class="toc-text">索引: TSI (Time Series Index)</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8F%82%E8%80%83"><span class="toc-number">6.</span> <span class="toc-text">参考</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2022/03/17/InfluxDB-%E7%9B%B8%E5%85%B3%E6%9D%90%E6%96%99/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2022/03/17/InfluxDB-%E7%9B%B8%E5%85%B3%E6%9D%90%E6%96%99/&text=InfluxDB 模型和存储引擎入门"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2022/03/17/InfluxDB-%E7%9B%B8%E5%85%B3%E6%9D%90%E6%96%99/&title=InfluxDB 模型和存储引擎入门"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2022/03/17/InfluxDB-%E7%9B%B8%E5%85%B3%E6%9D%90%E6%96%99/&is_video=false&description=InfluxDB 模型和存储引擎入门"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=InfluxDB 模型和存储引擎入门&body=Check out this article: http://blog.mwish.me/2022/03/17/InfluxDB-%E7%9B%B8%E5%85%B3%E6%9D%90%E6%96%99/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2022/03/17/InfluxDB-%E7%9B%B8%E5%85%B3%E6%9D%90%E6%96%99/&title=InfluxDB 模型和存储引擎入门"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2022/03/17/InfluxDB-%E7%9B%B8%E5%85%B3%E6%9D%90%E6%96%99/&title=InfluxDB 模型和存储引擎入门"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2022/03/17/InfluxDB-%E7%9B%B8%E5%85%B3%E6%9D%90%E6%96%99/&title=InfluxDB 模型和存储引擎入门"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2022/03/17/InfluxDB-%E7%9B%B8%E5%85%B3%E6%9D%90%E6%96%99/&title=InfluxDB 模型和存储引擎入门"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2022/03/17/InfluxDB-%E7%9B%B8%E5%85%B3%E6%9D%90%E6%96%99/&name=InfluxDB 模型和存储引擎入门&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2022/03/17/InfluxDB-%E7%9B%B8%E5%85%B3%E6%9D%90%E6%96%99/&t=InfluxDB 模型和存储引擎入门"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

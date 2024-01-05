@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="PostgreSQL 也有索引和 BTree 索引，但是它和 InnoDB 是有区别的，InnoDB 有 “Cluster Index”，索引指向 Cluster Index，Cluster Index 上数据有是完整的，它也有 roll_pointer 字段指向 Undo。PostgreSQL 没有 Cluster Index。它的主数据存储在一个叫 Heap Table 的”堆表”上，需要更新">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Notes on Btree Implements: PostgreSQL">
+<meta property="og:url" content="http://blog.mwish.me/2022/07/09/Notes-on-Btree-Implements-PostgreSQL/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="PostgreSQL 也有索引和 BTree 索引，但是它和 InnoDB 是有区别的，InnoDB 有 “Cluster Index”，索引指向 Cluster Index，Cluster Index 上数据有是完整的，它也有 roll_pointer 字段指向 Undo。PostgreSQL 没有 Cluster Index。它的主数据存储在一个叫 Heap Table 的”堆表”上，需要更新">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/190D2463-5889-453A-8310-C1C1058911D5.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/fig-5-02.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/fig-5-03.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/fig-5-06.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/4C345186-B4D8-435E-9C5B-DDD4D18671A5.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/fig-5-14.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/fig-6-01.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/fig-5-07.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/fig-5-08.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/68DC4BF6-FEDB-47B0-A10E-A981B22BECC3.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/AD6DE068-6D32-4756-8ED3-E841A8969781.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/IMG_1042.jpg">
+<meta property="og:image" content="https://image.mwish.me/blog-image/E586E76B8C150D42A8D7A4AA738ACB98.jpg">
+<meta property="og:image" content="https://image.mwish.me/blog-image/C0C2426A8807D6CA2DB200A68939625B.jpg">
+<meta property="og:image" content="https://image.mwish.me/blog-image/60C70C6E4770D882C1A15954F931DADF.jpg">
+<meta property="og:image" content="https://image.mwish.me/blog-image/IMG_1046.jpg">
+<meta property="og:image" content="https://image.mwish.me/blog-image/IMG_1047.jpg">
+<meta property="og:image" content="https://image.mwish.me/blog-image/IMG_1048.jpg">
+<meta property="article:published_time" content="2022-07-08T17:00:00.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.570Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/190D2463-5889-453A-8310-C1C1058911D5.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>Notes on Btree Implements: PostgreSQL</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2022/07/26/brpc-execution-queue/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2022/07/04/Notes-on-Btree-Implements-InnoDB/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2022/07/09/Notes-on-Btree-Implements-PostgreSQL/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2022/07/09/Notes-on-Btree-Implements-PostgreSQL/&text=Notes on Btree Implements: PostgreSQL"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2022/07/09/Notes-on-Btree-Implements-PostgreSQL/&title=Notes on Btree Implements: PostgreSQL"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2022/07/09/Notes-on-Btree-Implements-PostgreSQL/&is_video=false&description=Notes on Btree Implements: PostgreSQL"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Notes on Btree Implements: PostgreSQL&body=Check out this article: http://blog.mwish.me/2022/07/09/Notes-on-Btree-Implements-PostgreSQL/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2022/07/09/Notes-on-Btree-Implements-PostgreSQL/&title=Notes on Btree Implements: PostgreSQL"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2022/07/09/Notes-on-Btree-Implements-PostgreSQL/&title=Notes on Btree Implements: PostgreSQL"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2022/07/09/Notes-on-Btree-Implements-PostgreSQL/&title=Notes on Btree Implements: PostgreSQL"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2022/07/09/Notes-on-Btree-Implements-PostgreSQL/&title=Notes on Btree Implements: PostgreSQL"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2022/07/09/Notes-on-Btree-Implements-PostgreSQL/&name=Notes on Btree Implements: PostgreSQL&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2022/07/09/Notes-on-Btree-Implements-PostgreSQL/&t=Notes on Btree Implements: PostgreSQL"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A6%82%E5%BF%B5%E4%BB%8B%E7%BB%8D"><span class="toc-number">1.</span> <span class="toc-text">概念介绍</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Tuple"><span class="toc-number">1.1.</span> <span class="toc-text">Tuple</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Page"><span class="toc-number">1.2.</span> <span class="toc-text">Page</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Index"><span class="toc-number">1.3.</span> <span class="toc-text">Index</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Vacuum"><span class="toc-number">1.4.</span> <span class="toc-text">Vacuum</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BA%8B%E5%8A%A1%E7%8A%B6%E6%80%81-CLOG"><span class="toc-number">1.5.</span> <span class="toc-text">事务状态: CLOG</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#WAL-XLog"><span class="toc-number">1.6.</span> <span class="toc-text">WAL: XLog</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#NBTree"><span class="toc-number">2.</span> <span class="toc-text">NBTree</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#BTree-%E7%9A%84%E7%BB%93%E6%9E%84%E5%92%8C%E5%90%84%E7%A7%8DPage"><span class="toc-number">2.1.</span> <span class="toc-text">BTree 的结构和各种Page</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Fastroot"><span class="toc-number">2.1.1.</span> <span class="toc-text">Fastroot</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Btree-%E7%9A%84%E6%9F%A5%E6%89%BE%E5%92%8C%E7%A7%BB%E5%8A%A8"><span class="toc-number">2.2.</span> <span class="toc-text">Btree 的查找和移动</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E4%B8%8B%E9%99%8D"><span class="toc-number">2.2.1.</span> <span class="toc-text">下降</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Scan"><span class="toc-number">2.3.</span> <span class="toc-text">Scan</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%8F%92%E5%85%A5%E5%92%8C%E5%88%86%E8%A3%82"><span class="toc-number">2.4.</span> <span class="toc-text">插入和分裂</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E7%AC%AC%E4%B8%80%E9%98%B6%E6%AE%B5-%E9%A1%B5%E9%9D%A2%E5%88%86%E8%A3%82"><span class="toc-number">2.4.1.</span> <span class="toc-text">第一阶段: 页面分裂</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E7%AC%AC%E4%BA%8C%E9%98%B6%E6%AE%B5-%E6%8F%92%E5%85%A5%E7%88%B6%E8%8A%82%E7%82%B9"><span class="toc-number">2.4.2.</span> <span class="toc-text">第二阶段: 插入父节点</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Root-%E7%9A%84%E5%88%86%E8%A3%82"><span class="toc-number">2.4.3.</span> <span class="toc-text">Root 的分裂</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AF%B9-Key-%E7%9A%84%E5%88%A0%E9%99%A4"><span class="toc-number">2.5.</span> <span class="toc-text">对 Key 的删除</span></a></li></ol></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Notes on Btree Implements: PostgreSQL
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2022-07-08T17:00:00.000Z" itemprop="datePublished">2022-07-09</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>PostgreSQL 也有索引和 BTree 索引，但是它和 InnoDB 是有区别的，InnoDB 有 “Cluster Index”，索引指向 Cluster Index，Cluster Index 上数据有是完整的，它也有 <code>roll_pointer</code> 字段指向 Undo。PostgreSQL 没有 Cluster Index。它的主数据存储在一个叫 Heap Table 的”堆表”上，需要更新的时候，堆表上会插入对应的 Tuple，如果是字段更新，那么会在之前的 Tuple 记录一条指向现有 Tuple 的指针。这里对应的逻辑视图如下：</p>
+<p><img src="https://image.mwish.me/blog-image/190D2463-5889-453A-8310-C1C1058911D5.png" alt="190D2463-5889-453A-8310-C1C1058911D5"></p>
+<p>也就是说，对比 InnoDB，PostgreSQL 相当于 <strong>只有 secondary index</strong>。</p>
+<h2 id="概念介绍"><a href="#概念介绍" class="headerlink" title="概念介绍"></a>概念介绍</h2><h3 id="Tuple"><a href="#Tuple" class="headerlink" title="Tuple"></a>Tuple</h3><p>PostgreSQL 的 Tuple 分为 <code>HeapTuple</code> 和 <code>IndexTuple</code>，<code>HeapTuple</code> 是主表上的数据，<code>IndexTuple</code> 是索引上存储的指向 HeapTuple 的数据，它们大致逻辑内容如下：</p>
+<p><img src="https://image.mwish.me/blog-image/fig-5-02.png" alt="fig-5-02"></p>
+<p><img src="https://image.mwish.me/blog-image/fig-5-03.png" alt="fig-5-03"></p>
+<p>HeapTuple 定义在 pg 的 <code>src/include/access/htup.h</code>, 除了用户定义的值，它包含几个隐藏字段：</p>
+<ol>
+<li><code>t_xmin</code>, <code>t_xmax</code>: <code>t_xmin</code> 表示创建这个 Tuple 的事务的事务 id，即这个事务 commit 之后，事务 id 比 <code>t_xmin</code> 大的就可以看见 <code>tuple</code> ；<code>t_xmax</code> 表示更新或者删除这条记录的事务的 id（它也可以表示事务正在对这个 tuple 上锁）</li>
+<li>实际上，读一个 tuple 的时候，PG 可能要判断一下这个事务 id 的状态是什么样子的，Tuple 的隐藏字段有一些 info bits，如果查完可以把相关状态在 info bits 上做标记，优化查表的开销</li>
+<li><code>t_cid</code> 是更新这个 tuple 的 command id</li>
+<li><code>t_ctid</code> 是一个指针，指向 <em>Tuple 自己的位置</em> 或者 <em>被更新之后，Tuple新的位置</em></li>
+</ol>
+<p>我们以上图为例：</p>
+<ol>
+<li>Page 的 tuple1 被 txn_id 为 99 的事务插入，它的 <code>t_xmin</code> 为 99，<code>t_ctid</code> 指向自己的位置 <code>(0, 1)</code></li>
+<li>Page 的 tuple1 被 txn_id 为 100 的事务更新，它的 <code>t_xmax</code> 为 100, 创建了一条新的记录 Tuple2，<code>t_xmin</code> 为 100，<code>t_xmax</code> 为 0。Tuple1 的 <code>t_ctid</code> 指向 tuple2</li>
+</ol>
+<p>对于 IndexTuple，假设主表属性是 <code>(a, b, c)</code>, 而对 <code>(b)</code> 建了索引，那么索引 Tuple 可以被视作 <code>&lt;(b), 主表上 Tuple 的位置&gt;</code>, 同时，索引的 IndexTuple 可能只有叶子结点上才有主表 Tuple 的位置。 它被定义在 <code>src/include/access/itup.h</code></p>
+<p><img src="https://image.mwish.me/blog-image/fig-5-06.png" alt="fig-5-06"></p>
+<h3 id="Page"><a href="#Page" class="headerlink" title="Page"></a>Page</h3><p>PostgreSQL 的 Page 格式比较统一，而且非常典型，典型到很多数据库教材上都有。相比 InnoDB 的 稀疏索引 + 单向链表 + 垃圾链表 + 统计信息，PostgreSQL （以降低更新性能为代价）使用了一个非常简单的格式：</p>
+<p><img src="https://image.mwish.me/blog-image/4C345186-B4D8-435E-9C5B-DDD4D18671A5.png" alt="4C345186-B4D8-435E-9C5B-DDD4D18671A5"></p>
+<p>对于 Heap Table，不考虑 GC 数据（即 Vacuum）的情况下，数据几乎是只会往后添加、不会变更位置的。</p>
+<h3 id="Index"><a href="#Index" class="headerlink" title="Index"></a>Index</h3><p>终于讲到我们今天的主题了…其实还没有。我们刚才说过，不考虑 Vacuum 的情况下，数据几乎只会往后添加、不会变更位置。Index 需要指向最初的那个 Tuple，如图所示：</p>
+<p>PostgreSQL 把 Index 接口和 Index 管理器暴露给了用户，用户可以创建 HashIndex, Btree Index 等索引。</p>
+<p><img src="https://image.mwish.me/blog-image/fig-5-14.png" alt="fig-5-14"></p>
+<p>我们刚才谈到了，更新一个值可能会更改它的 <code>t_ctid</code>，指向新的位置。这个时候 <strong>索引的值不能改变，同时旧值不能被回收</strong>，除非索引相关的值被改变。如果 Tuple 为 <code>(a, b, c)</code>, 对 <code>(b)</code> 构建了索引，然后一个请求修改了 <code>b</code>，这个时候需要在索引插入一个新的值，但旧值也不能删除。需要等待 vacuum 阶段删除。</p>
+<h3 id="Vacuum"><a href="#Vacuum" class="headerlink" title="Vacuum"></a>Vacuum</h3><p>对于 PG 来说，它做的是一个比较复杂的多阶段的删除，用的 Tuple-level GC + VAC，具体可见 Vacuum 相关的材料（Lazy Vacuum, Full Vacuum）</p>
+<ul>
+<li>对于事务的记录，PostgreSQL 维护在 clog 里面，这可以当作一个事务表。它根据事务 id 的顺序存在各个 Page 上，缓存在内存的 slru 中。当事务推进的时候，可以 Truncate 前面的事务记录来回收空间，推进系统事务</li>
+<li>PostgreSQL 的 <code>xmax</code> 如果被标记且 tuple 没有被上锁，那么这个 tuple 是被删除的，如果 <code>xmax</code> 小于 <code>min-txn</code>，那这个 tuple 在逻辑上不会被任何事务看见，虽然物理上它还存在</li>
+<li>GC 过程中，PostgreSQL 会扫描所有 dead 的 tuple，然后清除它们，这里首先有一个 visibilitymap, 对应代码在 <code>backend/access/heap/visibilitymap</code>。如果某个 Page 被改了，有 Tuple 可能需要 GC，就会给 vm 记一下，然后这样的 Page 才需要被清理，这段过程中，索引的数据会被清除，如下面的图。</li>
+<li>索引数据清除之后，Heap Tuple 的数据会被标记删除，但是 slot 上的位置还是会留着。</li>
+<li>更新对应的 VM，移除 clog 等事务表信息。</li>
+</ul>
+<p><img src="https://image.mwish.me/blog-image/fig-6-01.png" alt="fig-6-01"></p>
+<h3 id="事务状态-CLOG"><a href="#事务状态-CLOG" class="headerlink" title="事务状态: CLOG"></a>事务状态: CLOG</h3><p><img src="https://image.mwish.me/blog-image/fig-5-07.png" alt="fig-5-07"></p>
+<p><img src="https://image.mwish.me/blog-image/fig-5-08.png" alt="fig-5-08"></p>
+<h3 id="WAL-XLog"><a href="#WAL-XLog" class="headerlink" title="WAL: XLog"></a>WAL: XLog</h3><p>PostgreSQL 的日志写在 XLog 中。PostgreSQL 模型中，没有 InnoDB 的 Undo data，但它认为它在 Heap Table 中维护了多版本，所以只写了 Redo Log。</p>
+<h2 id="NBTree"><a href="#NBTree" class="headerlink" title="NBTree"></a>NBTree</h2><p>PostgreSQL 的索引管理器定义在了 <code>src/backend/access/index</code>，而 Btree 的定义在 <code>src/backend/access/nbtree</code>。BTree 对外提供了 cursor, 插入，删除等接口，同时也定义了并行访问的接口。</p>
+<p>PostgreSQL 实现了 B-link Tree，B-link Tree 来自论文 Efficient Locking for Concurrent Operations on  B-Trees 逻辑定义如下：</p>
+<p><img src="https://image.mwish.me/blog-image/68DC4BF6-FEDB-47B0-A10E-A981B22BECC3.png" alt="68DC4BF6-FEDB-47B0-A10E-A981B22BECC3"></p>
+<p><img src="https://image.mwish.me/blog-image/AD6DE068-6D32-4756-8ED3-E841A8969781.png" alt="AD6DE068-6D32-4756-8ED3-E841A8969781"></p>
+<ul>
+<li>所有页面可能包含一个 <code>highkey</code>，表示本页面存储的 key 的最大值。同时可能包含一个分裂到一半需要的 <code>rightlink</code>，指向自己节点的右边。比 <code>highkey</code> 高的值可以去右边查询，走到右边的行为叫 <code>moveright</code></li>
+<li>b-link tree 的分裂是分为多阶段的<ul>
+<li>分裂的时候，<strong>永远只会向右分裂</strong>，首先节点会创建一个右节点，修改 high-key，链接 <code>rightlink</code>，完成操作的第一步</li>
+<li>之后发现这里有未完成的分裂后，会在父节点上插入右节点，完成分裂。如果父节点分裂，那么回到上一步，递归完成分裂。</li>
+</ul>
+</li>
+</ul>
+<p>对于一个下降的查询 <code>key</code>，它移动下来的时候，会先比较 <code>key</code> 和 这个 Page 上的 <code>highkey</code>，如果自己小于 Page 的 highkey，那么就在本页面查询，否则会需要 <code>moveright</code>，移动到右节点查询。</p>
+<p>PostgreSQL 的 Index 对外暴露了一组管理 api，包括：</p>
+<ol>
+<li>Search</li>
+<li>插入节点</li>
+<li>更新一些节点的元信息</li>
+<li>Scan</li>
+<li>Batch 的在 vacuum 阶段做删除节点</li>
+<li>…</li>
+</ol>
+<p>在 <code>Datum bthandler(PG_FUNCTION_ARGS)</code> 这个函数有着将函数 bind 到 <code>IndexAm</code> 上的逻辑。这里其实基本上相当于虚函数什么的了。</p>
+<h3 id="BTree-的结构和各种Page"><a href="#BTree-的结构和各种Page" class="headerlink" title="BTree 的结构和各种Page"></a>BTree 的结构和各种Page</h3><p>我们在刚刚介绍 InnoDB Btree 的时候提到过，InnoDB 有整个索引的锁，同时它的 RootPage 是不会改变的。</p>
+<p>InnoDB 的 RootPage 是会改变的，它有一个 MetaPage 指向它。Meta 永远是整个树的第一个 Page，而 Root 和 Internal Page 其实没有什么区别。如下图：</p>
+<p><img src="https://image.mwish.me/blog-image/IMG_1042.jpg" alt="IMG_1042"></p>
+<p>还可以注意到，Leaf Page 是有左指针 <code>leftlink</code> 的，这是因为反向 Scan 的时候，它希望不获取上层 Page 直接 Scan 下来。</p>
+<p>BTree 相关的内容定义在 <code>src/include/access/nbtree.h</code>，我们可以从 Meta 看起：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/*</span></span><br><span class="line"><span class="comment"> * The Meta page is always the first page in the btree index.</span></span><br><span class="line"><span class="comment"> * Its primary purpose is to point to the location of the btree root page.</span></span><br><span class="line"><span class="comment"> * We also point to the &quot;fast&quot; root, which is the current effective root;</span></span><br><span class="line"><span class="comment"> * see README for discussion.</span></span><br><span class="line"><span class="comment"> *</span></span><br><span class="line"><span class="comment"> * MetaPageData 指向</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">BTMetaPageData</span></span></span><br><span class="line"><span class="class">&#123;</span></span><br><span class="line">	<span class="comment">// 一些标志位</span></span><br><span class="line">	uint32		btm_magic;		<span class="comment">/* should contain BTREE_MAGIC */</span></span><br><span class="line">	uint32		btm_version;	<span class="comment">/* nbtree version (always &lt;= BTREE_VERSION) */</span></span><br><span class="line">	</span><br><span class="line">	<span class="comment">// 真实的 root</span></span><br><span class="line">	BlockNumber btm_root;		<span class="comment">/* current root location */</span></span><br><span class="line">	uint32		btm_level;		<span class="comment">/* tree level of the root page */</span></span><br><span class="line">	</span><br><span class="line">	<span class="comment">// Fastroot 相关的内容</span></span><br><span class="line">	BlockNumber btm_fastroot;	<span class="comment">/* current &quot;fast&quot; root location */</span></span><br><span class="line">	uint32		btm_fastlevel;	<span class="comment">/* tree level of the &quot;fast&quot; root page */</span></span><br><span class="line">	<span class="comment">/* remaining fields only valid when btm_version &gt;= BTREE_NOVAC_VERSION */</span></span><br><span class="line"></span><br><span class="line">	<span class="comment">// 一些 vacuum 有关的标记.</span></span><br><span class="line"></span><br><span class="line">	<span class="comment">/* number of deleted, non-recyclable pages during last cleanup */</span></span><br><span class="line">	uint32		btm_last_cleanup_num_delpages;</span><br><span class="line">	<span class="comment">/* number of heap tuples during last cleanup (deprecated) */</span></span><br><span class="line">	float8		btm_last_cleanup_num_heap_tuples;</span><br><span class="line"></span><br><span class="line">	<span class="type">bool</span>		btm_allequalimage;	<span class="comment">/* are all columns &quot;equalimage&quot;? */</span></span><br><span class="line">&#125; BTMetaPageData;</span><br></pre></td></tr></table></figure>
+<p>上面是整个 Page 的信息。</p>
+<p>对于 Internal Page 和 Leaf Page，PostgreSQL 并没有引入额外的结构，它和我们之前聊的 Page 结构是一样的，只是 Tuple 是 <code>IndexTuple</code>，尾部内容如下：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/*</span></span><br><span class="line"><span class="comment"> *  在 Page 的尾部, 存储 Page 的 left 和 right 的兄弟节点和 btree 的 level,</span></span><br><span class="line"><span class="comment"> *   page 的 type. Vacuum 本身也会占有锁.</span></span><br><span class="line"><span class="comment"> *</span></span><br><span class="line"><span class="comment"> *	BTPageOpaqueData -- At the end of every page, we store a pointer</span></span><br><span class="line"><span class="comment"> *	to both siblings in the tree.  This is used to do forward/backward</span></span><br><span class="line"><span class="comment"> *	index scans.  The next-page link is also critical for recovery when</span></span><br><span class="line"><span class="comment"> *	a search has navigated to the wrong page due to concurrent page splits</span></span><br><span class="line"><span class="comment"> *	or deletions; see src/backend/access/nbtree/README for more info.</span></span><br><span class="line"><span class="comment"> *</span></span><br><span class="line"><span class="comment"> *	In addition, we store the page&#x27;s btree level (counting upwards from</span></span><br><span class="line"><span class="comment"> *	zero at a leaf page) as well as some flag bits indicating the page type</span></span><br><span class="line"><span class="comment"> *	and status.  If the page is deleted, a BTDeletedPageData struct is stored</span></span><br><span class="line"><span class="comment"> *	in the page&#x27;s tuple area, while a standard BTPageOpaqueData struct is</span></span><br><span class="line"><span class="comment"> *	stored in the page special area.</span></span><br><span class="line"><span class="comment"> *</span></span><br><span class="line"><span class="comment"> *	We also store a &quot;vacuum cycle ID&quot;.  When a page is split while VACUUM is</span></span><br><span class="line"><span class="comment"> *	processing the index, a nonzero value associated with the VACUUM run is</span></span><br><span class="line"><span class="comment"> *	stored into both halves of the split page.  (If VACUUM is not running,</span></span><br><span class="line"><span class="comment"> *	both pages receive zero cycleids.)	This allows VACUUM to detect whether</span></span><br><span class="line"><span class="comment"> *	a page was split since it started, with a small probability of false match</span></span><br><span class="line"><span class="comment"> *	if the page was last split some exact multiple of MAX_BT_CYCLE_ID VACUUMs</span></span><br><span class="line"><span class="comment"> *	ago.  Also, during a split, the BTP_SPLIT_END flag is cleared in the left</span></span><br><span class="line"><span class="comment"> *	(original) page, and set in the right page, but only if the next page</span></span><br><span class="line"><span class="comment"> *	to its right has a different cycleid.</span></span><br><span class="line"><span class="comment"> *</span></span><br><span class="line"><span class="comment"> *	<span class="doctag">NOTE:</span> the BTP_LEAF flag bit is redundant since level==0 could be tested</span></span><br><span class="line"><span class="comment"> *	instead.</span></span><br><span class="line"><span class="comment"> *</span></span><br><span class="line"><span class="comment"> *	<span class="doctag">NOTE:</span> the btpo_level field used to be a union type in order to allow</span></span><br><span class="line"><span class="comment"> *	deleted pages to store a 32-bit safexid in the same field.  We now store</span></span><br><span class="line"><span class="comment"> *	64-bit/full safexid values using BTDeletedPageData instead.</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">BTPageOpaqueData</span></span></span><br><span class="line"><span class="class">&#123;</span></span><br><span class="line">	<span class="comment">/** 两个兄弟 **/</span></span><br><span class="line"></span><br><span class="line">	BlockNumber btpo_prev;		<span class="comment">/* left sibling, or P_NONE if leftmost */</span></span><br><span class="line">	BlockNumber btpo_next;		<span class="comment">/* right sibling, or P_NONE if rightmost */</span></span><br><span class="line">	<span class="comment">// 本 tree 的深度</span></span><br><span class="line">	uint32		btpo_level;		<span class="comment">/* tree level --- zero for leaf pages */</span></span><br><span class="line">	<span class="comment">// 下面几行就介绍这些 flags 了</span></span><br><span class="line">	uint16		btpo_flags;		<span class="comment">/* flag bits, see below */</span></span><br><span class="line">	BTCycleId	btpo_cycleid;	<span class="comment">/* vacuum cycle ID of latest split */</span></span><br><span class="line">&#125; BTPageOpaqueData;</span><br></pre></td></tr></table></figure>
+<p>这里我们关注 <code>btpo_next</code>，是对应的下一页。这是一个定长的字段。那么 highkey 存在哪里呢？答案是：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> *	Lehman and Yao&#x27;s algorithm requires a ``high key&#x27;&#x27; on every non-rightmost</span></span><br><span class="line"><span class="comment"> *	page.  The high key is not a tuple that is used to visit the heap.  It is</span></span><br><span class="line"><span class="comment"> *	a pivot tuple (see &quot;Notes on B-Tree tuple format&quot; below for definition).</span></span><br><span class="line"><span class="comment"> *	The high key on a page is required to be greater than or equal to any</span></span><br><span class="line"><span class="comment"> *	other key that appears on the page.  If we find ourselves trying to</span></span><br><span class="line"><span class="comment"> *	insert a key that is strictly &gt; high key, we know we need to move right</span></span><br><span class="line"><span class="comment"> *	(this should only happen if the page was split since we examined the</span></span><br><span class="line"><span class="comment"> *	parent page).</span></span><br><span class="line"><span class="comment"> *</span></span><br><span class="line"><span class="comment"> *	Our insertion algorithm guarantees that we can use the initial least key</span></span><br><span class="line"><span class="comment"> *	on our right sibling as the high key.  Once a page is created, its high</span></span><br><span class="line"><span class="comment"> *	key changes only if the page is split.</span></span><br><span class="line"><span class="comment"> *</span></span><br><span class="line"><span class="comment"> *	On a non-rightmost page, the high key lives in item 1 and data items</span></span><br><span class="line"><span class="comment"> *	start in item 2.  Rightmost pages have no high key, so we store data</span></span><br><span class="line"><span class="comment"> *	items beginning in item 1.</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> P_HIKEY				((OffsetNumber) 1)</span></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> P_FIRSTKEY			((OffsetNumber) 2)</span></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> P_FIRSTDATAKEY(opaque)	(P_RIGHTMOST(opaque) ? P_HIKEY : P_FIRSTKEY)</span></span><br></pre></td></tr></table></figure>
+<p>我们可以给 Page 画一个草图，如下：</p>
+<p><img src="https://image.mwish.me/blog-image/E586E76B8C150D42A8D7A4AA738ACB98.jpg" alt="E586E76B8C150D42A8D7A4AA738ACB98"></p>
+<p>此外，需要注意，对于 Internal Page 用户的第一个 key 相当于 <code>-inf</code>，它小于任何一个值。具体可以参考 <code>_bt_compare</code> 的注释。</p>
+<p>在叶子结点上，IndexTuple 包含有指向的 HeapTuple 的位置。</p>
+<h4 id="Fastroot"><a href="#Fastroot" class="headerlink" title="Fastroot"></a>Fastroot</h4><p>我们可以看到, <code>MetaPage</code> 有一个 <code>fastroot</code>，这个地方表示的是实际逻辑上的 Root，如下图：</p>
+<p><img src="https://image.mwish.me/blog-image/C0C2426A8807D6CA2DB200A68939625B.jpg" alt="C0C2426A8807D6CA2DB200A68939625B"></p>
+<p>这里 Root 到很下层都只有一个 link（可能是由于分裂和删除导致的，为什么会形成这种结构之后会讲），所以真实的 root 不等于访问上最快捷的 root，Meta 会有个 <code>fastroot</code> 来指向开始分叉的结点，来优化读</p>
+<h3 id="Btree-的查找和移动"><a href="#Btree-的查找和移动" class="headerlink" title="Btree 的查找和移动"></a>Btree 的查找和移动</h3><h4 id="下降"><a href="#下降" class="headerlink" title="下降"></a>下降</h4><p>Btree 下降的主要逻辑在下列两个函数：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">extern</span> BTStack _bt_search(Relation rel, BTScanInsert key, Buffer *bufP,</span><br><span class="line">						  <span class="type">int</span> access, Snapshot snapshot);</span><br><span class="line"><span class="keyword">extern</span> Buffer _bt_moveright(Relation rel, BTScanInsert key, Buffer buf,</span><br><span class="line">							<span class="type">bool</span> forupdate, BTStack <span class="built_in">stack</span>, <span class="type">int</span> access, Snapshot snapshot);</span><br></pre></td></tr></table></figure>
+<p>一个下降，无论是插入还是查找，都会走到 <code>_bt_search</code>，不过这两种情况的 <code>access</code> 标识是不一样的。读取的时候，<code>access</code> 是 <code>BT_READ</code>, 写入的时候是<code>BT_WRITE</code> 。<code>Relation</code> 是整个关系（可以理解成表，有 HeapTable 和 Index 的信息），<code>BTScanInsert</code> 是需要查找的或者插入有关的 key，他可能会指定是否是 <code>next_key</code>, 查询的方向等。最后会搜到叶子结点，返回 <code>BTStack</code>，即 Btree 遍历的时候的栈。</p>
+<p>我们首先介绍读的下降，下面逻辑对应的逻辑都在 <code>_bt_search</code> 中，假设第一次到第 k 层</p>
+<ol>
+<li>拿到本 Page 的读锁，对本 Page 进行 Pin。比较本 key 和 Page 的 <code>highkey</code>。如果小于等于 <code>highkey</code>，那么可以继续下降，否则，需要 <code>_bt_moveright</code> 向右移动</li>
+<li>向右移动的时候，<strong>先拿到右 Page 指针，然后再释放锁和pin，再 acquire 右边的 Page 和锁</strong>，然后回到 (1) 的逻辑<ol>
+<li>正确性：释放锁后，本 Page 和右边的 Page 可能都会分裂，因为 <code>highkey</code> 的限定，本 Page 分裂后，所有值仍然小于 highkey。而右边 Page 如果分裂，也只会向右分裂。Page 可能会删除 Page，这个时候删除 Page 的并发逻辑会保证删除的正确性</li>
+</ol>
+</li>
+<li>如果移动到了 <code>key &lt;= highkey</code> 的场景，那么我们就找到了，如果是叶子结点，那就访问叶子，否则下降。这里首先把这个节点放到 <code>BTStack</code> 这个遍历的栈中，然后查找到走哪个 key 下降（调用 <code>_bt_binsrch</code> 做二分查找），然后<strong>释放自己的锁和 pin，再下降</strong>，这里仍然是靠 <code>highkey</code> 保证了下降的正确性。</li>
+</ol>
+<p><img src="https://image.mwish.me/blog-image/60C70C6E4770D882C1A15954F931DADF.jpg" alt="60C70C6E4770D882C1A15954F931DADF"></p>
+<p>这里就可以正确的到达了。然后上面是讲第 <code>k</code> 层下降的。那根结点是怎么拿到的呢？这里会拿到 <code>fastroot</code>，直接下来就行了。用户没有插入任何值的时候，root 可能不存在。PG 如果发现 root 不存在，那就会直接返回 “啥都没查到”。</p>
+<p>对于插入而言，如果没有 RootPage，会创建一个 RootPage。插入的逻辑从 <code>_bt_doinsert</code> 开始，Btree 会在 <code>Relation</code> 上记录最右 Page，如果 Page 是一个最右插入（即大于所有的插入值），那么它会直接走到最右侧的 page, 把它当作 <code>root</code> (记得吗，root 只是一个正常的 internal 或者 leaf page), 否则，它会返回树的 root。如果是插入的话，PG 发现 root 不存在，会直接创建一个 Root。</p>
+<p>接下来，它会走 <code>_bt_search</code>，这里大概逻辑和 1-3 是一样的。不过读的时候拿的从根到叶子都是读锁，但 <strong>写在叶子结点的时候会切成写锁</strong>。</p>
+<p>还有一些地方有区别，在写链路上，这里如果遇到了未完成的分裂，会驱动父节点把 <code>rightlink</code> 完成分裂，插入父节点。这部分代码在 <code>_bt_moveright</code> 和 <code>_bt_finish_split</code> 中。</p>
+<h3 id="Scan"><a href="#Scan" class="headerlink" title="Scan"></a>Scan</h3><p>PostgreSQL 的 Scan 会首先下降到叶子节点，然后向右或者向左进行迭代。Scan 相关的一组函数如下：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">bool</span> _bt_first(IndexScanDesc scan, ScanDirection dir); <span class="comment">// 找到第一个对应位置, 然后把结构存在 `scan` 里面</span></span><br><span class="line"><span class="type">bool</span> _bt_next(IndexScanDesc scan, ScanDirection dir);  <span class="comment">// 对 scan 捞到下一个值</span></span><br><span class="line"><span class="type">bool</span> _bt_endpoint(IndexScanDesc scan, ScanDirection dir);</span><br></pre></td></tr></table></figure>
+<p>Scan 首先要争取处理方向，然后 <code>IndexScanDesc</code> 描述了 Index 和 <code>ScanKey</code> 的关系：可能是 <code>&gt;=</code>, <code>&lt;=</code>, <code>&gt;</code> , <code>&lt;</code> 等。这里才实际执行的时候会变成：</p>
+<ol>
+<li><code>goback</code>: 是否要回退一个。如果 <code>goback == true</code>，就要回退一项</li>
+<li><code>nextkey</code>: 是否要拿到大于搜索项的 key。这个有点怪，<code>nextkey</code> 设置的时候，会拿到 <code>item &gt; scan key</code>的，否则直接 <code>item &gt;= scan key</code> 就可以了</li>
+</ol>
+<p>有点绕，我们可以看看具体分析，这里有：</p>
+<ol>
+<li>如果是 <code>&lt;</code>, 那么会当 <code>&gt;=</code> 处理，然后需要 <code>goback</code></li>
+<li>如果是 <code>&lt;=</code>，那么会当成 <code>&gt;=</code> 处理，需要 <code>goback</code> + <code>nextkey</code></li>
+<li>…</li>
+</ol>
+<p>这里会构造一个搜索的 key 对象，来进行 <code>_bt_search</code>，再走 <code>_bt_binsrch</code> 在页面上定位到对应的位置。</p>
+<p>下面会有一些比较 hack 的地方，在定位到位置后，这里会用 <code>_bt_readpage</code>来读出本页面剩下来所有内容，然后<strong>释放锁</strong>。这个地方感觉有点 RC 的意思了，新插入的数据感觉 PostgreSQL 是读不到的。猜测它这就没在意这个。释放锁是个很奇怪的地方，我们后面会论证它的正确性。</p>
+<p><code>_bt_next</code> 移动到下一个要读的目标。这里有缓存的话，会先读取自己的缓存，没有的话，会走到下一个页面，调用函数: <code>_bt_steppage(IndexScanDesc scan, ScanDirection dir)</code>。</p>
+<p>如果要向右移动，这里 PostgreSQL 会在搜到页面然后放锁之前，拿到 Page 的 right link，然后在需要跳转到下一个页面的时候拿到，这里逻辑如下图：</p>
+<p><img src="https://image.mwish.me/blog-image/IMG_1046.jpg" alt="IMG_1046"></p>
+<ol>
+<li>如果自己这个 Page 没有分裂，即 <code>(1)</code>，那么移动到正确的页面</li>
+<li>如果自己这个 Page 分裂了，然后这里可以直接移动过去。</li>
+</ol>
+<p>读左边的页面比较复杂，需要验证比较多东西。这个时候会：</p>
+<ol>
+<li>先锁住本页面，<strong>拿到 left-link</strong>，注意，向右移动的时候拿的是刚下来的时候拿到的 right-link, 反之 left-link 则是在需要左移的时候再拿的</li>
+<li>放锁，走 left-link，拿到 left 的页面的锁</li>
+<li>查看右边的 Page 是不是原来的 Page，如果是的话，就成功了，否则要向右再移动</li>
+</ol>
+<p><img src="https://image.mwish.me/blog-image/IMG_1047.jpg" alt="IMG_1047"></p>
+<p>这里相对右移会复杂很多。这里再额外讨论一个 Page 被删除的情况。这个情况会根据 high key 来判断移动的范围。</p>
+<h3 id="插入和分裂"><a href="#插入和分裂" class="headerlink" title="插入和分裂"></a>插入和分裂</h3><p>B-link tree 的分裂也是 Btree 的分裂，和 InnoDB 一样，PostgreSQL 也支持按照 bytes 50%-50% 分裂，也能支持向右分裂。我们这里可以先看看插入的时候用的栈：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">btinsert -- hook 在上层插入的函数</span><br><span class="line">- _bt_doinsert -- 转换了一下 key, 具体的去做 insert</span><br><span class="line">  用我们上面介绍的逻辑, 走 _bt_search_insert, 里面会走我们上面的逻辑, 需要注意的是, **这里检测到未完全分裂的 Page, 会做 _bt_finish_split, 完成分裂**</span><br><span class="line">  做一些 checkUnique 和事务有关的东西(比如上锁), 可能会走到 HeapTable 上验证, 或者靠 LP_DEAD 等辅助位判断</span><br><span class="line">  - _bt_insertonpg, 具体插入</span><br><span class="line">  如果 PageGetFreeSpace(page) &lt; itemsz, 调用分裂, 走 _bt_split 和 _bt_insert_parent</span><br><span class="line">  否则, 直接插入页面, 写一条 xlog, 然后标识 LSN.</span><br></pre></td></tr></table></figure>
+<p>这里在搜索的时候，会有一些特殊的逻辑，搜索路径上碰到分裂会做 <code>_finish_split</code></p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/*</span></span><br><span class="line"><span class="comment"> * If this page was incompletely split, finish the split now.  We do</span></span><br><span class="line"><span class="comment"> * this while holding a lock on the left sibling, which is not good</span></span><br><span class="line"><span class="comment"> * because finishing the split could be a fairly lengthy operation.</span></span><br><span class="line"><span class="comment"> * But this should happen very seldom.</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="keyword">if</span> (P_INCOMPLETE_SPLIT(opaque))</span><br><span class="line">&#123;</span><br><span class="line">	_bt_finish_split(rel, rbuf, <span class="built_in">stack</span>);</span><br><span class="line">	rbuf = InvalidBuffer;</span><br><span class="line">	<span class="keyword">continue</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> (!P_IGNORE(opaque))</span><br><span class="line">	<span class="keyword">break</span>;</span><br><span class="line"><span class="keyword">if</span> (P_RIGHTMOST(opaque))</span><br><span class="line">	elog(ERROR, <span class="string">&quot;fell off the end of index \&quot;%s\&quot;&quot;</span>,</span><br><span class="line">		 RelationGetRelationName(rel));</span><br></pre></td></tr></table></figure>
+<h4 id="第一阶段-页面分裂"><a href="#第一阶段-页面分裂" class="headerlink" title="第一阶段: 页面分裂"></a>第一阶段: 页面分裂</h4><p>页面分裂会带上锁，然后把页面分裂成两份，然后标记页面为 unfinished split. 代码逻辑在 <code>_bt_split</code>:</p>
+<ol>
+<li><code>_bt_findsplitloc</code> 找到分裂点。这里准备临时的 leftpage 和 rightpage 作为目标，rightpage 需要持久化到存储中，leftpage 会写回原来的 page1</li>
+<li>产生新 Page, 在内存申请 page， 设置写入的 LSN，寻找分裂到左边的 highkey 等</li>
+<li>用  <code>_pg_addtup</code> 插入元素。</li>
+<li>写 xlog，把两边的更新写入 log buffer, 然后重新设置 LSN.</li>
+<li>放锁</li>
+</ol>
+<h4 id="第二阶段-插入父节点"><a href="#第二阶段-插入父节点" class="headerlink" title="第二阶段: 插入父节点"></a>第二阶段: 插入父节点</h4><p><code>_bt_finish_split</code> 在扫描阶段会检测到分裂到一半的节点，他会判断自己是不是 root，对自己和右节点上写锁（下降的时候，需要释放读锁，然后切成写锁），然后走 <code>_bt_insert_parent</code>，而分裂在代码上也会走 <code>_bt_insert_parent</code>。这里会有叶子和兄弟阶段的写锁。</p>
+<p><code>_bt_insert_parent</code> 中，之前 <code>BTStack</code> 上的锁都释放了，这里父节点不能被删除（因为删除比较特殊），但<strong>可能分裂了</strong>，所以要查到真的父节点在哪，然后再插入。插入很简单，但是查找父节点比较 hack，这部分代码在: <code>_bt_getstackbuf</code>:</p>
+<ol>
+<li>找到 stack 的父节点，get 起来然后捞到死锁</li>
+<li>(递归的) 调用 <code>_bt_finish_split</code>, 完成 incomplete split.</li>
+<li>扫描 page，看看子节点有没有对应的待完成分裂的那个，如果有的话，搜索成功</li>
+<li>否则，尝试 moveright</li>
+</ol>
+<h4 id="Root-的分裂"><a href="#Root-的分裂" class="headerlink" title="Root 的分裂"></a>Root 的分裂</h4><p>根节点的分裂和正常节点没有什么区别，这里根分裂会产生一个新的根节点，然后让 meta 指向它。</p>
+<p><img src="https://image.mwish.me/blog-image/IMG_1048.jpg" alt="IMG_1048"></p>
+<p>这里走的逻辑是 <code>_bt_newroot</code>，需要修改 <code>MetaPage</code> 上的标记</p>
+<h3 id="对-Key-的删除"><a href="#对-Key-的删除" class="headerlink" title="对 Key 的删除"></a>对 Key 的删除</h3><p>在原来的 B-link 树论文中，Delete 几乎是串行的。其实 B-link tree 也差不多，删除会占据 super lock：删的时候，页面要没有 Pin (防止 Scan 出问题) 也要没有 Lock。</p>
+<p>PG 不会对 key 简单删除，只会在 vacuum 的时候进行删除。PG 还有一个 simple delete，这里会把 touch 不到的多余的版本标记为 <code>LP_DEAD</code>，等待回收。</p>
+<p>PG 只有叶子节点删空了才会被回收，回收也是多阶段的，需要调整兄弟节点的指针，所以非常非常麻烦，这里会先调整指针，然后再把整个子结构摘除。</p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A6%82%E5%BF%B5%E4%BB%8B%E7%BB%8D"><span class="toc-number">1.</span> <span class="toc-text">概念介绍</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Tuple"><span class="toc-number">1.1.</span> <span class="toc-text">Tuple</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Page"><span class="toc-number">1.2.</span> <span class="toc-text">Page</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Index"><span class="toc-number">1.3.</span> <span class="toc-text">Index</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Vacuum"><span class="toc-number">1.4.</span> <span class="toc-text">Vacuum</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BA%8B%E5%8A%A1%E7%8A%B6%E6%80%81-CLOG"><span class="toc-number">1.5.</span> <span class="toc-text">事务状态: CLOG</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#WAL-XLog"><span class="toc-number">1.6.</span> <span class="toc-text">WAL: XLog</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#NBTree"><span class="toc-number">2.</span> <span class="toc-text">NBTree</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#BTree-%E7%9A%84%E7%BB%93%E6%9E%84%E5%92%8C%E5%90%84%E7%A7%8DPage"><span class="toc-number">2.1.</span> <span class="toc-text">BTree 的结构和各种Page</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Fastroot"><span class="toc-number">2.1.1.</span> <span class="toc-text">Fastroot</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Btree-%E7%9A%84%E6%9F%A5%E6%89%BE%E5%92%8C%E7%A7%BB%E5%8A%A8"><span class="toc-number">2.2.</span> <span class="toc-text">Btree 的查找和移动</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E4%B8%8B%E9%99%8D"><span class="toc-number">2.2.1.</span> <span class="toc-text">下降</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Scan"><span class="toc-number">2.3.</span> <span class="toc-text">Scan</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%8F%92%E5%85%A5%E5%92%8C%E5%88%86%E8%A3%82"><span class="toc-number">2.4.</span> <span class="toc-text">插入和分裂</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E7%AC%AC%E4%B8%80%E9%98%B6%E6%AE%B5-%E9%A1%B5%E9%9D%A2%E5%88%86%E8%A3%82"><span class="toc-number">2.4.1.</span> <span class="toc-text">第一阶段: 页面分裂</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E7%AC%AC%E4%BA%8C%E9%98%B6%E6%AE%B5-%E6%8F%92%E5%85%A5%E7%88%B6%E8%8A%82%E7%82%B9"><span class="toc-number">2.4.2.</span> <span class="toc-text">第二阶段: 插入父节点</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Root-%E7%9A%84%E5%88%86%E8%A3%82"><span class="toc-number">2.4.3.</span> <span class="toc-text">Root 的分裂</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AF%B9-Key-%E7%9A%84%E5%88%A0%E9%99%A4"><span class="toc-number">2.5.</span> <span class="toc-text">对 Key 的删除</span></a></li></ol></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2022/07/09/Notes-on-Btree-Implements-PostgreSQL/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2022/07/09/Notes-on-Btree-Implements-PostgreSQL/&text=Notes on Btree Implements: PostgreSQL"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2022/07/09/Notes-on-Btree-Implements-PostgreSQL/&title=Notes on Btree Implements: PostgreSQL"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2022/07/09/Notes-on-Btree-Implements-PostgreSQL/&is_video=false&description=Notes on Btree Implements: PostgreSQL"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Notes on Btree Implements: PostgreSQL&body=Check out this article: http://blog.mwish.me/2022/07/09/Notes-on-Btree-Implements-PostgreSQL/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2022/07/09/Notes-on-Btree-Implements-PostgreSQL/&title=Notes on Btree Implements: PostgreSQL"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2022/07/09/Notes-on-Btree-Implements-PostgreSQL/&title=Notes on Btree Implements: PostgreSQL"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2022/07/09/Notes-on-Btree-Implements-PostgreSQL/&title=Notes on Btree Implements: PostgreSQL"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2022/07/09/Notes-on-Btree-Implements-PostgreSQL/&title=Notes on Btree Implements: PostgreSQL"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2022/07/09/Notes-on-Btree-Implements-PostgreSQL/&name=Notes on Btree Implements: PostgreSQL&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2022/07/09/Notes-on-Btree-Implements-PostgreSQL/&t=Notes on Btree Implements: PostgreSQL"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

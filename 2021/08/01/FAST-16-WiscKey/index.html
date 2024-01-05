@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="FAST’16: WiscKeyWiscKey 是 LSM-Tree 上分离 Key-Value 的一种方案。作者的思路是：  LSMTree 的 Compaction 有很大的写放大，实际上，Compaction 的时候，value 不那么会被用上，同时，由于写放大，它也没有办法很好利用 SSD 的性能。 解决方案是将 Value 从 LSM-Tree 中分离出来，同时，实际的场景中，key 的">
+<meta property="og:type" content="article">
+<meta property="og:title" content="FAST&#39;16 WiscKey">
+<meta property="og:url" content="http://blog.mwish.me/2021/08/01/FAST-16-WiscKey/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="FAST’16: WiscKeyWiscKey 是 LSM-Tree 上分离 Key-Value 的一种方案。作者的思路是：  LSMTree 的 Compaction 有很大的写放大，实际上，Compaction 的时候，value 不那么会被用上，同时，由于写放大，它也没有办法很好利用 SSD 的性能。 解决方案是将 Value 从 LSM-Tree 中分离出来，同时，实际的场景中，key 的">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/A0BE8E5C-F832-4E04-AAA5-695DE7CB1309.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/DA2A69DF-BC32-4112-B862-9E59B8893ADE.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/07644C64-EB05-4306-AABE-09589B8D3066.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/052475CD-D553-457B-B931-552B6F1DB0D5.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/62A40683-41CB-4012-A3AD-5C0D272659CA.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/AEE04BBB-1802-414A-8EF5-C8B9B17D6D78.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/25B3417B-F9AA-4B0F-BF21-706C3DFE2E3B.png">
+<meta property="article:published_time" content="2021-07-31T20:32:51.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.568Z">
+<meta property="article:author" content="mwish">
+<meta property="article:tag" content="database, storage">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/A0BE8E5C-F832-4E04-AAA5-695DE7CB1309.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>FAST&#39;16 WiscKey</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2021/08/07/Database-Recover-System/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2021/07/27/VLDB-17-Fast-Scans-on-Key-Value-Stores/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2021/08/01/FAST-16-WiscKey/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2021/08/01/FAST-16-WiscKey/&text=FAST&#39;16 WiscKey"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2021/08/01/FAST-16-WiscKey/&title=FAST&#39;16 WiscKey"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2021/08/01/FAST-16-WiscKey/&is_video=false&description=FAST&#39;16 WiscKey"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=FAST&#39;16 WiscKey&body=Check out this article: http://blog.mwish.me/2021/08/01/FAST-16-WiscKey/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2021/08/01/FAST-16-WiscKey/&title=FAST&#39;16 WiscKey"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2021/08/01/FAST-16-WiscKey/&title=FAST&#39;16 WiscKey"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2021/08/01/FAST-16-WiscKey/&title=FAST&#39;16 WiscKey"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2021/08/01/FAST-16-WiscKey/&title=FAST&#39;16 WiscKey"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2021/08/01/FAST-16-WiscKey/&name=FAST&#39;16 WiscKey&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2021/08/01/FAST-16-WiscKey/&t=FAST&#39;16 WiscKey"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#FAST%E2%80%9916-WiscKey"><span class="toc-number">1.</span> <span class="toc-text">FAST’16: WiscKey</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#Introduction"><span class="toc-number">1.1.</span> <span class="toc-text">Introduction</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#LevelDB-%E7%9A%84%E8%AF%BB%E5%86%99%E6%94%BE%E5%A4%A7%E5%92%8C%E7%A1%AC%E4%BB%B6%E5%88%A9%E7%94%A8"><span class="toc-number">1.2.</span> <span class="toc-text">LevelDB 的读写放大和硬件利用</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#WiscKey"><span class="toc-number">1.3.</span> <span class="toc-text">WiscKey</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Key-Value-%E5%88%86%E7%A6%BB"><span class="toc-number">1.3.1.</span> <span class="toc-text">Key-Value 分离</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BC%98%E5%8C%96-Range-Query"><span class="toc-number">1.3.2.</span> <span class="toc-text">优化 Range Query</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#GC"><span class="toc-number">1.3.3.</span> <span class="toc-text">GC</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Crash-Consistency"><span class="toc-number">1.3.4.</span> <span class="toc-text">Crash Consistency</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BC%98%E5%8C%96"><span class="toc-number">1.3.5.</span> <span class="toc-text">优化</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Value-Log-Buffer"><span class="toc-number">1.3.5.1.</span> <span class="toc-text">Value-Log Buffer</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Optimizing-the-LSM-tree-Log"><span class="toc-number">1.3.5.2.</span> <span class="toc-text">Optimizing the LSM-tree Log</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Implemention"><span class="toc-number">1.3.6.</span> <span class="toc-text">Implemention</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Evaluation"><span class="toc-number">1.4.</span> <span class="toc-text">Evaluation</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%88%91%E7%9A%84%E4%B8%80%E4%BA%9B%E9%97%AE%E9%A2%98"><span class="toc-number">1.5.</span> <span class="toc-text">我的一些问题</span></a></li></ol></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        FAST&#39;16 WiscKey
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2021-07-31T20:32:51.000Z" itemprop="datePublished">2021-08-01</time>
+        
+      
+    </div>
+
+
+      
+
+      
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/database-storage/" rel="tag">database, storage</a>
+    </div>
+
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <h1 id="FAST’16-WiscKey"><a href="#FAST’16-WiscKey" class="headerlink" title="FAST’16: WiscKey"></a>FAST’16: WiscKey</h1><p>WiscKey 是 LSM-Tree 上分离 Key-Value 的一种方案。作者的思路是：</p>
+<ol>
+<li>LSMTree 的 Compaction 有很大的写放大，实际上，Compaction 的时候，value 不那么会被用上，同时，由于写放大，它也没有办法很好利用 SSD 的性能。</li>
+<li>解决方案是将 Value 从 LSM-Tree 中分离出来，同时，实际的场景中，key 的大小并不会很大。为了做到第二点，需要做的事情有：<ol>
+<li>拆分出一个 vLog (value log) 组件，并将 value 落到 vLog 里面</li>
+<li>需要一个 GC，来回收掉旧的 vLog</li>
+<li>不再需要 wal，一切用 vLog 来 trade off</li>
+<li>维持 consistency</li>
+</ol>
+</li>
+</ol>
+<p>当然，论文对 value log 的内容提出了指导性的设计，但是 Consistency 有关的部分其实是写得比较含糊的，感觉很多具体内容还是要看 badger 或者 Titan 之类的实现，才能了解的比较透彻。</p>
+<h2 id="Introduction"><a href="#Introduction" class="headerlink" title="Introduction"></a>Introduction</h2><p>论文的出发点是有两点：</p>
+<ol>
+<li>Compaction 可能会带来非常大的写放大和性能损耗。其中，value 的 Compaction 会带来很大的写放大。写放大比例可能和 Compaction 模式有关。Tiered Compaction 每层会写放大一次，Leveled Compaction 可能会放大数次。这导致了对 SSD 的狂写放大，带来了性能损耗。</li>
+<li>LSMTree 论文提出于 90 年代，那是一个 HDD 占主要地位的年代。HDD 的顺序写性能可能是随机写性能的百倍。LSM-Tree 相对来说，所有写入都是顺序写，这导致了很高的写性能。但是 SSD 没有必要这样去写 value，这回造成很高的写放大。同时，SSD 有很大的并行度，相对来说需要良好的设计来利用这些并行度。同时，SSD 暴写是有损耗的，很容易写坏设备。还有问题就是说，SSD 随机读/顺序读虽然还是有差距，但是相对 HDD 来差距会小很多。</li>
+</ol>
+<p>所以论文提供了最初的 idea:</p>
+<blockquote>
+<p>The central idea behind WiscKey is the separation of keys and values [42]; only keys are kept sorted in the LSM-tree, while values are stored separately in a log. In other words, we decou- ple key sorting and garbage collection in WiscKey while LevelDB bundles them together.</p>
+</blockquote>
+<p>这种 idea 带来了一些 challenge:</p>
+<ol>
+<li>Scan 的时候可能会有一些性能 loss，因为 value 没有任何 locality，如何解决这个问题。（Get 的时候也会有一点，不过这个相当于是一种 trade off 了，可以后文介绍）。WiscKey 靠 prefetch 和利用 SSD 并行度来解决这个问题</li>
+<li>GC: WiscKey 的 GC 利用 vLog 上的顺序读写来优化性能，并希望自己的 GC 是轻量级的</li>
+<li>Consistency: WiscKey 利用 vLog 和 vLog 记录的设计来做 consistency.</li>
+</ol>
+<p>下面是 benchmark 部分，这个就，听他吹一吹就行：</p>
+<blockquote>
+<p>With LevelDB’s own microbenchmark, WiscKey is 2.5×–111× faster than LevelDB for loading a database, depending on the size of the key-value pairs; for random lookups, WiscKey is 1.6×–14× faster than LevelDB. </p>
+</blockquote>
+<p>WiscKey 性能不总是比 LSM-Tree 好，在小 key 占多数的的 point get、range query 中，性能是下降的（当然，如果 vLog 值是顺序的，可能有好些的 locality, 但是不现实），不过，论文作者认为这些情况比较少发生：</p>
+<blockquote>
+<p>However, this workload does not reflect real-world use cases (which primarily use shorter range queries) and can be improved by log reorganization. </p>
+</blockquote>
+<h2 id="LevelDB-的读写放大和硬件利用"><a href="#LevelDB-的读写放大和硬件利用" class="headerlink" title="LevelDB 的读写放大和硬件利用"></a>LevelDB 的读写放大和硬件利用</h2><p><img src="https://image.mwish.me/blog-image/A0BE8E5C-F832-4E04-AAA5-695DE7CB1309.png" alt="A0BE8E5C-F832-4E04-AAA5-695DE7CB1309"></p>
+<p>LevelDB 就不讲了，写放大和 LevelDB Compaction 有关。读放大其实相对来说 trick 一些，这里的分析方式如下：</p>
+<blockquote>
+<p>In the worst case, LevelDB needs to check eight files in L0, and one file for each of the remaining six levels: a total of 14 files. Sec- ond, to find a key-value pair within a SSTable file, LevelDB needs to read multiple metadata blocks within the file. Specifically, the amount of data actually read is given by (index block + bloom-filter blocks + data block). For example, to lookup a 1-KB key-value pair, LevelDB needs to read a 16-KB index block, a 4- KB bloom-filter block, and a 4-KB data block; in total, 24 KB. Therefore, considering the 14 SSTable files in the worst case, the read amplification of LevelDB is 24 × 14 = 336. Smaller key-value pairs will lead to an even higher read amplification.</p>
+</blockquote>
+<p>这里是算上了 index block 和 bloom fliter 的情况，最后读了一次 data block。这里提供了一个 1KB 的 key-value 的 pair, 然后点查 100000 次。</p>
+<p><img src="https://image.mwish.me/blog-image/DA2A69DF-BC32-4112-B862-9E59B8893ADE.png" alt="DA2A69DF-BC32-4112-B862-9E59B8893ADE"></p>
+<p>上面的图有点反直觉，不过实际上原因是说，随着数据集增大，LevelDB 的层数变深、SST 变多，读可能会需要访问越来越多的 SST 的 index blocks, 同时，这些 blocks 不一定都能 fit 在文件元信息的 cache 中，导致读性能的下降，读放大增大。写入很好理解，就不解释了。</p>
+<p>（论文随后和 B+Tree 对比了一下，不过我感觉由于 BTree 的刷脏之类的逻辑，感觉读写放大都没这么好比较，就不贴了）</p>
+<p>下面是硬件相关的内容，可以看到，sequential 相对来说很容易打满读带宽。而 rand access 需要并行 + 每次 issue 较大的块的话，相对来说也能把带宽打满。</p>
+<p><img src="https://image.mwish.me/blog-image/07644C64-EB05-4306-AABE-09589B8D3066.png" alt="07644C64-EB05-4306-AABE-09589B8D3066"></p>
+<p>作者认为，综上所述，compaction 和 random access 浪费了很多读相关的带宽，这点可以被好好利用。同时，即使不是 sequential access, 带宽也是能被打满的。这代表了后文的优化方向。</p>
+<h2 id="WiscKey"><a href="#WiscKey" class="headerlink" title="WiscKey"></a>WiscKey</h2><p>WiscKey 提出了几个基本的设计思想和设计目标：</p>
+<ol>
+<li>WiscKey 分离了 key-value</li>
+<li>为了高效 range-query, WiscKey 用并行随机读来最大化利用 SSD 的带宽。</li>
+<li>WiscKey 利用 GC 等事务来优化 vLog</li>
+<li>WiscKey 可能通过牺牲一致性的方式来优化写性能</li>
+</ol>
+<p>Design Goals:</p>
+<ol>
+<li>低写放大</li>
+<li>低读放大</li>
+<li>SSD 优化</li>
+<li>兼容类似 LevelDB 这些语义，提供丰富的 api</li>
+</ol>
+<h3 id="Key-Value-分离"><a href="#Key-Value-分离" class="headerlink" title="Key-Value 分离"></a>Key-Value 分离</h3><p><img src="https://image.mwish.me/blog-image/052475CD-D553-457B-B931-552B6F1DB0D5.png" alt="052475CD-D553-457B-B931-552B6F1DB0D5"></p>
+<blockquote>
+<p>WiscKey is motivated by a simple revelation. Compaction only needs to sort keys, while values can be managed separately [42].</p>
+</blockquote>
+<p>实际上，这里的 sorting 只需要 key，不需要 value。由于大部分 workload 中，value 可能占的地位多一些，这样能让 SST 中，保存更多的对象，压缩更少的次数。Compaction 的时候，能减少 Compaction 相关的写放大。</p>
+<p>这种模式也减小了读相关的放大。虽然在 WiscKey 中，读也会走到 vLog 上，不能利用 <code>&lt;key, value&gt;</code> 一起的局部性，但是能保证较小的 LSMTree Level，用这个来节省走一堆 index block 的读放大。这里可以有：</p>
+<blockquote>
+<p>For example, assuming 16-B keys and 1-KB values, if the size of the entire key-value dataset is 100 GB, then the size of the LSM-tree is only around 2 GB (assuming a 12-B cost for a value’s location and size), which can be easily cached in modern servers which have over 100-GB of memory.</p>
+</blockquote>
+<p>Figure4 给出了 WiscKey 的基本设计，需要注意的是，这个设计是没有考虑 GC 的，后面还得改呢=。=</p>
+<p>LSM-tree 的 <code>addr</code> 差不多是 <code>(&lt;vLog-offset, value-size&gt;)</code> 这个格式。那么这个时候，逻辑大概如下：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">delete:</span><br><span class="line">	delete in LSM-tree</span><br><span class="line">	</span><br><span class="line">Insert:</span><br><span class="line">	insert value log</span><br><span class="line">	insert in LSM-tree</span><br><span class="line"></span><br><span class="line">get:</span><br><span class="line">	get in LSM-tree</span><br><span class="line">	get in value log by offset if key exists.</span><br></pre></td></tr></table></figure>
+<h3 id="优化-Range-Query"><a href="#优化-Range-Query" class="headerlink" title="优化 Range Query"></a>优化 Range Query</h3><p>LevelDB 提供了 <code>iterator</code> ，这有一些对应的 api:</p>
+<ol>
+<li><code>Seek(key)</code></li>
+<li><code>Next</code></li>
+<li><code>Prev</code></li>
+<li><code>Key</code></li>
+<li><code>Value</code></li>
+</ol>
+<p>在 LevelDB 里面，这几个操作都是比较朴素的，Key Value 拿到 iterator 现有的东西，返回 Slice. Next 要么直接下一个，然后走下前缀压缩相关的逻辑，要么跳到 Index 上再找个 data block. 这里有个好处就是，range scan 再单个 SST 上还是有一定局部性的。反正 value 都存在一起。</p>
+<p>WiscKey 这里降低了局部性。解决方案是，如果发现查询是一个 range 相关的查询，这里会提前拉出一堆 key 对应的 addr, 然后 issue 并行读。这里会有一批相关的线程来完成这些读相关的操作：</p>
+<blockquote>
+<p>The corresponding value addresses retrieved from the LSM-tree are inserted into a queue; multiple threads will fetch these addresses from the vLog concurrently in the background.</p>
+</blockquote>
+<h3 id="GC"><a href="#GC" class="headerlink" title="GC"></a>GC</h3><p><img src="https://image.mwish.me/blog-image/62A40683-41CB-4012-A3AD-5C0D272659CA.png" alt="62A40683-41CB-4012-A3AD-5C0D272659CA"></p>
+<p>LevelDB 是怎么 GC 的呢？答案是 Compaction 的时候把不再需要的数据干掉。因为它的 key-value 是在一起的，所以这里是相对轻松的。</p>
+<p>WiscKey Compaction 的时候没有动 vLog, 它需要根据 vLog 来做 GC。这个时候，它肯定需要走 LSM-tree 来查看 key 是不是不再需要的了，所以 vLog 要能够索引到 key. 如 Figure 5, 这里在 vLog 中编码了 key, 现在格式是：<code>(key size, value size, key, value)</code>.</p>
+<p>vLog 这里提供了 <code>tail</code> 和 <code>head</code>. 当 GC 的时候，这里从 <code>tail</code> 拿几 MB 的 kv pair, 然后走 LSM-tree 查看数据可不可以被 GC。这里会把还需要用的数据放到 head 处，然后调整 tail 的位置。这里为了保证正确性，需要有这样的顺序：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">1. 将有效的值 append 到 head 上</span><br><span class="line">2. fsync vLog file</span><br><span class="line">3. 把更新的值的地址加入到 LSM-tree</span><br><span class="line">4. 写入 tail 变更的信息</span><br><span class="line">5. 回收 tail</span><br></pre></td></tr></table></figure>
+<p>其实 (3) 这个地方是有一致性问题的：有效数据你想怎么更新呢？感觉这里还挺麻烦的，没有 snapshot 的话倒是还好，如果考虑 LevelDB 的 multi-version 的话，感觉问题还不小…</p>
+<p>WiscKey 可以配置 GC 触发的 pattern，比如定期触发之类的。同时，删除少的负载会很少触发 GC。</p>
+<h3 id="Crash-Consistency"><a href="#Crash-Consistency" class="headerlink" title="Crash Consistency"></a>Crash Consistency</h3><p>还记得 vLog 是什么样子吗？<code>(key size, value size, key, value)</code>。有了这个，实际上就相当于 wal 了。（那这个和 LevelDB 区别是什么呢？实际上 LevelDB 一个 memtable 对应一个 Log file，而 WiscKey 把这个玩意抽开了）。这实际上就能保证 consistency。</p>
+<p>当然，数据是可能有 corrupt 的。WiscKey 发现 log corrupt 的时候，可以在 LSMTree 中表示无该记录。</p>
+<h3 id="优化"><a href="#优化" class="headerlink" title="优化"></a>优化</h3><h4 id="Value-Log-Buffer"><a href="#Value-Log-Buffer" class="headerlink" title="Value-Log Buffer"></a>Value-Log Buffer</h4><p>这个就很简单，把 vLog 写到 buffer 里，写满了再刷，这个就，一致性/性能 trade-off 了。</p>
+<h4 id="Optimizing-the-LSM-tree-Log"><a href="#Optimizing-the-LSM-tree-Log" class="headerlink" title="Optimizing the LSM-tree Log"></a>Optimizing the LSM-tree Log</h4><p>这里，我们刚刚说到，<code>tail</code> 会在 GC 的时候调整。这里的 head 是持久化的，那么我们考虑，recover 的时候，实际上只要从 <code>head</code> 开始，把它当 ckpt，往后扫 log 来恢复。</p>
+<h3 id="Implemention"><a href="#Implemention" class="headerlink" title="Implemention"></a>Implemention</h3><p>vLog 可能有不同的访问模式，这里用 <code>posix_fadvise()</code> 来交给文件系统处理</p>
+<p>同时，对于 Scan，WiscKey 维护了 32 个线程来处理。</p>
+<blockquote>
+<p>These threads sleep on a thread-safe queue, waiting for new value addresses to arrive. When prefetching is triggered, WiscKey inserts a fixed number of value addresses to the worker queue, and then wakes up all the sleeping threads. These threads will start reading values in parallel, caching them in the buffer cache automatically.</p>
+</blockquote>
+<p>这里用 <code>fallocate(2)</code> 来处理 disk 上的空间： <a target="_blank" rel="noopener" href="https://man7.org/linux/man-pages/man2/fallocate.2.html">https://man7.org/linux/man-pages/man2/fallocate.2.html</a></p>
+<h2 id="Evaluation"><a href="#Evaluation" class="headerlink" title="Evaluation"></a>Evaluation</h2><p><img src="https://image.mwish.me/blog-image/AEE04BBB-1802-414A-8EF5-C8B9B17D6D78.png" alt="AEE04BBB-1802-414A-8EF5-C8B9B17D6D78"></p>
+<p><img src="https://image.mwish.me/blog-image/25B3417B-F9AA-4B0F-BF21-706C3DFE2E3B.png" alt="25B3417B-F9AA-4B0F-BF21-706C3DFE2E3B"></p>
+<p>可以看到，不知道出于什么原因，作者很逆天的把 WiscKey 写成了 WhisKey, 我搜了下，没找到原因。值得关注的其实还是 Figure 8 等一些 LevelDB 性能瓶颈出现的地方了。</p>
+<h2 id="我的一些问题"><a href="#我的一些问题" class="headerlink" title="我的一些问题"></a>我的一些问题</h2><ol>
+<li>GC 相关的写放大感觉是没有很好的衡量的，vLog GC 可能比较省写放大，但是能省多少读写放大呢，这个有很好的 tunning 吗？</li>
+<li>Consistency 怎么能很好的保证呢？假如 GC 的时候，那我们要更新所有的 LSMTree 的 index，这可能暗示</li>
+</ol>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#FAST%E2%80%9916-WiscKey"><span class="toc-number">1.</span> <span class="toc-text">FAST’16: WiscKey</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#Introduction"><span class="toc-number">1.1.</span> <span class="toc-text">Introduction</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#LevelDB-%E7%9A%84%E8%AF%BB%E5%86%99%E6%94%BE%E5%A4%A7%E5%92%8C%E7%A1%AC%E4%BB%B6%E5%88%A9%E7%94%A8"><span class="toc-number">1.2.</span> <span class="toc-text">LevelDB 的读写放大和硬件利用</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#WiscKey"><span class="toc-number">1.3.</span> <span class="toc-text">WiscKey</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Key-Value-%E5%88%86%E7%A6%BB"><span class="toc-number">1.3.1.</span> <span class="toc-text">Key-Value 分离</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BC%98%E5%8C%96-Range-Query"><span class="toc-number">1.3.2.</span> <span class="toc-text">优化 Range Query</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#GC"><span class="toc-number">1.3.3.</span> <span class="toc-text">GC</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Crash-Consistency"><span class="toc-number">1.3.4.</span> <span class="toc-text">Crash Consistency</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BC%98%E5%8C%96"><span class="toc-number">1.3.5.</span> <span class="toc-text">优化</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Value-Log-Buffer"><span class="toc-number">1.3.5.1.</span> <span class="toc-text">Value-Log Buffer</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Optimizing-the-LSM-tree-Log"><span class="toc-number">1.3.5.2.</span> <span class="toc-text">Optimizing the LSM-tree Log</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Implemention"><span class="toc-number">1.3.6.</span> <span class="toc-text">Implemention</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Evaluation"><span class="toc-number">1.4.</span> <span class="toc-text">Evaluation</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%88%91%E7%9A%84%E4%B8%80%E4%BA%9B%E9%97%AE%E9%A2%98"><span class="toc-number">1.5.</span> <span class="toc-text">我的一些问题</span></a></li></ol></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2021/08/01/FAST-16-WiscKey/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2021/08/01/FAST-16-WiscKey/&text=FAST&#39;16 WiscKey"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2021/08/01/FAST-16-WiscKey/&title=FAST&#39;16 WiscKey"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2021/08/01/FAST-16-WiscKey/&is_video=false&description=FAST&#39;16 WiscKey"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=FAST&#39;16 WiscKey&body=Check out this article: http://blog.mwish.me/2021/08/01/FAST-16-WiscKey/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2021/08/01/FAST-16-WiscKey/&title=FAST&#39;16 WiscKey"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2021/08/01/FAST-16-WiscKey/&title=FAST&#39;16 WiscKey"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2021/08/01/FAST-16-WiscKey/&title=FAST&#39;16 WiscKey"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2021/08/01/FAST-16-WiscKey/&title=FAST&#39;16 WiscKey"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2021/08/01/FAST-16-WiscKey/&name=FAST&#39;16 WiscKey&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2021/08/01/FAST-16-WiscKey/&t=FAST&#39;16 WiscKey"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

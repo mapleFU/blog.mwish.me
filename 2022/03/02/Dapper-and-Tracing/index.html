@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="DapperDapper 感觉最早是 Google 的追踪系统。实际系统的链路会非常长，从上游发起一个搜索，到下游运行，下游可能又是个分布式请求。如果最终结果是上游出现满请求&#x2F;问题，需要能够找到对应的选项。本身请求的监控是有用的，通过监控，开发者能够知道每个阶段大概的耗时。但对于偶现的查询，可能无法找到对应的耗时来源，需要具体的请求-阶段耗时。 这里还有个问题，就是定位到的结果也要分锅什么的，慢只">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Dapper and Tracing">
+<meta property="og:url" content="http://blog.mwish.me/2022/03/02/Dapper-and-Tracing/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="DapperDapper 感觉最早是 Google 的追踪系统。实际系统的链路会非常长，从上游发起一个搜索，到下游运行，下游可能又是个分布式请求。如果最终结果是上游出现满请求&#x2F;问题，需要能够找到对应的选项。本身请求的监控是有用的，通过监控，开发者能够知道每个阶段大概的耗时。但对于偶现的查询，可能无法找到对应的耗时来源，需要具体的请求-阶段耗时。 这里还有个问题，就是定位到的结果也要分锅什么的，慢只">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/img1.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/img2.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/img4.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/img5.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/table2.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/architecture-v2.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/architecture-v1.png">
+<meta property="article:published_time" content="2022-03-02T04:05:23.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.563Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/img1.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>Dapper and Tracing</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2022/03/17/InfluxDB-%E7%9B%B8%E5%85%B3%E6%9D%90%E6%96%99/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2022/02/27/2021-%E6%9D%82%E4%B9%A6%E8%AE%B0/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2022/03/02/Dapper-and-Tracing/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2022/03/02/Dapper-and-Tracing/&text=Dapper and Tracing"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2022/03/02/Dapper-and-Tracing/&title=Dapper and Tracing"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2022/03/02/Dapper-and-Tracing/&is_video=false&description=Dapper and Tracing"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Dapper and Tracing&body=Check out this article: http://blog.mwish.me/2022/03/02/Dapper-and-Tracing/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2022/03/02/Dapper-and-Tracing/&title=Dapper and Tracing"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2022/03/02/Dapper-and-Tracing/&title=Dapper and Tracing"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2022/03/02/Dapper-and-Tracing/&title=Dapper and Tracing"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2022/03/02/Dapper-and-Tracing/&title=Dapper and Tracing"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2022/03/02/Dapper-and-Tracing/&name=Dapper and Tracing&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2022/03/02/Dapper-and-Tracing/&t=Dapper and Tracing"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#Dapper"><span class="toc-number">1.</span> <span class="toc-text">Dapper</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E6%A8%A1%E5%9E%8B"><span class="toc-number">1.1.</span> <span class="toc-text">数据模型</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E6%94%B6%E9%9B%86"><span class="toc-number">1.2.</span> <span class="toc-text">数据收集</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Tracing-%E7%9A%84%E5%BC%80%E9%94%80%E5%92%8C%E5%BA%94%E5%AF%B9"><span class="toc-number">1.3.</span> <span class="toc-text">Tracing 的开销和应对</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E7%99%BE%E5%BA%A6%E5%A4%A7%E6%90%9C%E7%9A%84%E4%B8%80%E4%BA%9B%E6%96%B9%E6%A1%88"><span class="toc-number">2.</span> <span class="toc-text">百度大搜的一些方案</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%87%87%E6%A0%B7%E7%9A%84%E4%B8%80%E4%BA%9B%E8%AE%A8%E8%AE%BA"><span class="toc-number">2.1.</span> <span class="toc-text">采样的一些讨论</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Trace-%E5%B7%A5%E4%B8%9A%E7%95%8C%E5%AE%9E%E8%B7%B5"><span class="toc-number">2.2.</span> <span class="toc-text">Trace: 工业界实践</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#brpc-tracing-%E5%AE%A2%E6%88%B7%E7%AB%AF%E5%AE%9E%E7%8E%B0%E7%9A%84%E4%B8%80%E4%B8%AA%E7%AE%80%E5%8D%95%E4%BE%8B%E5%AD%90"><span class="toc-number">2.2.1.</span> <span class="toc-text">brpc tracing: 客户端实现的一个简单例子</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#tokio-tracing"><span class="toc-number">2.2.2.</span> <span class="toc-text">tokio tracing</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#minitrace"><span class="toc-number">2.2.3.</span> <span class="toc-text">minitrace</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Jaeger-amp-OpenTelemetry-OpenTracing"><span class="toc-number">2.2.4.</span> <span class="toc-text">Jaeger &amp; OpenTelemetry(OpenTracing)</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8F%82%E8%80%83"><span class="toc-number">2.3.</span> <span class="toc-text">参考</span></a></li></ol></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Dapper and Tracing
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2022-03-02T04:05:23.000Z" itemprop="datePublished">2022-03-02</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <h1 id="Dapper"><a href="#Dapper" class="headerlink" title="Dapper"></a>Dapper</h1><p>Dapper 感觉最早是 Google 的追踪系统。实际系统的链路会非常长，从上游发起一个搜索，到下游运行，下游可能又是个分布式请求。如果最终结果是上游出现满请求/问题，需要能够找到对应的选项。本身请求的监控是有用的，通过监控，开发者能够知道每个阶段大概的耗时。但对于偶现的查询，可能无法找到对应的耗时来源，需要具体的请求-阶段耗时。</p>
+<p>这里还有个问题，就是定位到的结果也要分锅什么的，慢只是一个结果。可能某个系统多租户没做好，然后来个傻逼用户打一堆 AP 请求过来，把别的地方的请求搞慢了。这些地方也要根据 tracing 之类的来分锅。</p>
+<p>竟然要分锅，这里暗含了几件事：</p>
+<ol>
+<li>这个系统对性能的影响，应该要在预期之内，不能太大</li>
+<li>可能可以全打，或者精细的按照一些配置来输出</li>
+<li>可能可以 hack 进一些基本的工具，包括 rpc、runtime 等（作者说不需要手工编码的部分，强调了对应用的透明，但我感觉为了一些细粒度的排查，还是需要的吧）</li>
+</ol>
+<h2 id="数据模型"><a href="#数据模型" class="headerlink" title="数据模型"></a>数据模型</h2><p>一个调用的链路如下文所示：</p>
+<p><img src="https://image.mwish.me/blog-image/img1.png" alt="img1"></p>
+<p>基本的思路是，这里需要有一些 context （大概可以用类似 snowflake 之类的方式生成）:</p>
+<ol>
+<li>跟踪标识符(message identifiers)</li>
+<li>时间戳(timestamped events)。</li>
+</ol>
+<p>这里是单个的跟踪关系，dapper 这里非常有意思，考虑了层次的/并发的跟踪关系：</p>
+<p><img src="https://image.mwish.me/blog-image/img2.png" alt="img2"></p>
+<p>如上，这里其实是有一个（多个） <code>Span</code> 对象的，Root 本身构建了一个 Span 对象，然后调用下层的时候也会起 Span。这里可以有一个很显著的事实：Span 是可以跨机器的。</p>
+<p>还有个很奇怪的问题是时间戳的偏移，这里本身靠请求发出的时间 &gt; 请求收到的时间保证。（TODO：不过感觉这个是个特别工程的问题了，可以看看这些系统是具体怎么实现的了）。</p>
+<p>Dapper 在使用的时候，可能会被丢到 Thread Local Storage 系统里，或者和某个 Context 对象绑定，具体而言：</p>
+<ol>
+<li>这个 context 开销尽量小，然后可能可以丢到 TLS 或者某个 <code>context</code> 参数里</li>
+<li>在异步调用、起别的线程的时候，能够正确处理它们的所有权</li>
+</ol>
+<p>这个时候还要注意到一点，这些大公司可能用的是一套 RPC，RPC 可能又会定义一些 runtime 之类的，trace 得很好的和他们做到一起。这里还可以加入一些 annotation，注入一些标记：</p>
+<p><img src="https://image.mwish.me/blog-image/img4.png" alt="img4"></p>
+<p>这个我感觉就依赖一些奇怪的内存申请了。论文里还提到可以存 key-value, counter，不过我觉得就是一个多模/语义的问题了。</p>
+<h2 id="数据收集"><a href="#数据收集" class="headerlink" title="数据收集"></a>数据收集</h2><p><img src="https://image.mwish.me/blog-image/img5.png" alt="img5"></p>
+<p>这里分为三个阶段：</p>
+<ol>
+<li>log 到本地文件</li>
+<li>Dapper 的 deamon 把它弄到某个 collector 里面</li>
+<li>最后写到 BigTable 里面，对 模型为 trace_id/span/span_cnt</li>
+</ol>
+<p>同时，这里 latency 从 15s - 2min，不算很延迟敏感。这里还有一些重要数据要走 OOB，我个人感觉这里暗示了有一些 tracing 可以是「重要的」。</p>
+<p>上图也表明，tracing 大概包括：</p>
+<ol>
+<li>客户端和对应的 Dapper daemon</li>
+<li>Collectors</li>
+<li>一个时序的库，用来存储这样的数据</li>
+</ol>
+<h2 id="Tracing-的开销和应对"><a href="#Tracing-的开销和应对" class="headerlink" title="Tracing 的开销和应对"></a>Tracing 的开销和应对</h2><p>毕竟要在线上系统跑，肯定要考虑性能问题，考虑 Root Span 需要分配 unique id ，论文描述：</p>
+<blockquote>
+<p>根span的创建和销毁需要损耗平均204纳秒的时间，而同样的操作在其他span上需要消耗176纳秒</p>
+<p>如果一个span没有被采样的话，那么这个额外的span下创建annotation的成本几乎可以忽略不计，他由在Dapper运行期对ThreadLocal查找操作构成，这平均只消耗9纳秒。如果这个span被计入采样的话，会用一个用字符串进行标注—在图4中有展现—平均需要消耗40纳秒。这些数据都是在2.2GHz的x86服务器上采集的。</p>
+<p>在Dapper运行期写入到本地磁盘是最昂贵的操作，但是他们的可见损耗大大减少，因为写入日志文件和操作相对于被跟踪的应用系统来说都是异步的。</p>
+</blockquote>
+<p>Dapper 将自己的进程设置为 Linux 调度最低的优先级，然后在实践中，占用资源一般非常非常低。</p>
+<p>同时，采样率对性能会产生影响，内容如下：</p>
+<p><img src="https://image.mwish.me/blog-image/table2.png" alt="table2"></p>
+<p>Dapper 能够可变的、自适应的、aggressive 的采样。上层还支持了一些二级采样，继续 discard 一些数据。</p>
+<h1 id="百度大搜的一些方案"><a href="#百度大搜的一些方案" class="headerlink" title="百度大搜的一些方案"></a>百度大搜的一些方案</h1><p>如果你真的查过一些问题，你就会知道，Dapper 很好，但是很多东西你会希望更多的日志、更高的自由度、必要的时候有一些定制的信息，这里可以参考百度大搜的方案：</p>
+<ol>
+<li><a target="_blank" rel="noopener" href="https://mp.weixin.qq.com/s/BMbdk5RviLG1Ftlo-qRsDQ">https://mp.weixin.qq.com/s/BMbdk5RviLG1Ftlo-qRsDQ</a></li>
+<li><a target="_blank" rel="noopener" href="https://mp.weixin.qq.com/s/IHVUnyhJr4fhiopMLOJqjA">https://mp.weixin.qq.com/s/IHVUnyhJr4fhiopMLOJqjA</a></li>
+</ol>
+<p>这个方案相对来说可能和开放方案不是 100% 对齐。里面对数据的可追踪性做了考量，我认为，有意思的地方在于：</p>
+<ol>
+<li>希望开启根据某些特征采样的时候，一定能开启</li>
+<li>支持全量的采样</li>
+</ol>
+<p>我觉得这两点还是比较重要的</p>
+<h2 id="采样的一些讨论"><a href="#采样的一些讨论" class="headerlink" title="采样的一些讨论"></a>采样的一些讨论</h2><p>上述 baidu 的系统通过一些资源开销完成了完全的采样. 关于 Dapper 本身的采样，可以看 <code>&lt;Uncertainty in Aggregate Estimates from Sampled Distributed Traces&gt;</code>，Google 在这篇论文对采样和概率做了量化描述。</p>
+<h2 id="Trace-工业界实践"><a href="#Trace-工业界实践" class="headerlink" title="Trace: 工业界实践"></a>Trace: 工业界实践</h2><p>工业界有着不少的实践，或许最值得瞅一眼的入门是 Opentracing。有的体系过于庞大，我们会一步一步介绍这个系统是怎么构建的。</p>
+<h3 id="brpc-tracing-客户端实现的一个简单例子"><a href="#brpc-tracing-客户端实现的一个简单例子" class="headerlink" title="brpc tracing: 客户端实现的一个简单例子"></a>brpc tracing: 客户端实现的一个简单例子</h3><p>介绍这玩意一方面是它是 Dapper 描述的客户端的一个很好的实现，另一方面我上班用的是 brpc… 出于私心瞅一眼。</p>
+<p>入口可以看到 <code>Collector</code> 和 <code>Span</code>:</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// described in http://static.googleusercontent.com/media/research.google.com/en//pubs/archive/36356.pdf</span></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">Span</span> : <span class="keyword">public</span> bvar::Collected &#123;</span><br><span class="line"><span class="keyword">friend</span> <span class="keyword">class</span> <span class="title class_">SpanDB</span>;</span><br><span class="line">    <span class="keyword">struct</span> <span class="title class_">Forbidden</span> &#123;&#125;;</span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">    <span class="comment">// Call CreateServerSpan/CreateClientSpan instead.</span></span><br><span class="line">    <span class="built_in">Span</span>(Forbidden) &#123;&#125;</span><br><span class="line">    ~<span class="built_in">Span</span>() &#123;&#125;</span><br><span class="line">    <span class="comment">// ...</span></span><br><span class="line"><span class="keyword">private</span>:</span><br><span class="line">  	<span class="comment">// 生成的 TraceID, 每个链路是唯一的.</span></span><br><span class="line">    <span class="type">uint64_t</span> _trace_id;</span><br><span class="line">  	<span class="comment">// 生成的 SpanID, 会被串联到一起.</span></span><br><span class="line">    <span class="type">uint64_t</span> _span_id;</span><br><span class="line">    <span class="type">uint64_t</span> _parent_span_id;</span><br><span class="line">  </span><br><span class="line">  	<span class="comment">// </span></span><br><span class="line">    <span class="type">uint64_t</span> _log_id;</span><br><span class="line">  </span><br><span class="line">  	<span class="comment">/* 下面这几个字段可以放到一起理解, 有点像 brpc 逻辑, 确定谁是 server</span></span><br><span class="line"><span class="comment">  	谁是 client, 和一些对应的处理 */</span></span><br><span class="line">  	<span class="comment">// ClientID</span></span><br><span class="line">    <span class="type">bthread_id_t</span> _base_cid;</span><br><span class="line">    <span class="type">bthread_id_t</span> _ending_cid;</span><br><span class="line">  </span><br><span class="line">  	<span class="comment">// svc 对应的 ip 和 port</span></span><br><span class="line">    butil::EndPoint _remote_side;</span><br><span class="line">  	<span class="comment">// SpanType 可以是 Server 和 Client</span></span><br><span class="line">    SpanType _type;</span><br><span class="line">  </span><br><span class="line">  	<span class="comment">// TODO(mwish): 这是什么几把</span></span><br><span class="line">    <span class="type">bool</span> _async;</span><br><span class="line">    ProtocolType _protocol;</span><br><span class="line">    <span class="type">int</span> _error_code;</span><br><span class="line">  </span><br><span class="line">  	<span class="comment">/* </span></span><br><span class="line"><span class="comment">  	一些 brpc internal 的记录, 想看的话可以认真看的话倒是可以看看</span></span><br><span class="line"><span class="comment">  	这个就和我们的内容无关了</span></span><br><span class="line"><span class="comment">  	</span></span><br><span class="line"><span class="comment">    int  _request_size;</span></span><br><span class="line"><span class="comment">    int  _response_size;</span></span><br><span class="line"><span class="comment">    int64_t _base_real_us;</span></span><br><span class="line"><span class="comment">    int64_t _received_real_us;</span></span><br><span class="line"><span class="comment">    int64_t _start_parse_real_us;</span></span><br><span class="line"><span class="comment">    int64_t _start_callback_real_us;</span></span><br><span class="line"><span class="comment">    int64_t _start_send_real_us;</span></span><br><span class="line"><span class="comment">    int64_t _sent_real_us;</span></span><br><span class="line"><span class="comment">    std::string _full_method_name;</span></span><br><span class="line"><span class="comment">    */</span></span><br><span class="line"> </span><br><span class="line">    <span class="comment">// Format: </span></span><br><span class="line">    <span class="comment">//   time1_us \s annotation1 &lt;SEP&gt;</span></span><br><span class="line">    <span class="comment">//   time2_us \s annotation2 &lt;SEP&gt;</span></span><br><span class="line">    <span class="comment">//   ...</span></span><br><span class="line">  	<span class="comment">// Annotation 会按照上述的</span></span><br><span class="line">    std::string _info;</span><br><span class="line"></span><br><span class="line">  	<span class="comment">// 和 SpanID 一样的一些本地 ctx 标记</span></span><br><span class="line">    Span* _local_parent;</span><br><span class="line">    Span* _next_client;</span><br><span class="line">    Span* _tls_next;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>我们首先关注一下这个类型的成员.</p>
+<p><code>Channel::CallMethod</code> 里面，描述了作为 client 发送请求的对应 Span 和行为，调用了 <code>Span::CreateClientSpan</code>。</p>
+<p>这里接收一个请求的时候，会初始化它（以 HTTP Server 为例）：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br></pre></td><td class="code"><pre><span class="line">Span* span = <span class="literal">NULL</span>;</span><br><span class="line"><span class="type">const</span> std::string&amp; path = req_header.<span class="built_in">uri</span>().<span class="built_in">path</span>();</span><br><span class="line"><span class="type">const</span> std::string* trace_id_str = req_header.<span class="built_in">GetHeader</span>(<span class="string">&quot;x-bd-trace-id&quot;</span>);</span><br><span class="line"><span class="keyword">if</span> (<span class="built_in">IsTraceable</span>(trace_id_str)) &#123;</span><br><span class="line">  <span class="comment">// 从 rpc 请求拿到 id, 没有的话</span></span><br><span class="line">  <span class="type">uint64_t</span> trace_id = <span class="number">0</span>;</span><br><span class="line">  <span class="keyword">if</span> (trace_id_str) &#123;</span><br><span class="line">    trace_id = <span class="built_in">strtoull</span>(trace_id_str-&gt;<span class="built_in">c_str</span>(), <span class="literal">NULL</span>, <span class="number">10</span>);</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="comment">// 拿到 SpanID(服务器).</span></span><br><span class="line">  <span class="type">uint64_t</span> span_id = <span class="number">0</span>;</span><br><span class="line">  <span class="type">const</span> std::string* span_id_str = req_header.<span class="built_in">GetHeader</span>(<span class="string">&quot;x-bd-span-id&quot;</span>);</span><br><span class="line">  <span class="keyword">if</span> (span_id_str) &#123;</span><br><span class="line">    span_id = <span class="built_in">strtoull</span>(span_id_str-&gt;<span class="built_in">c_str</span>(), <span class="literal">NULL</span>, <span class="number">10</span>);</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="comment">// 拿到 parent span id.</span></span><br><span class="line">  <span class="type">uint64_t</span> parent_span_id = <span class="number">0</span>;</span><br><span class="line">  <span class="type">const</span> std::string* parent_span_id_str =</span><br><span class="line">    req_header.<span class="built_in">GetHeader</span>(<span class="string">&quot;x-bd-parent-span-id&quot;</span>);</span><br><span class="line">  <span class="keyword">if</span> (parent_span_id_str) &#123;</span><br><span class="line">    parent_span_id = <span class="built_in">strtoull</span>(parent_span_id_str-&gt;<span class="built_in">c_str</span>(), <span class="literal">NULL</span>, <span class="number">10</span>);</span><br><span class="line">  &#125;</span><br><span class="line">  span = Span::<span class="built_in">CreateServerSpan</span>(</span><br><span class="line">    path, trace_id, span_id, parent_span_id, msg-&gt;<span class="built_in">base_real_us</span>());</span><br><span class="line">  </span><br><span class="line">  <span class="comment">/* 一些 RPC 的上下文设置, 不感兴趣就别看了嘻嘻 */</span></span><br><span class="line">  accessor.<span class="built_in">set_span</span>(span);</span><br><span class="line">  span-&gt;<span class="built_in">set_log_id</span>(cntl-&gt;<span class="built_in">log_id</span>());</span><br><span class="line">  span-&gt;<span class="built_in">set_remote_side</span>(user_addr);</span><br><span class="line">  span-&gt;<span class="built_in">set_received_us</span>(msg-&gt;<span class="built_in">received_us</span>());</span><br><span class="line">  span-&gt;<span class="built_in">set_start_parse_us</span>(start_parse_us);</span><br><span class="line">  span-&gt;<span class="built_in">set_protocol</span>(is_http2 ? PROTOCOL_H2 : PROTOCOL_HTTP);</span><br><span class="line">  span-&gt;<span class="built_in">set_request_size</span>(imsg_guard-&gt;<span class="built_in">parsed_length</span>());</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>可以看到，这个地方，如果没有给 <code>trace_id</code> , <code>log_id</code> 的话，这两个会是 <code>0</code>，那我们细看一下对应的逻辑：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">Span* <span class="title">Span::CreateServerSpan</span><span class="params">(</span></span></span><br><span class="line"><span class="params"><span class="function">    <span class="type">const</span> std::string&amp; full_method_name,</span></span></span><br><span class="line"><span class="params"><span class="function">    <span class="type">uint64_t</span> trace_id, <span class="type">uint64_t</span> span_id, <span class="type">uint64_t</span> parent_span_id,</span></span></span><br><span class="line"><span class="params"><span class="function">    <span class="type">int64_t</span> base_real_us)</span> </span>&#123;</span><br><span class="line">  	<span class="comment">// 从内存池获取 Span 对象.</span></span><br><span class="line">    Span* span = butil::<span class="built_in">get_object</span>&lt;Span&gt;(<span class="built_in">Forbidden</span>());</span><br><span class="line">    <span class="keyword">if</span> (__builtin_expect(span == <span class="literal">NULL</span>, <span class="number">0</span>)) &#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">NULL</span>;</span><br><span class="line">    &#125;</span><br><span class="line">    span-&gt;_trace_id = (trace_id ? trace_id : <span class="built_in">GenerateTraceId</span>());</span><br><span class="line">    span-&gt;_span_id = (span_id ? span_id : <span class="built_in">GenerateSpanId</span>());</span><br><span class="line">    span-&gt;_parent_span_id = parent_span_id;</span><br><span class="line">    span-&gt;_log_id = <span class="number">0</span>;</span><br><span class="line">  </span><br><span class="line">  	<span class="comment">/* 一些内部逻辑 */</span></span><br><span class="line">    span-&gt;_base_cid = INVALID_BTHREAD_ID;</span><br><span class="line">    span-&gt;_ending_cid = INVALID_BTHREAD_ID;</span><br><span class="line">    span-&gt;_type = SPAN_TYPE_SERVER;</span><br><span class="line">    span-&gt;_async = <span class="literal">false</span>;</span><br><span class="line">    span-&gt;_protocol = PROTOCOL_UNKNOWN;</span><br><span class="line">    span-&gt;_error_code = <span class="number">0</span>;</span><br><span class="line">    span-&gt;_request_size = <span class="number">0</span>;</span><br><span class="line">    span-&gt;_response_size = <span class="number">0</span>;</span><br><span class="line">    span-&gt;_base_real_us = base_real_us;</span><br><span class="line">    span-&gt;_received_real_us = <span class="number">0</span>;</span><br><span class="line">    span-&gt;_start_parse_real_us = <span class="number">0</span>;</span><br><span class="line">    span-&gt;_start_callback_real_us = <span class="number">0</span>;</span><br><span class="line">    span-&gt;_start_send_real_us = <span class="number">0</span>;</span><br><span class="line">    span-&gt;_sent_real_us = <span class="number">0</span>;</span><br><span class="line">    span-&gt;_next_client = <span class="literal">NULL</span>;</span><br><span class="line">    span-&gt;_tls_next = <span class="literal">NULL</span>;</span><br><span class="line">    span-&gt;_full_method_name = (!full_method_name.<span class="built_in">empty</span>() ?</span><br><span class="line">                               full_method_name : <span class="built_in">unknown_span_name</span>());</span><br><span class="line">    span-&gt;_info.<span class="built_in">clear</span>();</span><br><span class="line">    span-&gt;_local_parent = <span class="literal">NULL</span>;</span><br><span class="line">    <span class="keyword">return</span> span;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这里有生成 Span 的逻辑，同时注意到，这个逻辑绑定在了 Runtime 的 bthread 上：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">EndAsParent</span><span class="params">()</span> </span>&#123;</span><br><span class="line">  <span class="keyword">if</span> (<span class="keyword">this</span> == (Span*)bthread::tls_bls.rpcz_parent_span) &#123;</span><br><span class="line">  	bthread::tls_bls.rpcz_parent_span = <span class="literal">NULL</span>;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// Set tls parent.</span></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">AsParent</span><span class="params">()</span> </span>&#123;</span><br><span class="line">  bthread::tls_bls.rpcz_parent_span = <span class="keyword">this</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这里，它把 trace 上下文挂在了 thread local 的地方。那怎么创建子 Span 呢？内容如下：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> (parent) &#123;</span><br><span class="line">  span-&gt;_trace_id = parent-&gt;<span class="built_in">trace_id</span>();</span><br><span class="line">  span-&gt;_parent_span_id = parent-&gt;<span class="built_in">span_id</span>();</span><br><span class="line">  span-&gt;_local_parent = parent;</span><br><span class="line">  span-&gt;_next_client = parent-&gt;_next_client;</span><br><span class="line">  parent-&gt;_next_client = span;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这里挂了一个 Span 的单链表。</p>
+<p>那 Annotation 呢？其实很简单：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">Span::Annotate</span><span class="params">(<span class="type">const</span> <span class="type">char</span>* fmt, va_list args)</span> </span>&#123;</span><br><span class="line">    <span class="type">const</span> <span class="type">int64_t</span> anno_time = butil::<span class="built_in">cpuwide_time_us</span>() + _base_real_us;</span><br><span class="line">    butil::<span class="built_in">string_appendf</span>(&amp;_info, BRPC_SPAN_INFO_SEP <span class="string">&quot;%lld &quot;</span>,</span><br><span class="line">                         (<span class="type">long</span> <span class="type">long</span>)anno_time);</span><br><span class="line">    butil::<span class="built_in">string_vappendf</span>(&amp;_info, fmt, args);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这里会更新格式，然后丢到 <code>_info</code> 对象里。</p>
+<p>我们再看看它是怎么异步析构的：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">Span::destroy</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="built_in">EndAsParent</span>();</span><br><span class="line">    Span* p = _next_client;</span><br><span class="line">    <span class="keyword">while</span> (p) &#123;</span><br><span class="line">        Span* p_next = p-&gt;_next_client;</span><br><span class="line">        p-&gt;_info.<span class="built_in">clear</span>();</span><br><span class="line">        butil::<span class="built_in">return_object</span>(p);</span><br><span class="line">        p = p_next;</span><br><span class="line">    &#125;</span><br><span class="line">    _info.<span class="built_in">clear</span>();</span><br><span class="line">    butil::<span class="built_in">return_object</span>(<span class="keyword">this</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>ok，此外，这里可能会造一个 LevelDB 对象，然后有一个 <code>Collector</code> 定期把这些数据收集到 LevelDB.</p>
+<p>那采样的逻辑呢？看看这里：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// Check this function first before creating a span.</span></span><br><span class="line"><span class="comment">// If rpcz of upstream is enabled, local rpcz is enabled automatically.</span></span><br><span class="line"><span class="comment">// 如果上面开了 trace 就不检查了, 否则看是否开了 `rpcz 和有没有限流`</span></span><br><span class="line"><span class="function"><span class="keyword">inline</span> <span class="type">bool</span> <span class="title">IsTraceable</span><span class="params">(<span class="type">bool</span> is_upstream_traced)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">extern</span> bvar::CollectorSpeedLimit g_span_sl;</span><br><span class="line">    <span class="keyword">return</span> is_upstream_traced ||</span><br><span class="line">        (FLAGS_enable_rpcz &amp;&amp; bvar::<span class="built_in">is_collectable</span>(&amp;g_span_sl));</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这里通过 <code>CollectorSpeedLimit</code> 这个限流器，完成了「低访问不采样，高访问采样」这样的逻辑。</p>
+<h3 id="tokio-tracing"><a href="#tokio-tracing" class="headerlink" title="tokio tracing"></a>tokio tracing</h3><p>Tokio Tracing 的文档见：<a target="_blank" rel="noopener" href="https://tracing.rs/tracing/">https://tracing.rs/tracing/</a> . 其实它处理的也是一个 runtime 的问题。因为</p>
+<blockquote>
+<p>The span in which a thread is currently executing is referred to as that thread’s <em>current</em> span.</p>
+</blockquote>
+<p>同时它也处理了一些 <code>field</code> <code>tag</code> 什么的，原论文里面说自己能处理 kv pair 写到 BigTable 什么的，我觉得这里差不多。</p>
+<p><code>tracing-core</code> 实现了一些基础的语义，包括 <code>Span</code> 元信息 <code>MetaData</code>，和 <code>event</code> (记录消息，开 Span 退出 Span 在 tokio-tracing 里面都叫做 <code>event</code>)，大致内容如下：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#[derive(Debug)]</span></span><br><span class="line"><span class="keyword">pub</span> <span class="keyword">struct</span> <span class="title class_">Event</span>&lt;<span class="symbol">&#x27;a</span>&gt; &#123;</span><br><span class="line">    fields: &amp;<span class="symbol">&#x27;a</span> field::ValueSet&lt;<span class="symbol">&#x27;a</span>&gt;,</span><br><span class="line">    metadata: &amp;<span class="symbol">&#x27;static</span> Metadata&lt;<span class="symbol">&#x27;static</span>&gt;,</span><br><span class="line">    parent: Parent,</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="meta">#[derive(Clone, Debug, PartialEq, Eq, Hash)]</span></span><br><span class="line"><span class="keyword">pub</span> <span class="keyword">struct</span> <span class="title class_">Id</span>(NonZeroU64);</span><br><span class="line"></span><br><span class="line"><span class="meta">#[derive(Debug)]</span></span><br><span class="line"><span class="keyword">pub</span> <span class="keyword">struct</span> <span class="title class_">Current</span> &#123;</span><br><span class="line">    inner: CurrentInner,</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="meta">#[derive(Debug)]</span></span><br><span class="line"><span class="keyword">enum</span> <span class="title class_">CurrentInner</span> &#123;</span><br><span class="line">    Current &#123;</span><br><span class="line">        id: Id,</span><br><span class="line">        metadata: &amp;<span class="symbol">&#x27;static</span> Metadata&lt;<span class="symbol">&#x27;static</span>&gt;,</span><br><span class="line">    &#125;,</span><br><span class="line">    <span class="literal">None</span>,</span><br><span class="line">    Unknown,</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="meta">#[derive(Debug)]</span></span><br><span class="line"><span class="title function_ invoke__">pub</span>(<span class="keyword">crate</span>) <span class="keyword">enum</span> <span class="title class_">Parent</span> &#123;</span><br><span class="line">    <span class="comment">/// The new span will be a root span.</span></span><br><span class="line">    Root,</span><br><span class="line">    <span class="comment">/// The new span will be rooted in the current span.</span></span><br><span class="line">    Current,</span><br><span class="line">    <span class="comment">/// The new span has an explicitly-specified parent.</span></span><br><span class="line">    <span class="title function_ invoke__">Explicit</span>(Id),</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>上面是需要的元数据，包括 <code>Parent</code>，<code>Current</code> . 还有一部分重要内容是 <code>Dispatch</code>，文档可见: <a target="_blank" rel="noopener" href="https://tracing.rs/tracing_core/struct.dispatch">https://tracing.rs/tracing_core/struct.dispatch</a></p>
+<blockquote>
+<p>Every thread in a program using <code>tracing</code> has a <em>default collector</em>. When events occur, or spans are created, they are dispatched to the thread’s current collector.</p>
+</blockquote>
+<p>dispatch 内容如下：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// `Dispatch` trace data to a [`Collect`].</span></span><br><span class="line"><span class="meta">#[derive(Clone)]</span></span><br><span class="line"><span class="keyword">pub</span> <span class="keyword">struct</span> <span class="title class_">Dispatch</span> &#123;</span><br><span class="line">    <span class="meta">#[cfg(feature = <span class="string">&quot;alloc&quot;</span>)]</span></span><br><span class="line">    collector: Kind&lt;Arc&lt;<span class="keyword">dyn</span> Collect + <span class="built_in">Send</span> + <span class="built_in">Sync</span>&gt;&gt;,</span><br><span class="line"></span><br><span class="line">    <span class="meta">#[cfg(not(feature = <span class="string">&quot;alloc&quot;</span>))]</span></span><br><span class="line">    collector: &amp;<span class="symbol">&#x27;static</span> (<span class="keyword">dyn</span> Collect + <span class="built_in">Send</span> + <span class="built_in">Sync</span>),</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="meta">#[cfg(feature = <span class="string">&quot;alloc&quot;</span>)]</span></span><br><span class="line"><span class="meta">#[derive(Clone)]</span></span><br><span class="line"><span class="keyword">enum</span> <span class="title class_">Kind</span>&lt;T&gt; &#123;</span><br><span class="line">    <span class="title function_ invoke__">Global</span>(&amp;<span class="symbol">&#x27;static</span> (<span class="keyword">dyn</span> Collect + <span class="built_in">Send</span> + <span class="built_in">Sync</span>)),</span><br><span class="line">    <span class="title function_ invoke__">Scoped</span>(T),</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="meta">#[cfg(feature = <span class="string">&quot;std&quot;</span>)]</span></span><br><span class="line">thread_local! &#123;</span><br><span class="line">    <span class="keyword">static</span> CURRENT_STATE: State = State &#123;</span><br><span class="line">        default: RefCell::<span class="title function_ invoke__">new</span>(Dispatch::<span class="title function_ invoke__">none</span>()),</span><br><span class="line">        can_enter: Cell::<span class="title function_ invoke__">new</span>(<span class="literal">true</span>),</span><br><span class="line">    &#125;;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这部分有个 <code>thread_local</code> 的 <code>State</code> 内容，表示本线程对应的 tracing 上下文。</p>
+<p>下面我们看看 Span 具体是怎么实现的，这部分在 <code>tracing</code> 中：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// A handle representing a span, with the capability to enter the span if it</span></span><br><span class="line"><span class="comment">/// exists.</span></span><br><span class="line"><span class="comment">///</span></span><br><span class="line"><span class="comment">/// If the span was rejected by the current `Collector`&#x27;s filter, entering the</span></span><br><span class="line"><span class="comment">/// span will silently do nothing. Thus, the handle can be used in the same</span></span><br><span class="line"><span class="comment">/// manner regardless of whether or not the trace is currently being collected.</span></span><br><span class="line"><span class="meta">#[derive(Clone)]</span></span><br><span class="line"><span class="keyword">pub</span> <span class="keyword">struct</span> <span class="title class_">Span</span> &#123;</span><br><span class="line">    <span class="comment">/// A handle used to enter the span when it is not executing.</span></span><br><span class="line">    <span class="comment">///</span></span><br><span class="line">    <span class="comment">/// If this is `None`, then the span has either closed or was never enabled.</span></span><br><span class="line">    inner: <span class="type">Option</span>&lt;Inner&gt;,</span><br><span class="line">    <span class="comment">/// Metadata describing the span.</span></span><br><span class="line">    <span class="comment">///</span></span><br><span class="line">    <span class="comment">/// This might be `Some` even if `inner` is `None`, in the case that the</span></span><br><span class="line">    <span class="comment">/// span is disabled but the metadata is needed for `log` support.</span></span><br><span class="line">    meta: <span class="type">Option</span>&lt;&amp;<span class="symbol">&#x27;static</span> Metadata&lt;<span class="symbol">&#x27;static</span>&gt;&gt;,</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">/// A handle representing the capacity to enter a span which is known to exist.</span></span><br><span class="line"><span class="comment">///</span></span><br><span class="line"><span class="comment">/// Unlike `Span`, this type is only constructed for spans which _have_ been</span></span><br><span class="line"><span class="comment">/// enabled by the current filter. This type is primarily used for implementing</span></span><br><span class="line"><span class="comment">/// span handles; users should typically not need to interact with it directly.</span></span><br><span class="line"><span class="meta">#[derive(Debug)]</span></span><br><span class="line"><span class="title function_ invoke__">pub</span>(<span class="keyword">crate</span>) <span class="keyword">struct</span> <span class="title class_">Inner</span> &#123;</span><br><span class="line">    <span class="comment">/// The span&#x27;s ID, as provided by `collector`.</span></span><br><span class="line">    id: Id,</span><br><span class="line"></span><br><span class="line">    <span class="comment">/// The collector that will receive events relating to this span.</span></span><br><span class="line">    <span class="comment">///</span></span><br><span class="line">    <span class="comment">/// This should be the same collector that provided this span with its</span></span><br><span class="line">    <span class="comment">/// `id`.</span></span><br><span class="line">    collector: Dispatch,</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这里用 <code>DefaultGuard</code> 等内容，很 RAII 的做了一下它们生命周期的变化</p>
+<p>让我们来看看 Span 的 Enter 和 Exit</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#[inline]</span></span><br><span class="line"><span class="keyword">fn</span> <span class="title function_">do_enter</span>(&amp;<span class="keyword">self</span>) &#123;</span><br><span class="line">    <span class="keyword">if</span> <span class="keyword">let</span> <span class="variable">Some</span>(inner) = <span class="keyword">self</span>.inner.<span class="title function_ invoke__">as_ref</span>() &#123;</span><br><span class="line">        inner.collector.<span class="title function_ invoke__">enter</span>(&amp;inner.id);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    if_log_enabled! &#123; crate::Level::TRACE, &#123;</span><br><span class="line">        <span class="keyword">if</span> <span class="keyword">let</span> <span class="variable">Some</span>(_meta) = <span class="keyword">self</span>.meta &#123;</span><br><span class="line">            <span class="keyword">self</span>.<span class="title function_ invoke__">log</span>(ACTIVITY_LOG_TARGET, log::Level::Trace, <span class="built_in">format_args!</span>(<span class="string">&quot;-&gt; &#123;&#125;&quot;</span>, _meta.<span class="title function_ invoke__">name</span>()));</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;&#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="meta">#[inline]</span></span><br><span class="line"><span class="keyword">fn</span> <span class="title function_">do_exit</span>(&amp;<span class="keyword">self</span>) &#123;</span><br><span class="line">    <span class="keyword">if</span> <span class="keyword">let</span> <span class="variable">Some</span>(inner) = <span class="keyword">self</span>.inner.<span class="title function_ invoke__">as_ref</span>() &#123;</span><br><span class="line">        inner.collector.<span class="title function_ invoke__">exit</span>(&amp;inner.id);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    if_log_enabled! &#123; crate::Level::TRACE, &#123;</span><br><span class="line">        <span class="keyword">if</span> <span class="keyword">let</span> <span class="variable">Some</span>(_meta) = <span class="keyword">self</span>.meta &#123;</span><br><span class="line">            <span class="keyword">self</span>.<span class="title function_ invoke__">log</span>(ACTIVITY_LOG_TARGET, log::Level::Trace, <span class="built_in">format_args!</span>(<span class="string">&quot;&lt;- &#123;&#125;&quot;</span>, _meta.<span class="title function_ invoke__">name</span>()));</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>看，这里调用了 tracing-core 的内容。OK，那最后一个问题，这里都是 thread-local，那么 tokio 呢？这里可以看 span 的 <code>enter</code> 注释，<code>instrument</code> 和 <code>Span::in_scope</code></p>
+<h3 id="minitrace"><a href="#minitrace" class="headerlink" title="minitrace"></a>minitrace</h3><p><a target="_blank" rel="noopener" href="https://github.com/tikv/minitrace-rust">https://github.com/tikv/minitrace-rust</a></p>
+<p>这个项目不力图完善，而是力图快，用 <code>tsc</code> 寄存器等方式大幅度优化了 trace 的性能。比较值得再提的是 ministant: <a target="_blank" rel="noopener" href="https://github.com/tikv/minstant">https://github.com/tikv/minstant</a></p>
+<h3 id="Jaeger-amp-OpenTelemetry-OpenTracing"><a href="#Jaeger-amp-OpenTelemetry-OpenTracing" class="headerlink" title="Jaeger &amp; OpenTelemetry(OpenTracing)"></a>Jaeger &amp; OpenTelemetry(OpenTracing)</h3><p>OpenTracing 通过提供了 API 标准，基本上算是做了很不错的事情：<a target="_blank" rel="noopener" href="https://github.com/opentracing/specification/blob/master/specification.md">https://github.com/opentracing/specification/blob/master/specification.md</a></p>
+<p>Jaeger 提供了下面 的架构（使用 Kakfa or Direct-to-storage）：</p>
+<p><img src="https://image.mwish.me/blog-image/architecture-v2.png" alt="architecture-v2"></p>
+<p><img src="https://image.mwish.me/blog-image/architecture-v1.png" alt="architecture-v1"></p>
+<p>这里的 DB 可能还需要一些时序/多模之类的需求: 本质上这个和存储日志差不多，半结构化的数据、最近的数据需要高效查询 etc…</p>
+<h2 id="参考"><a href="#参考" class="headerlink" title="参考"></a>参考</h2><p>[1] <a target="_blank" rel="noopener" href="https://bigbully.github.io/Dapper-translation/">https://bigbully.github.io/Dapper-translation/</a></p>
+<p>[2] <a target="_blank" rel="noopener" href="https://mp.weixin.qq.com/s/BMbdk5RviLG1Ftlo-qRsDQ">https://mp.weixin.qq.com/s/BMbdk5RviLG1Ftlo-qRsDQ</a></p>
+<p>[3] <a target="_blank" rel="noopener" href="https://mp.weixin.qq.com/s/IHVUnyhJr4fhiopMLOJqjA">https://mp.weixin.qq.com/s/IHVUnyhJr4fhiopMLOJqjA</a></p>
+<p>[4] <a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/34318538">https://zhuanlan.zhihu.com/p/34318538</a></p>
+<p>[5] <a target="_blank" rel="noopener" href="https://www.jaegertracing.io/docs/1.31/architecture/">https://www.jaegertracing.io/docs/1.31/architecture/</a></p>
+<p>[6] <a target="_blank" rel="noopener" href="https://tracing.rs/tracing/">https://tracing.rs/tracing/</a></p>
+<p>[7] Dapper, a Large-Scale Distributed Systems Tracing Infrastructure</p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#Dapper"><span class="toc-number">1.</span> <span class="toc-text">Dapper</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E6%A8%A1%E5%9E%8B"><span class="toc-number">1.1.</span> <span class="toc-text">数据模型</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E6%94%B6%E9%9B%86"><span class="toc-number">1.2.</span> <span class="toc-text">数据收集</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Tracing-%E7%9A%84%E5%BC%80%E9%94%80%E5%92%8C%E5%BA%94%E5%AF%B9"><span class="toc-number">1.3.</span> <span class="toc-text">Tracing 的开销和应对</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E7%99%BE%E5%BA%A6%E5%A4%A7%E6%90%9C%E7%9A%84%E4%B8%80%E4%BA%9B%E6%96%B9%E6%A1%88"><span class="toc-number">2.</span> <span class="toc-text">百度大搜的一些方案</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%87%87%E6%A0%B7%E7%9A%84%E4%B8%80%E4%BA%9B%E8%AE%A8%E8%AE%BA"><span class="toc-number">2.1.</span> <span class="toc-text">采样的一些讨论</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Trace-%E5%B7%A5%E4%B8%9A%E7%95%8C%E5%AE%9E%E8%B7%B5"><span class="toc-number">2.2.</span> <span class="toc-text">Trace: 工业界实践</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#brpc-tracing-%E5%AE%A2%E6%88%B7%E7%AB%AF%E5%AE%9E%E7%8E%B0%E7%9A%84%E4%B8%80%E4%B8%AA%E7%AE%80%E5%8D%95%E4%BE%8B%E5%AD%90"><span class="toc-number">2.2.1.</span> <span class="toc-text">brpc tracing: 客户端实现的一个简单例子</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#tokio-tracing"><span class="toc-number">2.2.2.</span> <span class="toc-text">tokio tracing</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#minitrace"><span class="toc-number">2.2.3.</span> <span class="toc-text">minitrace</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Jaeger-amp-OpenTelemetry-OpenTracing"><span class="toc-number">2.2.4.</span> <span class="toc-text">Jaeger &amp; OpenTelemetry(OpenTracing)</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8F%82%E8%80%83"><span class="toc-number">2.3.</span> <span class="toc-text">参考</span></a></li></ol></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2022/03/02/Dapper-and-Tracing/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2022/03/02/Dapper-and-Tracing/&text=Dapper and Tracing"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2022/03/02/Dapper-and-Tracing/&title=Dapper and Tracing"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2022/03/02/Dapper-and-Tracing/&is_video=false&description=Dapper and Tracing"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Dapper and Tracing&body=Check out this article: http://blog.mwish.me/2022/03/02/Dapper-and-Tracing/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2022/03/02/Dapper-and-Tracing/&title=Dapper and Tracing"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2022/03/02/Dapper-and-Tracing/&title=Dapper and Tracing"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2022/03/02/Dapper-and-Tracing/&title=Dapper and Tracing"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2022/03/02/Dapper-and-Tracing/&title=Dapper and Tracing"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2022/03/02/Dapper-and-Tracing/&name=Dapper and Tracing&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2022/03/02/Dapper-and-Tracing/&t=Dapper and Tracing"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="Parquet 是一个由 Google Dremel 格式启发而来的列存格式，在大数据领域通常作为存储格式，被 iceberg 等湖、各种查询引擎能够合理的使用。Parquet 的格式定义在https:&#x2F;&#x2F;github.com&#x2F;apache&#x2F;parquet-format ，由于大数据事实标准语言是 Java，所以其 Java 实现(  https:&#x2F;&#x2F;github.com&#x2F;apache&#x2F;parqu">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Parquet Part1: Basic">
+<meta property="og:url" content="http://blog.mwish.me/2022/09/18/Parquet-Part1-Basic/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="Parquet 是一个由 Google Dremel 格式启发而来的列存格式，在大数据领域通常作为存储格式，被 iceberg 等湖、各种查询引擎能够合理的使用。Parquet 的格式定义在https:&#x2F;&#x2F;github.com&#x2F;apache&#x2F;parquet-format ，由于大数据事实标准语言是 Java，所以其 Java 实现(  https:&#x2F;&#x2F;github.com&#x2F;apache&#x2F;parqu">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/68747470733a2f2f7261772e6769746875622e636f6d2f6170616368652f706172717565742d666f726d61742f6d61737465722f646f632f696d616765732f46696c654c61796f75742e676966.gif">
+<meta property="og:image" content="https://image.mwish.me/blog-image/FileFormat.gif">
+<meta property="og:image" content="https://image.mwish.me/blog-image/PageIndexLayout.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/FileLayoutBloomFilter1.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/C4B586F5-3356-4CCD-AC3B-A9D22E671185.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/schema.png">
+<meta property="article:published_time" content="2022-09-18T10:04:58.000Z">
+<meta property="article:modified_time" content="2023-02-02T19:53:16.709Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/68747470733a2f2f7261772e6769746875622e636f6d2f6170616368652f706172717565742d666f726d61742f6d61737465722f646f632f696d616765732f46696c654c61796f75742e676966.gif">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>Parquet Part1: Basic</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2022/09/18/futures-promise-executors-continuation/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2022/07/26/brpc-execution-queue/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2022/09/18/Parquet-Part1-Basic/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2022/09/18/Parquet-Part1-Basic/&text=Parquet Part1: Basic"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2022/09/18/Parquet-Part1-Basic/&title=Parquet Part1: Basic"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2022/09/18/Parquet-Part1-Basic/&is_video=false&description=Parquet Part1: Basic"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Parquet Part1: Basic&body=Check out this article: http://blog.mwish.me/2022/09/18/Parquet-Part1-Basic/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2022/09/18/Parquet-Part1-Basic/&title=Parquet Part1: Basic"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2022/09/18/Parquet-Part1-Basic/&title=Parquet Part1: Basic"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2022/09/18/Parquet-Part1-Basic/&title=Parquet Part1: Basic"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2022/09/18/Parquet-Part1-Basic/&title=Parquet Part1: Basic"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2022/09/18/Parquet-Part1-Basic/&name=Parquet Part1: Basic&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2022/09/18/Parquet-Part1-Basic/&t=Parquet Part1: Basic"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Format"><span class="toc-number">1.</span> <span class="toc-text">Format</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Footer-%E9%83%A8%E5%88%86"><span class="toc-number">1.1.</span> <span class="toc-text">Footer 部分</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E9%83%A8%E5%88%86"><span class="toc-number">1.2.</span> <span class="toc-text">数据部分</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%B1%BB%E5%9E%8B%E7%B3%BB%E7%BB%9F%E5%92%8C%E9%80%BB%E8%BE%91%E7%B1%BB%E5%9E%8B"><span class="toc-number">2.</span> <span class="toc-text">类型系统和逻辑类型</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9F%BA%E7%A1%80%E7%B1%BB%E5%9E%8B"><span class="toc-number">2.1.</span> <span class="toc-text">基础类型</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Sort-Order-amp-Statistics"><span class="toc-number">2.2.</span> <span class="toc-text">Sort Order &amp; Statistics</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#SchemaElement"><span class="toc-number">2.3.</span> <span class="toc-text">SchemaElement</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Data-amp-Page"><span class="toc-number">3.</span> <span class="toc-text">Data &amp; Page</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#V1-vs-V2"><span class="toc-number">3.1.</span> <span class="toc-text">V1 vs V2</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%88%87%E5%88%86-Data-amp-Page"><span class="toc-number">3.2.</span> <span class="toc-text">切分 Data &amp; Page</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#CRC32"><span class="toc-number">3.3.</span> <span class="toc-text">CRC32</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Encoding"><span class="toc-number">4.</span> <span class="toc-text">Encoding</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Page-Index"><span class="toc-number">5.</span> <span class="toc-text">Page Index</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#BloomFilter"><span class="toc-number">6.</span> <span class="toc-text">BloomFilter</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Nested-Structure-and-NULL-Serde"><span class="toc-number">7.</span> <span class="toc-text">Nested Structure and NULL: Serde</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Repetition-Levels"><span class="toc-number">7.1.</span> <span class="toc-text">Repetition Levels</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#definition-levels"><span class="toc-number">7.2.</span> <span class="toc-text">definition levels</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%BC%96%E7%A0%81%E5%92%8C%E8%A7%A3%E7%A0%81"><span class="toc-number">7.3.</span> <span class="toc-text">编码和解码</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Reference"><span class="toc-number">8.</span> <span class="toc-text">Reference</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Parquet Part1: Basic
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2022-09-18T10:04:58.000Z" itemprop="datePublished">2022-09-18</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>Parquet 是一个由 Google Dremel 格式启发而来的列存格式，在大数据领域通常作为存储格式，被 iceberg 等湖、各种查询引擎能够合理的使用。Parquet 的格式定义在<a target="_blank" rel="noopener" href="https://github.com/apache/parquet-format">https://github.com/apache/parquet-format</a> ，由于大数据事实标准语言是 Java，所以其 Java 实现(  <a target="_blank" rel="noopener" href="https://github.com/apache/parquet-mr">https://github.com/apache/parquet-mr</a> ) 较为完善。C++ 实现目前在 arrow 的仓库下：<a target="_blank" rel="noopener" href="https://github.com/apache/arrow/tree/master/cpp/src/parquet">https://github.com/apache/arrow/tree/master/cpp/src/parquet</a> 。它的功能实现的不是很完善，具体可以见: <a target="_blank" rel="noopener" href="https://arrow.apache.org/docs/cpp/parquet.html">https://arrow.apache.org/docs/cpp/parquet.html</a></p>
+<p>Parquet 在最早被描述为 HDFS 上的格式，所以有 HDFS Block/File 相关的概念。</p>
+<p>此外，有一些地方会专门在自己仓库里实现了一些 parquet 特性，在 2011 年这格式被提出来的时候，相关处理逻辑还是比较复杂的，可能有的人自己实现了一套，又和自己的数据结构很紧密，比如 Impala 实现了一套 parquet 有关的逻辑。这里我将会介绍一下 parquet 和官方的代码，带大家走进黑暗的格式</p>
+<h2 id="Format"><a href="#Format" class="headerlink" title="Format"></a>Format</h2><p><img src="https://image.mwish.me/blog-image/68747470733a2f2f7261772e6769746875622e636f6d2f6170616368652f706172717565742d666f726d61742f6d61737465722f646f632f696d616765732f46696c654c61796f75742e676966.gif" alt="68747470733a2f2f7261772e6769746875622e636f6d2f6170616368652f706172717565742d666f726d61742f6d61737465722f646f632f696d616765732f46696c654c61796f75742e676966"></p>
+<h3 id="Footer-部分"><a href="#Footer-部分" class="headerlink" title="Footer 部分"></a>Footer 部分</h3><p>这图大概如上所示，然后官方介绍的很好：</p>
+<ol>
+<li>读这个，首先要找到 tailer，发现满足对应的 magic number 和 footer length。<em>反过来说，metadata 只在 结尾，允许整个文件只写一次</em>，</li>
+<li><code>Footer</code> 有文件的元信息，用 ThriftCompactProtocol 描述，这里相对 thrift 原本 binary，可能会有一些 varint zigzag 什么的<ol>
+<li>version 应该是 Parquet 内部的信息，在 thrift 里面标明了格式的版本，这里有个<a target="_blank" rel="noopener" href="https://github.com/apache/arrow/pull/13665">有趣的 issue</a>，逻辑问题来自于 file 低版本的时候，Page 可能没带版本。</li>
+<li>Schema 代表 RowGroup 的 schema，<strong>所有 RowGroup 都需要是这个 Schema</strong>。schema 感觉其实可能不小，有 name / type (在递归定义中的 path) 等，还有一些子节点相关的信息。这里还有一个很重要的信息 <strong>field id</strong>, 这是上层传下来的，唯一的字段的 id，上层可以用这个字段来做一些 schema evolution 相关的逻辑<ol>
+<li>Schema 类型只是 Parquet 的类型，其中外部的 SQL / 用户类型实际上和 Parquet 内部这些类型不一定能对上，类型需要额外做一层映射 / Hack，可能会借助额外的 Attributes。</li>
+</ol>
+</li>
+<li>Extra key/value pairs 可以塞一些信息，在 arrow 的 compute 模块里，用它来塞了一些和计算有关的逻辑。这块我觉得有点矛盾，因为一个读者必须拿到 writer、收集一些信息或者什么的，才会好放进去，我看一般的库基本没有暴露这个接口出去的，感觉基本上是给一些能改得动 parquet 的人开洞用的。</li>
+</ol>
+</li>
+<li>剩下会给出每个 RowGroup 的元信息，里面包括每个 Column 的元信息。这里的单位是 RowGroup，没有 Page 粒度的信息。它相当于在 parquet.thrift 里面的 <code>RowGroup</code> 里面给了定义。每个 RowGroup 有<strong>所有</strong> Columns 的定义，这里会有<ol>
+<li>指向数据块头的 <code>file_offset</code>，数据页头也是个 thrift 结构，这里可能会 duplicate 一份（结构上有一个 <code>optional ColumnMetaData</code>，在标准上允许你写或者不写，估摸着看实现），这个结构叫做 <code>ColumnMetaData</code>。我们之后介绍数据页的时候，会介绍这里。<ol>
+<li>注意 <code>ColumnMetaData</code> 上有一个 <code>num_values</code>，这里代表的是「包括 nulls，这个 <code>ColumnChunk</code> 对应值的数量」而非「这个 <code>ColumnChunk</code> 对应行的数量」。这个地方我说的可能有一点难理解，比如对于 <code>optional i32</code> 的平坦数据，这里等价于行数，而对于 <code>repeated &lt;optional i32&gt;</code>，这里代表内层的数量。<code>PageHeader</code> 的 <code>num_values</code> 也同理。</li>
+<li>总文件的 <code>FileMetaData</code>、RowGroup 的元数据、DataPageV2 会有 <code>num_rows</code>，表示对应行的数量。<strong>在有嵌套的情况下，这个不等于 <code>num_values</code></strong>.</li>
+</ol>
+</li>
+<li>会有一些 PageIndex 相关的偏移量，这里可能指向 OffsetIndex 和 ColumnIndex. 注意，这里指向的是 <strong>RowGroup 的 Index</strong>。</li>
+<li>会有字典页相关的记录，如果采用了字典编码，ColumnChunk 的第一个页面会是字典页</li>
+<li>记录了总行数，未压缩的大小（未经过压缩，但已经 Encoding），压缩后的大小，RowGroup 对应的位置（即这个 rg 之前的总行数）</li>
+<li>有一个特殊的 <code>SortingColumns</code>，标识这个 RowGroup 按照什么排序。这里类似数据库的 <code>SortingColumn</code>，会有一些 <code>nulls_first</code> 的处理什么的。这里还有一些和类型相关的排序要求 <code>ColumnOrder</code>，会把类型编码到对应的逻辑中。<strong>注意，sorting 是 RowGroup 级别的 sorting，格式应该没有强制整个文件用一样的 sorting</strong> （我觉得这里很鸡贼，schema 用的是同一份，但是 sorting 却并不是…）。</li>
+</ol>
+</li>
+</ol>
+<p>给出一张总图：</p>
+<p><img src="https://image.mwish.me/blog-image/FileFormat.gif" alt="FileFormat"></p>
+<h3 id="数据部分"><a href="#数据部分" class="headerlink" title="数据部分"></a>数据部分</h3><p>元信息中，<code>ColumnChunk</code> 会包含对应的 <code>file_path</code> 和 <code>file_offset</code>，这点 <strong>允许数据分布在别的文件</strong>. 数据文件的分布大概是：</p>
+<ul>
+<li>RowGroup 包含一个或者多个 ColumnChunk</li>
+<li>ColumnChunk 包含一个或者多个 Page，也包含了各种元信息</li>
+</ul>
+<p><strong>注意，ColumnChunk 的元信息（ColumnMetaData）也存放在 ColumnChunk 的尾部</strong>，在 IO 完成后写入。</p>
+<h2 id="类型系统和逻辑类型"><a href="#类型系统和逻辑类型" class="headerlink" title="类型系统和逻辑类型"></a>类型系统和逻辑类型</h2><h3 id="基础类型"><a href="#基础类型" class="headerlink" title="基础类型"></a>基础类型</h3><p>Parquet 只支持一组很小的基础类型，叫做 <code>Type</code>，我们需要把它和后文的 <code>LogicalType</code> 区分开来：</p>
+<figure class="highlight protobuf"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * Types supported by Parquet.  These types are intended to be used in combination</span></span><br><span class="line"><span class="comment"> * with the encodings to control the on disk storage format.</span></span><br><span class="line"><span class="comment"> * For example INT16 is not included as a type since a good encoding of INT32</span></span><br><span class="line"><span class="comment"> * would handle this.</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="keyword">enum </span><span class="title class_">Type</span> &#123;</span><br><span class="line">  BOOLEAN = <span class="number">0</span>;</span><br><span class="line">  INT32 = <span class="number">1</span>;</span><br><span class="line">  INT64 = <span class="number">2</span>;</span><br><span class="line">  INT96 = <span class="number">3</span>;  <span class="comment">// deprecated, only used by legacy implementations.</span></span><br><span class="line">  FLOAT = <span class="number">4</span>;</span><br><span class="line">  DOUBLE = <span class="number">5</span>;</span><br><span class="line">  BYTE_ARRAY = <span class="number">6</span>;</span><br><span class="line">  FIXED_LEN_BYTE_ARRAY = <span class="number">7</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这里物理为啥最低支持 INT32? 因为作者似乎认为 i16 i8 能比较好被压缩。（2023.2.2: 目前似乎在讨论在 spec 里面加入窄浮点数）。</p>
+<p>这个字段配合一个 <code>LogicalType</code>，共同组成了需要的类型：</p>
+<figure class="highlight protobuf"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * LogicalType annotations to replace ConvertedType.</span></span><br><span class="line"><span class="comment"> *</span></span><br><span class="line"><span class="comment"> * To maintain compatibility, implementations using LogicalType for a</span></span><br><span class="line"><span class="comment"> * SchemaElement must also set the corresponding ConvertedType from the</span></span><br><span class="line"><span class="comment"> * following table.</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line">union LogicalType &#123;</span><br><span class="line">  <span class="number">1</span>:  StringType STRING       <span class="comment">// use ConvertedType UTF8</span></span><br><span class="line">  <span class="number">2</span>:  MapType MAP             <span class="comment">// use ConvertedType MAP</span></span><br><span class="line">  <span class="number">3</span>:  ListType LIST           <span class="comment">// use ConvertedType LIST</span></span><br><span class="line">  <span class="number">4</span>:  EnumType ENUM           <span class="comment">// use ConvertedType ENUM</span></span><br><span class="line">  <span class="number">5</span>:  DecimalType DECIMAL     <span class="comment">// use ConvertedType DECIMAL</span></span><br><span class="line">  <span class="number">6</span>:  DateType DATE           <span class="comment">// use ConvertedType DATE</span></span><br><span class="line"></span><br><span class="line">  <span class="comment">// use ConvertedType TIME_MICROS for TIME(isAdjustedToUTC = *, unit = MICROS)</span></span><br><span class="line">  <span class="comment">// use ConvertedType TIME_MILLIS for TIME(isAdjustedToUTC = *, unit = MILLIS)</span></span><br><span class="line">  <span class="number">7</span>:  TimeType TIME</span><br><span class="line"></span><br><span class="line">  <span class="comment">// use ConvertedType TIMESTAMP_MICROS for TIMESTAMP(isAdjustedToUTC = *, unit = MICROS)</span></span><br><span class="line">  <span class="comment">// use ConvertedType TIMESTAMP_MILLIS for TIMESTAMP(isAdjustedToUTC = *, unit = MILLIS)</span></span><br><span class="line">  <span class="number">8</span>:  TimestampType TIMESTAMP</span><br><span class="line"></span><br><span class="line">  <span class="comment">// 9: reserved for INTERVAL</span></span><br><span class="line">  <span class="number">10</span>: IntType INTEGER         <span class="comment">// use ConvertedType INT_* or UINT_*</span></span><br><span class="line">  <span class="number">11</span>: NullType UNKNOWN        <span class="comment">// no compatible ConvertedType</span></span><br><span class="line">  <span class="number">12</span>: JsonType JSON           <span class="comment">// use ConvertedType JSON</span></span><br><span class="line">  <span class="number">13</span>: BsonType BSON           <span class="comment">// use ConvertedType BSON</span></span><br><span class="line">  <span class="number">14</span>: UUIDType UUID</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这里它有个 <code>ConvertedType</code>，基本上是兼容旧屎山了，属于旧代码。有一些特殊类型需要注意一下：</p>
+<ol>
+<li>Decimal/Time 可能根据精度/代表的东西不同，物理的表示是不一样的</li>
+<li>对于 struct，外头相当于只会把叶子结点编码，但是还是有一些复杂类型的，比如 LIST 和 MAP:<ol>
+<li>List 相当于 2个元素，<code>LIST&lt;int&gt;</code> 里面，外面的 List 是一组标记，里面 int 又是一组标记</li>
+<li>Map 则相当于三个, <code>Map&lt;K, V&gt;</code> 里面，<code>Map</code> <code>K</code> <code>V</code> 都是标记</li>
+</ol>
+</li>
+</ol>
+<p>有一点需要注意的是，只有 Leaf 节点拥有 <code>Type</code>，它不可能是 Map, List, Struct. 中间的节点可能会是：</p>
+<ol>
+<li>List, Map, Struct 之类的嵌套类型</li>
+<li>别的对应的逻辑类型</li>
+</ol>
+<p>嵌套结构定义其实还挺啰嗦的，这段代码看着还是很恶心的，但是很清晰，可以试看下图：</p>
+<p>List (最外层的 optional 是 List 是否 optional, 里面的是 List member 是否 optional) :</p>
+<figure class="highlight protobuf"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">&lt;list-repetition&gt; <span class="keyword">group</span> &lt;name&gt; (LIST) &#123;</span><br><span class="line">  <span class="keyword">repeated</span> <span class="keyword">group</span> list &#123;</span><br><span class="line">    &lt;element-repetition&gt; &lt;element-type&gt; element;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>上述是理想场景的 List，下列是读取的时候会遇到的一些奇怪的东西的兼容性：<a target="_blank" rel="noopener" href="https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#backward-compatibility-rules">https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#backward-compatibility-rules</a></p>
+<p>Map 的 Key 则需要一个字段，而且必须要 non-null:</p>
+<figure class="highlight protobuf"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">&lt;map-repetition&gt; <span class="keyword">group</span> &lt;name&gt; (MAP) &#123;</span><br><span class="line">  <span class="keyword">repeated</span> <span class="keyword">group</span> key_value &#123;</span><br><span class="line">    <span class="keyword">required</span> &lt;key-type&gt; key;</span><br><span class="line">    &lt;value-repetition&gt; &lt;value-type&gt; value;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>To be honest, 我总觉得存 Map 的话，做不到二分，不过 arrow 的 Map 应该也是这么草台的？</p>
+<p>这里也要考虑兼容性：<a target="_blank" rel="noopener" href="https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#backward-compatibility-rules-1">https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#backward-compatibility-rules-1</a></p>
+<h3 id="Sort-Order-amp-Statistics"><a href="#Sort-Order-amp-Statistics" class="headerlink" title="Sort Order &amp; Statistics"></a>Sort Order &amp; Statistics</h3><ul>
+<li>这个地方我不确定自己完全看懂了，因为 Sort Order 在 C++ 实现的时候很 Shit，必须要有 SortOrder 和 Comparable 的信息才能够生成对应的</li>
+<li>至少在今天(2023.2.2)，parquet-format 页面上的描述不是很清晰。但是 parquet.thrift 的定义是十分清晰的</li>
+</ul>
+<p>我直接介绍一下 Parquet-format 的定义，避免说车轱辘话：</p>
+<ol>
+<li>LogicalType Order: 由 LogicalType 定义的 Order，这套东西最好做到标准上，不然应该不太合法<ol>
+<li>目前标准上给每个 LogicalType 都有 Order 相关的定义，如果是用户映射的类型，可能要注意相关的定义</li>
+</ol>
+</li>
+<li>Type：按照 Type 的定义来行为。其中 INT 强制有符号比较，bytes 类的类型强制 byte 比较<ol>
+<li>比较 Trickey 的是浮点数类型，这里 Spec 应该写了如何处理，比较 Trickey: <a target="_blank" rel="noopener" href="https://github.com/apache/parquet-format/blob/master/src/main/thrift/parquet.thrift#L888">https://github.com/apache/parquet-format/blob/master/src/main/thrift/parquet.thrift#L888</a></li>
+</ol>
+</li>
+</ol>
+<p>在 C++ 版本代码中，如果不可比较，就不会生成任何 Statistics。这个显然是有问题的。</p>
+<p>Statistics 在 Parquet 中<strong>「永远」</strong> 是 optional 的，下面我把兼容性字段裁剪掉了贴一下 Statistics:</p>
+<figure class="highlight thrift"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * Statistics per row group and per page</span></span><br><span class="line"><span class="comment"> * All fields are optional.</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">Statistics</span> </span>&#123;</span><br><span class="line">   <span class="comment">/** count of null value in the column */</span></span><br><span class="line">   <span class="number">3</span>: <span class="keyword">optional</span> <span class="type">i64</span> null_count;</span><br><span class="line">   <span class="comment">/** count of distinct values occurring */</span></span><br><span class="line">   <span class="number">4</span>: <span class="keyword">optional</span> <span class="type">i64</span> distinct_count;</span><br><span class="line">   <span class="comment">/**</span></span><br><span class="line"><span class="comment">    * Min and max values for the column, determined by its ColumnOrder.</span></span><br><span class="line"><span class="comment">    *</span></span><br><span class="line"><span class="comment">    * Values are encoded using PLAIN encoding, except that variable-length byte</span></span><br><span class="line"><span class="comment">    * arrays do not include a length prefix.</span></span><br><span class="line"><span class="comment">    */</span></span><br><span class="line">   <span class="number">5</span>: <span class="keyword">optional</span> <span class="type">binary</span> max_value;</span><br><span class="line">   <span class="number">6</span>: <span class="keyword">optional</span> <span class="type">binary</span> min_value;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p><code>max_value</code> 和 <code>min_value</code> 都是类型自定义的，按照对应的内容解析。</p>
+<h3 id="SchemaElement"><a href="#SchemaElement" class="headerlink" title="SchemaElement"></a>SchemaElement</h3><p><code>SchemaElement</code> 是 Parquet Schema 的最重要部分之一，没 Statistics 你还能活，没 SchemaElement 就笑嘻了。理解 SchemaElement 也能帮助理解 Nested Type 的处理:</p>
+<figure class="highlight thrift"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * Represents a element inside a schema definition.</span></span><br><span class="line"><span class="comment"> *  - if it is a group (inner node) then type is undefined and num_children is defined</span></span><br><span class="line"><span class="comment"> *  - if it is a primitive type (leaf) then type is defined and num_children is undefined</span></span><br><span class="line"><span class="comment"> * the nodes are listed in depth first traversal order.</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">SchemaElement</span> </span>&#123;</span><br><span class="line">  <span class="comment">/** Data type for this field. Not set if the current element is a non-leaf node */</span></span><br><span class="line">  <span class="number">1</span>: <span class="keyword">optional</span> Type type;</span><br><span class="line"></span><br><span class="line">  <span class="comment">/** repetition of the field. The root of the schema does not have a repetition_type.</span></span><br><span class="line"><span class="comment">   * All other nodes must have one */</span></span><br><span class="line">  <span class="number">3</span>: <span class="keyword">optional</span> FieldRepetitionType repetition_type;</span><br><span class="line"></span><br><span class="line">  <span class="comment">/** Name of the field in the schema */</span></span><br><span class="line">  <span class="number">4</span>: <span class="keyword">required</span> <span class="type">string</span> name;</span><br><span class="line"></span><br><span class="line">  <span class="comment">/** Nested fields.  Since thrift does not support nested fields,</span></span><br><span class="line"><span class="comment">   * the nesting is flattened to a single list by a depth-first traversal.</span></span><br><span class="line"><span class="comment">   * The children count is used to construct the nested relationship.</span></span><br><span class="line"><span class="comment">   * This field is not set when the element is a primitive type</span></span><br><span class="line"><span class="comment">   */</span></span><br><span class="line">  <span class="number">5</span>: <span class="keyword">optional</span> <span class="type">i32</span> num_children;</span><br><span class="line"></span><br><span class="line">  <span class="comment">/** When the original schema supports field ids, this will save the</span></span><br><span class="line"><span class="comment">   * original field id in the parquet schema</span></span><br><span class="line"><span class="comment">   */</span></span><br><span class="line">  <span class="number">9</span>: <span class="keyword">optional</span> <span class="type">i32</span> field_id;</span><br><span class="line"></span><br><span class="line">  <span class="comment">/**</span></span><br><span class="line"><span class="comment">   * The logical type of this SchemaElement</span></span><br><span class="line"><span class="comment">   *</span></span><br><span class="line"><span class="comment">   * LogicalType replaces ConvertedType, but ConvertedType is still required</span></span><br><span class="line"><span class="comment">   * for some logical types to ensure forward-compatibility in format v1.</span></span><br><span class="line"><span class="comment">   */</span></span><br><span class="line">  <span class="number">10</span>: <span class="keyword">optional</span> LogicalType logicalType</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>上面的结构中我去掉了兼容性有关的字段，和类型 Specific 的字段。可以从 <code>Type</code> 和 <code>LogicalType</code> 的存在性来理解。这个结构会以 depth-first 的形式出现在 FileMetaData 的 Schema 中：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">/**</span><br><span class="line"> * Description for file metadata</span><br><span class="line"> */</span><br><span class="line">struct FileMetaData &#123;</span><br><span class="line">  /** Version of this file **/</span><br><span class="line">  1: required i32 version</span><br><span class="line"></span><br><span class="line">  /** Parquet schema for this file.  This schema contains metadata for all the columns.</span><br><span class="line">   * The schema is represented as a tree with a single root.  The nodes of the tree</span><br><span class="line">   * are flattened to a list by doing a depth-first traversal.</span><br><span class="line">   * The column metadata contains the path in the schema for that column which can be</span><br><span class="line">   * used to map columns to nodes in the schema.</span><br><span class="line">   * The first element is the root **/</span><br><span class="line">  2: required list&lt;SchemaElement&gt; schema;</span><br></pre></td></tr></table></figure>
+<p>可以感受一下 Leaf Schema 和 non-leaf 的区别。</p>
+<h2 id="Data-amp-Page"><a href="#Data-amp-Page" class="headerlink" title="Data &amp; Page"></a>Data &amp; Page</h2><p>DataPage 和 Dictionary Page 是系统的重要部分，承载数据。RowGroup 中，每一列会有一个或多个 Page 存在。Page 会有一个 PageHeader，里面可能包含 <code>DataPageHeader</code> 或者 <code>DictionaryPageHeader</code> 或者 <code>DataPageHeaderV2</code>，而 RowGroup 没有 Header，RowGroup 靠偏移量指向每列的第一个 Page。关于 Page 的其他信息，则可以在 <code>PageIndex</code> 中找到，后文再提这些信息。</p>
+<p>PageHeader 会有一些 size 之类的元信息，不过本身 RowGroup 的 Metadata 也有一份这些信息。</p>
+<p>数据可能会有编码之类的，Encoding 和 Compression 都以 Page 为粒度，在 Page 解析的时候会读到对应的标记。为什么呢？因为压缩的时候，这里会有一定的 fallback 策略，row group 不一定有同一个策略。</p>
+<p>里面 repetition level 和 definition level 会紧随在 Page Header 后，这里也会标识他们的长度，这两列会以 RLE 形式被压缩。之后就是 values 的具体编码了。当然，这两个不一定会写入：</p>
+<ol>
+<li>如果没有 nested 定义的话，是不需要 repetition level 的</li>
+<li>如果路径上没有 nullable 的字段的话，是不需要 definition level 的</li>
+</ol>
+<p>具体读取和写入的时候，会按照 ColumnChunk 为单位写入。具体而言，Page 就是某列 Column Chunk 内一批数据而已。</p>
+<p><strong>依照 ColumnChunk 为单位写入</strong>是一个很蛋疼的事情，arrow 的 parquet 实现中，提供了 <code>buffer</code> 和非 buffer 的 io，如果用户是先写完第一个 Column，再写第二个 Column，那么就可以：</p>
+<ol>
+<li>写完第一个 Column 所有内容，写完多个 Page，进行 io，写到文件。当然也可以一个个 Page 写进去。</li>
+<li>第二个 Column 开始同一个步骤…</li>
+</ol>
+<p>所以如果按行或者 vectorized data 写的话，io 其实不太可能完全按照第一个 Column —&gt; 第二个 Column 这样写，所以实际上可能是：</p>
+<ol>
+<li>RowGroup 所有的写都 buffer 在内存里</li>
+<li>监测到要切 row group，然后一起 buffer 写了</li>
+</ol>
+<p>这里还会有 Statistics，包括 Page 包含多少行数据、里面对应 min-max 为何。这部分其实有一部分和 Page Index 功能是重叠的。</p>
+<h3 id="V1-vs-V2"><a href="#V1-vs-V2" class="headerlink" title="V1 vs V2"></a>V1 vs V2</h3><p>DataPage 有两个版本 V1 和 V2，目前，大部分地方没有广泛使用 DataPageV2。</p>
+<p>这两个格式主要区别是 rep-level 和 def-level 的处理，V1 中，两个 level 会和数据一起被压缩；V2 中，两个 level 并未被压缩。此外还有些比较微小的区别，具体可以看 thrift 的定义了。</p>
+<p>在内存中，DataPage 内存存储方式都是：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">(optional 的 16位数组) rep-levels</span><br><span class="line">(optional 的 16位数组) def-levels</span><br><span class="line">data</span><br></pre></td></tr></table></figure>
+<p>levels 的长度由 Header 来标识。</p>
+<h3 id="切分-Data-amp-Page"><a href="#切分-Data-amp-Page" class="headerlink" title="切分 Data &amp; Page"></a>切分 Data &amp; Page</h3><p>官方可以根据 Row Group Size (推荐 512M - 1GB) 和 Page Size（推荐 8kB）来切分。值得一提的是，感觉这个格式基本没做 Random Access 优化，读取都是 Page 为单位的。</p>
+<h3 id="CRC32"><a href="#CRC32" class="headerlink" title="CRC32"></a>CRC32</h3><p>Page 会对「上面的数据」做 crc，Page 本身不会做 CRC。</p>
+<p>另外，我翻了一下绝大多数实现，截至 2022.10.19，parquet-mr 只有 DataPageV1 和 Dictionary Page 会写 CRC，C++/Rust 版本基本都没写 crc。考虑到之前很多地方落在 S3 / HDFS 上，其实可以理解，但引入了本地 SSD 缓存之后，恐怕没有 CRC 真的就死路一条了，笔者正在给 C++ 标准的 Parquet 实现 crc。</p>
+<h2 id="Encoding"><a href="#Encoding" class="headerlink" title="Encoding"></a>Encoding</h2><p>Parquet 官方规定的 encoding 数量不多，而且实现看上去有点大病。比如字典的实现是：</p>
+<ol>
+<li>先死命往字典里放</li>
+<li>字典空间过大了就 fallback 到 PLAIN<ol>
+<li>这个地方 fallback 到 PLAIN 这个说法比较让人困惑，因为每个 ColumnChunk (RowGroup 内的单个 Column) 是只有一个字典页的，这里编码的时候，会不断往字典里面添加内容，然后之前的页面会缓存下来。如果发现过大，这里会写完之前的字典 + 数据页面</li>
+</ol>
+</li>
+</ol>
+<p>看上去就很傻逼。</p>
+<p>不过，有的地方字典会规定是有序的，Parquet 并没有规定字典本身是有序的，但在字典页面上提供了</p>
+<p>编码的格式见：<a target="_blank" rel="noopener" href="https://github.com/apache/parquet-format/blob/master/Encodings.md">https://github.com/apache/parquet-format/blob/master/Encodings.md</a></p>
+<ul>
+<li><p>PLAIN 格式：啥都没有，直接写数据</p>
+<ul>
+<li>关于变长的字段，这里会有 BYTE_ARRAY: 写4B -&gt; 写数据</li>
+</ul>
+</li>
+<li>字典会有 <code>PLAIN_DICTIONARY</code> 和 <code>RLE_DICTIONARY</code>。字典压缩本身会压完一列，然后在<strong>数据页之前</strong>会有字典页，字典页推荐用 PLAIN 格式。<ul>
+<li>同一个 ColumnChunk 共用一个字典，但是可能里面有的页面不用字典编码。</li>
+</ul>
+</li>
+<li>RLE: parquet 推荐的是 RLE + Bit-packing 混合模式，这个地方是「走 RLE 或者走 bit-packing」，这段在 RFC 里面介绍非常鬼畜，建议找代码注释读。</li>
+<li>DELTA: 先走 delta，再走 bit-packing，数据在 bit-packing 层会被压到一堆 miniblocks 里面</li>
+<li>Delta-length byte array: Delta 编码以下所有字符的<strong>长度</strong>，再把内容拼贴</li>
+<li>Delta Strings: 前缀压缩</li>
+</ul>
+<p>关于编码的选择，parquet 没有做任何实现和规定，建议运行的时候 xjb 选吧。Encoding 的格式会标注在 Page 的里面，因为可能同一个 ColumnChunk 的不同 Page 编码方式不一样。</p>
+<h2 id="Page-Index"><a href="#Page-Index" class="headerlink" title="Page Index"></a>Page Index</h2><p><img src="https://image.mwish.me/blog-image/PageIndexLayout.png" alt="PageIndexLayout"></p>
+<p>我们注意到，Metadata 只有 rowgroup 层面的信息，Page 层面的位置和大小，都需要走 PageIndex。这个可以做一些细粒度的裁剪。 Metadata 的 Column 中，会有地方指向这几段。</p>
+<p>PageIndex 希望让点查、Range Scan on sorting columns、Selection 能够以跳过不需要扫描 Page 的方式节省 IO / 计算的资源，<em>同时 full scan 不用扫描这部分数据，让这部分尽量没有开销</em></p>
+<p>PageIndex 描述在 FileMetaData 之前，也就是接近文件尾部的地方。</p>
+<p>PageIndex 是以文件中整个 Column 为粒度的数据，PageIndex 包含两个部分：ColumnIndex 和 OffsetIndex:</p>
+<ol>
+<li>ColumnIndex 会标志某个 RowGroup 的某个 Column  内的各个 Page 的 Range 信息，包括 min-max 。<ol>
+<li>这里有点类似 RocksDB，每列可以存放压缩的值，比如 “ab” “db” 可以存 “a” “d”.</li>
+<li>Statistics 的问题见 <code>Sort Order</code> 一节，其实目前的实现还是有比较大问题的.</li>
+</ol>
+</li>
+<li>OffsetIndex 会标记各个 RowGroup 对应的 Page 的偏移量</li>
+</ol>
+<p>这部分的 Page 类型为 <code>INDEX_PAGE</code>, 对应 thrift 结构如下：</p>
+<figure class="highlight protobuf"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br></pre></td><td class="code"><pre><span class="line">struct PageLocation &#123;</span><br><span class="line">  <span class="comment">/** Offset of the page in the file **/</span></span><br><span class="line">  <span class="number">1</span>: <span class="keyword">required</span> i64 offset</span><br><span class="line"></span><br><span class="line">  <span class="comment">/**</span></span><br><span class="line"><span class="comment">   * Size of the page, including header. Sum of compressed_page_size and header</span></span><br><span class="line"><span class="comment">   * length</span></span><br><span class="line"><span class="comment">   */</span></span><br><span class="line">  <span class="number">2</span>: <span class="keyword">required</span> i32 compressed_page_size</span><br><span class="line"></span><br><span class="line">  <span class="comment">/**</span></span><br><span class="line"><span class="comment">   * Index within the RowGroup of the first row of the page; this means pages</span></span><br><span class="line"><span class="comment">   * change on record boundaries (r = 0).</span></span><br><span class="line"><span class="comment">   */</span></span><br><span class="line">  <span class="number">3</span>: <span class="keyword">required</span> i64 first_row_index</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">struct OffsetIndex &#123;</span><br><span class="line">  <span class="comment">/**</span></span><br><span class="line"><span class="comment">   * PageLocations, ordered by increasing PageLocation.offset. It is required</span></span><br><span class="line"><span class="comment">   * that page_locations[i].first_row_index &lt; page_locations[i+1].first_row_index.</span></span><br><span class="line"><span class="comment">   */</span></span><br><span class="line">  <span class="number">1</span>: <span class="keyword">required</span> list&lt;PageLocation&gt; page_locations</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * Description for ColumnIndex.</span></span><br><span class="line"><span class="comment"> * Each &lt;array-field&gt;[i] refers to the page at OffsetIndex.page_locations[i]</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line">struct ColumnIndex &#123;</span><br><span class="line">  <span class="comment">/**</span></span><br><span class="line"><span class="comment">   * A list of Boolean values to determine the validity of the corresponding</span></span><br><span class="line"><span class="comment">   * min and max values. If true, a page contains only null values, and writers</span></span><br><span class="line"><span class="comment">   * have to set the corresponding entries in min_values and max_values to</span></span><br><span class="line"><span class="comment">   * byte[0], so that all lists have the same length. If false, the</span></span><br><span class="line"><span class="comment">   * corresponding entries in min_values and max_values must be valid.</span></span><br><span class="line"><span class="comment">   */</span></span><br><span class="line">  <span class="number">1</span>: <span class="keyword">required</span> list&lt;<span class="type">bool</span>&gt; null_pages</span><br><span class="line"></span><br><span class="line">  <span class="comment">/**</span></span><br><span class="line"><span class="comment">   * Two lists containing lower and upper bounds for the values of each page</span></span><br><span class="line"><span class="comment">   * determined by the ColumnOrder of the column. These may be the actual</span></span><br><span class="line"><span class="comment">   * minimum and maximum values found on a page, but can also be (more compact)</span></span><br><span class="line"><span class="comment">   * values that do not exist on a page. For example, instead of storing &quot;&quot;Blart</span></span><br><span class="line"><span class="comment">   * Versenwald III&quot;, a writer may set min_values[i]=&quot;B&quot;, max_values[i]=&quot;C&quot;.</span></span><br><span class="line"><span class="comment">   * Such more compact values must still be valid values within the column&#x27;s</span></span><br><span class="line"><span class="comment">   * logical type. Readers must make sure that list entries are populated before</span></span><br><span class="line"><span class="comment">   * using them by inspecting null_pages.</span></span><br><span class="line"><span class="comment">   */</span></span><br><span class="line">  <span class="number">2</span>: <span class="keyword">required</span> list&lt;binary&gt; min_values</span><br><span class="line">  <span class="number">3</span>: <span class="keyword">required</span> list&lt;binary&gt; max_values</span><br><span class="line"></span><br><span class="line">  <span class="comment">/**</span></span><br><span class="line"><span class="comment">   * Stores whether both min_values and max_values are orderd and if so, in</span></span><br><span class="line"><span class="comment">   * which direction. This allows readers to perform binary searches in both</span></span><br><span class="line"><span class="comment">   * lists. Readers cannot assume that max_values[i] &lt;= min_values[i+1], even</span></span><br><span class="line"><span class="comment">   * if the lists are ordered.</span></span><br><span class="line"><span class="comment">   */</span></span><br><span class="line">  <span class="number">4</span>: <span class="keyword">required</span> BoundaryOrder boundary_order</span><br><span class="line"></span><br><span class="line">  <span class="comment">/** A list containing the number of null values for each page **/</span></span><br><span class="line">  <span class="number">5</span>: <span class="keyword">optional</span> list&lt;i64&gt; null_counts</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>别的字段都比较简单，<code>boundary_order</code> 专门记录了 Page Index 的顺序性。至少是 RowGroup 内的顺序性。</p>
+<h2 id="BloomFilter"><a href="#BloomFilter" class="headerlink" title="BloomFilter"></a>BloomFilter</h2><p><img src="https://image.mwish.me/blog-image/FileLayoutBloomFilter1.png" alt="FileLayoutBloomFilter1"></p>
+<p>BloomFilter 官方实现有两种位置。官方有一个 RowGroup 的 BloomFilter，对需要构建的列构建 BF。值得一提的是，代码实现中，这里需要提前 guess （或者预知）行数，来提前分配 BloomFilter。</p>
+<p>这里的 BloomFilter 算法和 RocksDB 的类似，具体数学可以参考：<a target="_blank" rel="noopener" href="https://github.com/facebook/rocksdb/wiki/RocksDB-Bloom-Filter#the-math">https://github.com/facebook/rocksdb/wiki/RocksDB-Bloom-Filter#the-math</a> . 不过看了一下代码后，感觉 RocksDB 做的要细很多。</p>
+<h2 id="Nested-Structure-and-NULL-Serde"><a href="#Nested-Structure-and-NULL-Serde" class="headerlink" title="Nested Structure and NULL: Serde"></a>Nested Structure and NULL: Serde</h2><p>nested 和 null 都是靠 definition level 和 repitition level 来完成的。对于两个 level，这里会用 <code>RLE</code> 进行编码，然后存放在 Page 上，每个 Page 包含的逻辑内容大概是：</p>
+<ol>
+<li>Page Header</li>
+<li>Repitition Levels</li>
+<li>Definition Levels</li>
+<li>具体的值</li>
+</ol>
+<p>给一个 <code>Dremel</code> 论文中的 schema 定义：</p>
+<figure class="highlight protobuf"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">message </span><span class="title class_">Document</span> &#123;</span><br><span class="line">  <span class="keyword">required</span> <span class="type">int64</span> DocId;</span><br><span class="line">  <span class="keyword">optional</span> <span class="keyword">group</span> Links &#123;</span><br><span class="line">    <span class="keyword">repeated</span> <span class="type">int64</span> Backward;</span><br><span class="line">    <span class="keyword">repeated</span> <span class="type">int64</span> Forward; </span><br><span class="line">  &#125;</span><br><span class="line">  <span class="keyword">repeated</span> <span class="keyword">group</span> Name &#123;</span><br><span class="line">    <span class="keyword">repeated</span> <span class="keyword">group</span> Language &#123;</span><br><span class="line">      <span class="keyword">required</span> <span class="type">string</span> Code;</span><br><span class="line">      <span class="keyword">optional</span> <span class="type">string</span> Country; </span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">optional</span> <span class="type">string</span> Url; </span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="Repetition-Levels"><a href="#Repetition-Levels" class="headerlink" title="Repetition Levels"></a>Repetition Levels</h3><p>先 repetition levels, 这里只需要保存有值的字段：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">DocId</span><br><span class="line">Links.Backward</span><br><span class="line">Links.Forward</span><br><span class="line">Name.Language.Code</span><br><span class="line">Name.Language.Country</span><br><span class="line">Name.Url</span><br></pre></td></tr></table></figure>
+<p>repeatable 的字段是：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">Links.Backward</span><br><span class="line">Links.Forward</span><br><span class="line">Name</span><br><span class="line">Name.Language</span><br></pre></td></tr></table></figure>
+<p>可以看到，对于一个 <code>Name.Language.Code</code>，它既可能是属于<strong>新的 Name</strong> , 也可能属于 <code>Name</code> 下新的 Language。 那么，对于 <code>repetition</code> 来说，就是「它在哪个级别 repeat 了」。</p>
+<p>那么，如果是某个值「父亲不存在，导致应该存在的值不存在」的话，比如：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">Document &#123;</span><br><span class="line">  DocId: ...,</span><br><span class="line">  Name: ...</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这个时候，LinkID 是残缺的，这里可以补一个 <code>NULL</code> 的虚拟记录，然后标注一下 r 就可以了</p>
+<h3 id="definition-levels"><a href="#definition-levels" class="headerlink" title="definition levels"></a>definition levels</h3><p>对于某个字段，它的路径上有多少值是「可以不存在」的，可以不存在即 Schema 定义为 nullable 或者 repeated 的字段。这个字段也包括自身（如果自己是 nullable 或者 repeatable 的话）。这个路径也需要理解一下：</p>
+<ol>
+<li>对于非嵌套的字段，如果它是个 optional 的，且为 null，那么自己的 definition levels 就为 0，否则为 1</li>
+<li>嵌套的字段取决于父级对应的字段，<em>parent的一行</em> 数据的某一列至少有一个 d (这话有点模糊，我指的是，如果父亲是 null，这玩意也得带个 d，虽然这行数据不存在)</li>
+</ol>
+<p><img src="https://image.mwish.me/blog-image/C4B586F5-3356-4CCD-AC3B-A9D22E671185.png" alt="C4B586F5-3356-4CCD-AC3B-A9D22E671185"></p>
+<h3 id="编码和解码"><a href="#编码和解码" class="headerlink" title="编码和解码"></a>编码和解码</h3><p>这里可以看到，其实不是所有字段都需要 r/d 的，比如 DocId 就可以都不要；<code>Name.Language</code> 可以不要 <code>d</code>。然后这个编码还是有父子层次的概念的，比如有几条 <code>Name.Language.Country</code> 取决有几条 <code>Name.Language</code>，这个记录可以看看我们前面的定义和 Schema 定义。Parquet 读者在读的时候会创建一个 Struct 对应的 Reader，来递归读取。 </p>
+<p>编码的算法大概如下：</p>
+<ol>
+<li>首先，会根据 Schema 构建出一颗树，来表示对应的结构。这个树的构建方式使用 dfs，大概如下：</li>
+</ol>
+<p><img src="https://image.mwish.me/blog-image/schema.png" alt="schema"></p>
+<ol>
+<li>对构建出来的树扫描的时候，带上 r, d，然后构建</li>
+</ol>
+<p>我们讨论一些特殊情况：</p>
+<ol>
+<li>如果正常的一条路径全部没有 null，那么 <code>d = 路径上(包括自己) nullable 和 repeatable 的数量</code>，<code>r = 路径上(包括自己) repeated 中的某一个</code>。 r 和 d 都是 是「自己级别的 max」</li>
+<li>如果一个路径<strong>自己</strong>是 null，父亲不含 null，那么 <code>d = 路径上(包括自己) nullable 和 repeatable 的数量 - 1</code>，即 <strong>父亲的 d，或者上一个 nullable / repeatable 对象的 d</strong>，r 和 (1) 则一样，<strong>但最大是一样的</strong>，都是「自己级别的 rep-max」</li>
+<li>从 1/2 其实可以看出来，null 可以通过 d 来确定，d 如果小于路径上 nullable/repeatable 值总数，就可以是 Null</li>
+<li>如果某个路径父亲是 null，那么 d 会更小，d 会等于非 null 父级的 d，r 则是父亲级别最大的 r。相当于某个级别开始为空的话，d 会是父级别的 d-max，r 会是自己的 r</li>
+</ol>
+<p>上面这些内容非常重要，因为 arrow 的代码实际上是靠这套规则来实现的。</p>
+<h2 id="Reference"><a href="#Reference" class="headerlink" title="Reference"></a>Reference</h2><ol>
+<li><p>Google Dremel数据模型详解(上) <a target="_blank" rel="noopener" href="http://static.kancloud.cn/digest/in-memory-computing/202157">http://static.kancloud.cn/digest/in-memory-computing/202157</a></p>
+</li>
+<li><p>Google Dremel数据模型详解(下) <a target="_blank" rel="noopener" href="http://static.kancloud.cn/digest/in-memory-computing/202158">http://static.kancloud.cn/digest/in-memory-computing/202158</a></p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://blog.twitter.com/engineering/en_us/a/2013/dremel-made-simple-with-parquet">https://blog.twitter.com/engineering/en_us/a/2013/dremel-made-simple-with-parquet</a></p>
+</li>
+<li><p>专门解释 Parquet / Dremel 格式的文章：<a target="_blank" rel="noopener" href="https://github.com/julienledem/redelm/wiki/The-striping-and-assembly-algorithms-from-the-Dremel-paper">https://github.com/julienledem/redelm/wiki/The-striping-and-assembly-algorithms-from-the-Dremel-paper</a></p>
+</li>
+<li><p>Rust 版本的 Parquet 为了解释发了几篇文章，其实介绍的比较好：</p>
+<ol>
+<li>Arrow and Parquet Part 1: Primitive Types and Nullability: <a target="_blank" rel="noopener" href="https://arrow.apache.org/blog/2022/10/05/arrow-parquet-encoding-part-1/">https://arrow.apache.org/blog/2022/10/05/arrow-parquet-encoding-part-1/</a></li>
+<li>Arrow and Parquet Part 2: Nested and Hierarchical Data using Structs and Lists: <a target="_blank" rel="noopener" href="https://arrow.apache.org/blog/2022/10/08/arrow-parquet-encoding-part-2/">https://arrow.apache.org/blog/2022/10/08/arrow-parquet-encoding-part-2/</a></li>
+</ol>
+</li>
+</ol>
+<p>还有一些二手评论：</p>
+<ol>
+<li><a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/25206176">https://zhuanlan.zhihu.com/p/25206176</a></li>
+<li><a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/25206199">https://zhuanlan.zhihu.com/p/25206199</a></li>
+</ol>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Format"><span class="toc-number">1.</span> <span class="toc-text">Format</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Footer-%E9%83%A8%E5%88%86"><span class="toc-number">1.1.</span> <span class="toc-text">Footer 部分</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E9%83%A8%E5%88%86"><span class="toc-number">1.2.</span> <span class="toc-text">数据部分</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%B1%BB%E5%9E%8B%E7%B3%BB%E7%BB%9F%E5%92%8C%E9%80%BB%E8%BE%91%E7%B1%BB%E5%9E%8B"><span class="toc-number">2.</span> <span class="toc-text">类型系统和逻辑类型</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9F%BA%E7%A1%80%E7%B1%BB%E5%9E%8B"><span class="toc-number">2.1.</span> <span class="toc-text">基础类型</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Sort-Order-amp-Statistics"><span class="toc-number">2.2.</span> <span class="toc-text">Sort Order &amp; Statistics</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#SchemaElement"><span class="toc-number">2.3.</span> <span class="toc-text">SchemaElement</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Data-amp-Page"><span class="toc-number">3.</span> <span class="toc-text">Data &amp; Page</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#V1-vs-V2"><span class="toc-number">3.1.</span> <span class="toc-text">V1 vs V2</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%88%87%E5%88%86-Data-amp-Page"><span class="toc-number">3.2.</span> <span class="toc-text">切分 Data &amp; Page</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#CRC32"><span class="toc-number">3.3.</span> <span class="toc-text">CRC32</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Encoding"><span class="toc-number">4.</span> <span class="toc-text">Encoding</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Page-Index"><span class="toc-number">5.</span> <span class="toc-text">Page Index</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#BloomFilter"><span class="toc-number">6.</span> <span class="toc-text">BloomFilter</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Nested-Structure-and-NULL-Serde"><span class="toc-number">7.</span> <span class="toc-text">Nested Structure and NULL: Serde</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Repetition-Levels"><span class="toc-number">7.1.</span> <span class="toc-text">Repetition Levels</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#definition-levels"><span class="toc-number">7.2.</span> <span class="toc-text">definition levels</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%BC%96%E7%A0%81%E5%92%8C%E8%A7%A3%E7%A0%81"><span class="toc-number">7.3.</span> <span class="toc-text">编码和解码</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Reference"><span class="toc-number">8.</span> <span class="toc-text">Reference</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2022/09/18/Parquet-Part1-Basic/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2022/09/18/Parquet-Part1-Basic/&text=Parquet Part1: Basic"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2022/09/18/Parquet-Part1-Basic/&title=Parquet Part1: Basic"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2022/09/18/Parquet-Part1-Basic/&is_video=false&description=Parquet Part1: Basic"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Parquet Part1: Basic&body=Check out this article: http://blog.mwish.me/2022/09/18/Parquet-Part1-Basic/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2022/09/18/Parquet-Part1-Basic/&title=Parquet Part1: Basic"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2022/09/18/Parquet-Part1-Basic/&title=Parquet Part1: Basic"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2022/09/18/Parquet-Part1-Basic/&title=Parquet Part1: Basic"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2022/09/18/Parquet-Part1-Basic/&title=Parquet Part1: Basic"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2022/09/18/Parquet-Part1-Basic/&name=Parquet Part1: Basic&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2022/09/18/Parquet-Part1-Basic/&t=Parquet Part1: Basic"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

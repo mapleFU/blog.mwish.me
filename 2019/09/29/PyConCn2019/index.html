@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="PyCon Cn 2019 上海的观看体验">
+<meta property="og:type" content="article">
+<meta property="og:title" content="PyConCn2019">
+<meta property="og:url" content="http://blog.mwish.me/2019/09/29/PyConCn2019/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="PyCon Cn 2019 上海的观看体验">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2019-09-29T03:55:58.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.564Z">
+<meta property="article:author" content="mwish">
+<meta property="article:tag" content="talks">
+<meta property="article:tag" content="Python">
+<meta name="twitter:card" content="summary">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>PyConCn2019</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2019/10/09/MapReduce-Paper-Lab-Report/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2019/09/29/PyConCn2019/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2019/09/29/PyConCn2019/&text=PyConCn2019"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2019/09/29/PyConCn2019/&title=PyConCn2019"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2019/09/29/PyConCn2019/&is_video=false&description=PyConCn2019"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=PyConCn2019&body=Check out this article: http://blog.mwish.me/2019/09/29/PyConCn2019/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2019/09/29/PyConCn2019/&title=PyConCn2019"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2019/09/29/PyConCn2019/&title=PyConCn2019"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2019/09/29/PyConCn2019/&title=PyConCn2019"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2019/09/29/PyConCn2019/&title=PyConCn2019"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2019/09/29/PyConCn2019/&name=PyConCn2019&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2019/09/29/PyConCn2019/&t=PyConCn2019"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-3"><a class="toc-link" href="#ARMIN-RONACHER-%E8%B0%83%E8%AF%95%E6%98%AF%E4%B8%80%E7%A7%8D%E6%96%B0%E7%9A%84%E5%8F%91%E5%B8%83%EF%BC%9A%E6%85%A2%E8%AF%AD%E8%A8%80%E7%9A%84%E6%84%8F%E5%A4%96%E4%BC%98%E5%8A%BF"><span class="toc-number">1.</span> <span class="toc-text">ARMIN RONACHER: 调试是一种新的发布：慢语言的意外优势</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#LAIKE9M-Python-%E8%B0%83%E8%AF%95%E6%96%B0%E6%80%9D%E8%B7%AF"><span class="toc-number">2.</span> <span class="toc-text">LAIKE9M: Python 调试新思路</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%BC%A0%E4%BD%B3%E5%9C%86-GIL-%E7%9A%84%E8%BF%87%E5%8E%BB%E5%92%8C%E6%9C%AA%E6%9D%A5"><span class="toc-number">3.</span> <span class="toc-text">张佳圆: GIL 的过去和未来</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#GIAMPAOLO-RODOLA-%E4%BD%BF%E7%94%A8-Python-%E5%8A%A0%E9%80%9F%E6%96%87%E4%BB%B6%E4%BC%A0%E8%BE%93%E5%92%8C%E6%96%87%E4%BB%B6%E5%A4%8D%E5%88%B6"><span class="toc-number">4.</span> <span class="toc-text">GIAMPAOLO RODOLA: 使用 Python 加速文件传输和文件复制</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#THAUTWARM-Python-%E8%AF%AD%E6%B3%95%E6%89%A9%E5%B1%95%E6%A1%86%E6%9E%B6-Moshmosh-%E5%92%8C%E5%85%B6%E4%B8%8A-CPython-%E5%85%BC%E5%AE%B9%E7%9A%84-JIT-%E5%AE%9E%E7%8E%B0"><span class="toc-number">5.</span> <span class="toc-text">THAUTWARM: Python 语法扩展框架 Moshmosh 和其上 CPython 兼容的 JIT 实现</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%BC%A0%E6%B1%9D%E5%AE%B6-%E4%BB%8E-thriftpy-%E4%B8%AD%E5%AD%A6%E4%B9%A0-rpc-%E5%8D%8F%E8%AE%AE"><span class="toc-number">6.</span> <span class="toc-text">张汝家: 从 thriftpy 中学习 rpc 协议</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        PyConCn2019
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2019-09-29T03:55:58.000Z" itemprop="datePublished">2019-09-29</time>
+        
+      
+    </div>
+
+
+      
+    <div class="article-category">
+        <i class="fas fa-archive"></i>
+        <a class="category-link" href="/categories/life/">life</a>
+    </div>
+
+
+      
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/Python/" rel="tag">Python</a>, <a class="tag-link-link" href="/tags/talks/" rel="tag">talks</a>
+    </div>
+
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>翘了一天公司 TB 来 PyCon, 也不说想法了，就说下自己听的一些。由于自己水平不够，说的东西可能有很多问题，欢迎各路大佬指出：</p>
+<h3 id="ARMIN-RONACHER-调试是一种新的发布：慢语言的意外优势"><a href="#ARMIN-RONACHER-调试是一种新的发布：慢语言的意外优势" class="headerlink" title="ARMIN RONACHER: 调试是一种新的发布：慢语言的意外优势"></a>ARMIN RONACHER: 调试是一种新的发布：慢语言的意外优势</h3><p>作者对比了 Python, V8, 还有 Cpp 这些语言的 debug/release 下的性能比较和 debug 可提供的信息，得出 Python 编译不能像有 JIT/AOT 编译器一样，提供很高的优化，但是这也让在生产环境中用 debug mode（或者说提供更多的 debug 信息）的性能损耗、代价更小。</p>
+<h3 id="LAIKE9M-Python-调试新思路"><a href="#LAIKE9M-Python-调试新思路" class="headerlink" title="LAIKE9M: Python 调试新思路"></a>LAIKE9M: Python 调试新思路</h3><p><a target="_blank" rel="noopener" href="https://github.com/laike9m/Cyberbraingithub.com">https://github.com/laike9m/Cyberbraingithub.com</a></p>
+<p>介绍了下 Python debug 的思路，同时引出这个 repo, 看上去很不错= =不过我尚且没有体验过，不好做出评价。感觉做题可以用用，不过目前生产环境用这个估计不是很方便？</p>
+<h3 id="张佳圆-GIL-的过去和未来"><a href="#张佳圆-GIL-的过去和未来" class="headerlink" title="张佳圆: GIL 的过去和未来"></a>张佳圆: GIL 的过去和未来</h3><p><a target="_blank" rel="noopener" href="https://www.python.org/dev/peps/pep-0554/www.python.org">https://www.python.org/dev/peps/pep-0554/www.python.org</a></p>
+<p>介绍了一下 GIL 的历史和一些绕过 GIL 的方案，也介绍了上面这个 PEP，不过感觉提问环节质量不是很高= =</p>
+<h3 id="GIAMPAOLO-RODOLA-使用-Python-加速文件传输和文件复制"><a href="#GIAMPAOLO-RODOLA-使用-Python-加速文件传输和文件复制" class="headerlink" title="GIAMPAOLO RODOLA: 使用 Python 加速文件传输和文件复制"></a>GIAMPAOLO RODOLA: 使用 Python 加速文件传输和文件复制</h3><p>psutil 这个库的作者介绍一下用 sendfile 代替 read + write 减少用户态内核跳来跳去的方法。同时也简短介绍了下 psutil 这个库。（我本人也用这个库，所以听得很开心）</p>
+<p><a target="_blank" rel="noopener" href="https://pic3.zhimg.com/v2-ea5c21e251004d639b624aaae78294ae_ipico.jpg">giampaolo/psutilgithub.com</a></p>
+<h3 id="THAUTWARM-Python-语法扩展框架-Moshmosh-和其上-CPython-兼容的-JIT-实现"><a href="#THAUTWARM-Python-语法扩展框架-Moshmosh-和其上-CPython-兼容的-JIT-实现" class="headerlink" title="THAUTWARM: Python 语法扩展框架 Moshmosh 和其上 CPython 兼容的 JIT 实现"></a>THAUTWARM: Python 语法扩展框架 Moshmosh 和其上 CPython 兼容的 JIT 实现</h3><p>Moshmosh 似乎没介绍？主要内容是后者，期待大佬开发者填坑。</p>
+<h3 id="张汝家-从-thriftpy-中学习-rpc-协议"><a href="#张汝家-从-thriftpy-中学习-rpc-协议" class="headerlink" title="张汝家: 从 thriftpy 中学习 rpc 协议"></a>张汝家: 从 thriftpy 中学习 rpc 协议</h3><p>简单介绍了一下 thrift 和 thriftpy，似乎没有讲很深。</p>
+<hr>
+<p>参会体验还是很不错的，很多比较实用的建议，期待下次再玩</p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-3"><a class="toc-link" href="#ARMIN-RONACHER-%E8%B0%83%E8%AF%95%E6%98%AF%E4%B8%80%E7%A7%8D%E6%96%B0%E7%9A%84%E5%8F%91%E5%B8%83%EF%BC%9A%E6%85%A2%E8%AF%AD%E8%A8%80%E7%9A%84%E6%84%8F%E5%A4%96%E4%BC%98%E5%8A%BF"><span class="toc-number">1.</span> <span class="toc-text">ARMIN RONACHER: 调试是一种新的发布：慢语言的意外优势</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#LAIKE9M-Python-%E8%B0%83%E8%AF%95%E6%96%B0%E6%80%9D%E8%B7%AF"><span class="toc-number">2.</span> <span class="toc-text">LAIKE9M: Python 调试新思路</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%BC%A0%E4%BD%B3%E5%9C%86-GIL-%E7%9A%84%E8%BF%87%E5%8E%BB%E5%92%8C%E6%9C%AA%E6%9D%A5"><span class="toc-number">3.</span> <span class="toc-text">张佳圆: GIL 的过去和未来</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#GIAMPAOLO-RODOLA-%E4%BD%BF%E7%94%A8-Python-%E5%8A%A0%E9%80%9F%E6%96%87%E4%BB%B6%E4%BC%A0%E8%BE%93%E5%92%8C%E6%96%87%E4%BB%B6%E5%A4%8D%E5%88%B6"><span class="toc-number">4.</span> <span class="toc-text">GIAMPAOLO RODOLA: 使用 Python 加速文件传输和文件复制</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#THAUTWARM-Python-%E8%AF%AD%E6%B3%95%E6%89%A9%E5%B1%95%E6%A1%86%E6%9E%B6-Moshmosh-%E5%92%8C%E5%85%B6%E4%B8%8A-CPython-%E5%85%BC%E5%AE%B9%E7%9A%84-JIT-%E5%AE%9E%E7%8E%B0"><span class="toc-number">5.</span> <span class="toc-text">THAUTWARM: Python 语法扩展框架 Moshmosh 和其上 CPython 兼容的 JIT 实现</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%BC%A0%E6%B1%9D%E5%AE%B6-%E4%BB%8E-thriftpy-%E4%B8%AD%E5%AD%A6%E4%B9%A0-rpc-%E5%8D%8F%E8%AE%AE"><span class="toc-number">6.</span> <span class="toc-text">张汝家: 从 thriftpy 中学习 rpc 协议</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2019/09/29/PyConCn2019/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2019/09/29/PyConCn2019/&text=PyConCn2019"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2019/09/29/PyConCn2019/&title=PyConCn2019"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2019/09/29/PyConCn2019/&is_video=false&description=PyConCn2019"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=PyConCn2019&body=Check out this article: http://blog.mwish.me/2019/09/29/PyConCn2019/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2019/09/29/PyConCn2019/&title=PyConCn2019"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2019/09/29/PyConCn2019/&title=PyConCn2019"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2019/09/29/PyConCn2019/&title=PyConCn2019"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2019/09/29/PyConCn2019/&title=PyConCn2019"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2019/09/29/PyConCn2019/&name=PyConCn2019&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2019/09/29/PyConCn2019/&t=PyConCn2019"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

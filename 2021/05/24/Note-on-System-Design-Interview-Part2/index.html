@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="Notification System这里应该还可以包括 chrome notification:  这里的要点是：  有一个软实时更新的系统，不要求实时发送，不过也最好不要把推送给用户的内容晚了太多 能够 scale, 并推给不同类型的端，比如 iOS, iPad 等  这里应该要设置一对多的 user: device 表，作为用户存储信息的表，然后可以准备一个 cache. 有这个信息后，如果">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Note on System Design Interview: Part2">
+<meta property="og:url" content="http://blog.mwish.me/2021/05/24/Note-on-System-Design-Interview-Part2/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="Notification System这里应该还可以包括 chrome notification:  这里的要点是：  有一个软实时更新的系统，不要求实时发送，不过也最好不要把推送给用户的内容晚了太多 能够 scale, 并推给不同类型的端，比如 iOS, iPad 等  这里应该要设置一对多的 user: device 表，作为用户存储信息的表，然后可以准备一个 cache. 有这个信息后，如果">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/A7653474-34AE-4C7E-8E99-3638D3995E23.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/FADB51E3-4EC9-42B0-8B4F-BADE93037F33.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/07544A0D-700E-4A9D-9CA3-77AADD3D70F4.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/6F30A791-DB86-4267-A099-C0A3134C3158.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/9AE9A19F-6B93-442D-B83E-7CABE3FD9028.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/50343781-12BD-409F-ACAB-9100CBC61263.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/8C0B2A00-B661-4CF9-9C37-F633AE934756.png">
+<meta property="article:published_time" content="2021-05-24T15:29:10.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.558Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/A7653474-34AE-4C7E-8E99-3638D3995E23.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>Note on System Design Interview: Part2</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2021/06/18/LevelDB-Write-Path/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2021/05/22/Note-on-System-Design-Interview/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2021/05/24/Note-on-System-Design-Interview-Part2/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2021/05/24/Note-on-System-Design-Interview-Part2/&text=Note on System Design Interview: Part2"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2021/05/24/Note-on-System-Design-Interview-Part2/&title=Note on System Design Interview: Part2"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2021/05/24/Note-on-System-Design-Interview-Part2/&is_video=false&description=Note on System Design Interview: Part2"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Note on System Design Interview: Part2&body=Check out this article: http://blog.mwish.me/2021/05/24/Note-on-System-Design-Interview-Part2/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2021/05/24/Note-on-System-Design-Interview-Part2/&title=Note on System Design Interview: Part2"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2021/05/24/Note-on-System-Design-Interview-Part2/&title=Note on System Design Interview: Part2"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2021/05/24/Note-on-System-Design-Interview-Part2/&title=Note on System Design Interview: Part2"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2021/05/24/Note-on-System-Design-Interview-Part2/&title=Note on System Design Interview: Part2"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2021/05/24/Note-on-System-Design-Interview-Part2/&name=Note on System Design Interview: Part2&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2021/05/24/Note-on-System-Design-Interview-Part2/&t=Note on System Design Interview: Part2"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-3"><a class="toc-link" href="#Notification-System"><span class="toc-number">1.</span> <span class="toc-text">Notification System</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#News-Feed-System"><span class="toc-number">2.</span> <span class="toc-text">News Feed System</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Chat-System"><span class="toc-number">3.</span> <span class="toc-text">Chat System</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Note on System Design Interview: Part2
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2021-05-24T15:29:10.000Z" itemprop="datePublished">2021-05-24</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <h3 id="Notification-System"><a href="#Notification-System" class="headerlink" title="Notification System"></a>Notification System</h3><p>这里应该还可以包括 chrome notification:</p>
+<p><img src="https://image.mwish.me/blog-image/A7653474-34AE-4C7E-8E99-3638D3995E23.png" alt="A7653474-34AE-4C7E-8E99-3638D3995E23"></p>
+<p>这里的要点是：</p>
+<ol>
+<li>有一个软实时更新的系统，不要求实时发送，不过也最好不要把推送给用户的内容晚了太多</li>
+<li>能够 scale, 并推给不同类型的端，比如 iOS, iPad 等</li>
+</ol>
+<p>这里应该要设置一对多的 user: device 表，作为用户存储信息的表，然后可以准备一个 cache.</p>
+<p>有这个信息后，如果收到一条消息，可能要慢慢把消息丢给 user 的各个 device 或者一些 device, 这里可以用 mq 来解耦这个过程：</p>
+<p><img src="https://image.mwish.me/blog-image/FADB51E3-4EC9-42B0-8B4F-BADE93037F33.png" alt="FADB51E3-4EC9-42B0-8B4F-BADE93037F33"></p>
+<p>这里 worker group 需要 talk from queue, 然后开始消费。这里因为消息不能丢，所以也要持久化处理情况：</p>
+<p><img src="https://image.mwish.me/blog-image/07544A0D-700E-4A9D-9CA3-77AADD3D70F4.png" alt="07544A0D-700E-4A9D-9CA3-77AADD3D70F4"></p>
+<p>当然，这里还要注意 rate limit, retry 和 queue 状态的监控。</p>
+<h3 id="News-Feed-System"><a href="#News-Feed-System" class="headerlink" title="News Feed System"></a>News Feed System</h3><blockquote>
+<p>News feed is the constantly updating list of stories in the middle of your home page. News Feed includes status updates, photos, videos, links, app activity, and likes from people, pages, and groups that you follow on Facebook</p>
+</blockquote>
+<p>又叫喂猪系统。</p>
+<p>这里提供了几个 api:</p>
+<ol>
+<li>Post service (包含 post cache): 正常发文/读文章的服务。</li>
+<li>Fanout service: push new content to friends’ news feed. Newsfeed data is stored in the cache for fast retrieval. (感觉还是要写到 SQL/NoSQL 里面的，得防止丢数据)</li>
+<li>Notification service: 我们上一节吹逼做的那个</li>
+</ol>
+<p>用户发文的时候，可能要读扩散写扩散搞到 feed system 里面。给关注自己的人推消息。话说这个 ddia 应该讲了。这里可以只存 <code>&lt;post_id, user_id &gt;</code>, 然后找到 db 里头。</p>
+<p><img src="https://image.mwish.me/blog-image/6F30A791-DB86-4267-A099-C0A3134C3158.png" alt="6F30A791-DB86-4267-A099-C0A3134C3158"></p>
+<p>上述是写入的 pipeline. 查询的话就是把大 v 的文章和自己 feed 里面的 merge 一下就行：</p>
+<p><img src="https://image.mwish.me/blog-image/9AE9A19F-6B93-442D-B83E-7CABE3FD9028.png" alt="9AE9A19F-6B93-442D-B83E-7CABE3FD9028"></p>
+<p>话说这里还列了 cache type, 其实挺有意义的：</p>
+<p><img src="https://image.mwish.me/blog-image/50343781-12BD-409F-ACAB-9100CBC61263.png" alt="50343781-12BD-409F-ACAB-9100CBC61263"></p>
+<p>还可以参考：</p>
+<ol>
+<li><a target="_blank" rel="noopener" href="https://www.zhihu.com/question/20690652">https://www.zhihu.com/question/20690652</a></li>
+<li><a target="_blank" rel="noopener" href="https://developer.aliyun.com/article/224132">https://developer.aliyun.com/article/224132</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.facebook.com/help/327131014036297/">https://www.facebook.com/help/327131014036297/</a></li>
+</ol>
+<h3 id="Chat-System"><a href="#Chat-System" class="headerlink" title="Chat System"></a>Chat System</h3><p>Chat System 的要点是：</p>
+<ol>
+<li>可能需要保持状态、长连接（这里使用了 ws 实现）</li>
+<li>网络不好的时候，避免频繁的状态变化</li>
+<li>对话肯定要持久化，但是不同的用户可以连接在不同的机器上</li>
+<li>也有些东西不需要长连接</li>
+</ol>
+<p>这里登陆之类的使用了无状态的 api, 然后用 ws 维护连接。登录状态用心跳包维护，避免过度 reset。</p>
+<p>人与人聊天，人与组聊天使用序列的 id, 这个因为可以 sharding 所以代价不高。一条消息，先持久化存储，然后 fanout 给对话对象（或者 notification system）</p>
+<p><img src="https://image.mwish.me/blog-image/8C0B2A00-B661-4CF9-9C37-F633AE934756.png" alt="8C0B2A00-B661-4CF9-9C37-F633AE934756"></p>
+<p>这里端需要维护自己的 <code>max_seq_id</code>, 然后重新登录的时候，能够拉出一批数据。</p>
+<p>而群聊可以用推模式或者拉模式来实现。对于小群推就推了，否则也可以拉。</p>
+<p>登录推送(QQ 微信没有，steam 有)可以 fanout 类似的逻辑来维护</p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-3"><a class="toc-link" href="#Notification-System"><span class="toc-number">1.</span> <span class="toc-text">Notification System</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#News-Feed-System"><span class="toc-number">2.</span> <span class="toc-text">News Feed System</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Chat-System"><span class="toc-number">3.</span> <span class="toc-text">Chat System</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2021/05/24/Note-on-System-Design-Interview-Part2/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2021/05/24/Note-on-System-Design-Interview-Part2/&text=Note on System Design Interview: Part2"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2021/05/24/Note-on-System-Design-Interview-Part2/&title=Note on System Design Interview: Part2"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2021/05/24/Note-on-System-Design-Interview-Part2/&is_video=false&description=Note on System Design Interview: Part2"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Note on System Design Interview: Part2&body=Check out this article: http://blog.mwish.me/2021/05/24/Note-on-System-Design-Interview-Part2/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2021/05/24/Note-on-System-Design-Interview-Part2/&title=Note on System Design Interview: Part2"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2021/05/24/Note-on-System-Design-Interview-Part2/&title=Note on System Design Interview: Part2"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2021/05/24/Note-on-System-Design-Interview-Part2/&title=Note on System Design Interview: Part2"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2021/05/24/Note-on-System-Design-Interview-Part2/&title=Note on System Design Interview: Part2"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2021/05/24/Note-on-System-Design-Interview-Part2/&name=Note on System Design Interview: Part2&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2021/05/24/Note-on-System-Design-Interview-Part2/&t=Note on System Design Interview: Part2"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

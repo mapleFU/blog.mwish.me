@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="一个程序员的工作可能包括：服务器实现了 HTTP 或者 Rpc 协议，接受用户发送来的 JSON&#x2F;文本&#x2F;RPC Idl，然后用 JSON&#x2F;文本&#x2F;RPC idl，给一些其他服务发送请求，拿到想要拿到的东西。上述处理完之后，可能对数据库 CRUD，在 RDBMS 中，程序员可能定义了表，表中的一行有多个列。用户可能会更新某几行数据的某几列，然后把请求返回给用户。写完数据库后，可能会有 binlog 流">
+<meta property="og:type" content="article">
+<meta property="og:title" content="谈谈格式">
+<meta property="og:url" content="http://blog.mwish.me/2022/01/14/format-thinking/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="一个程序员的工作可能包括：服务器实现了 HTTP 或者 Rpc 协议，接受用户发送来的 JSON&#x2F;文本&#x2F;RPC Idl，然后用 JSON&#x2F;文本&#x2F;RPC idl，给一些其他服务发送请求，拿到想要拿到的东西。上述处理完之后，可能对数据库 CRUD，在 RDBMS 中，程序员可能定义了表，表中的一行有多个列。用户可能会更新某几行数据的某几列，然后把请求返回给用户。写完数据库后，可能会有 binlog 流">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/2B9240B1-E512-4373-8666-775B6051EB91.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/700px-Relational_database_terms.svg.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/0A3074B3-A1EA-4CAE-80DC-BA37D2C40CC0.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/21_619_e2fcf037b107485.jpeg">
+<meta property="og:image" content="https://image.mwish.me/blog-image/GD4XrgCFBDro_c0FAGwOzSsAAAAAbj0JAAAB.jpeg">
+<meta property="og:image" content="https://image.mwish.me/blog-image/GI9ytQBfig2BZtYCAAZUtV0AAAAAbj0JAAAB.jpeg">
+<meta property="article:published_time" content="2022-01-14T14:53:55.000Z">
+<meta property="article:modified_time" content="2022-12-13T14:20:50.419Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/2B9240B1-E512-4373-8666-775B6051EB91.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>谈谈格式</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2022/01/15/format-thinking-2/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2021/11/05/An-Overview-of-Query-Optimization-in-Relational-Systems/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2022/01/14/format-thinking/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2022/01/14/format-thinking/&text=谈谈格式"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2022/01/14/format-thinking/&title=谈谈格式"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2022/01/14/format-thinking/&is_video=false&description=谈谈格式"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=谈谈格式&body=Check out this article: http://blog.mwish.me/2022/01/14/format-thinking/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2022/01/14/format-thinking/&title=谈谈格式"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2022/01/14/format-thinking/&title=谈谈格式"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2022/01/14/format-thinking/&title=谈谈格式"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2022/01/14/format-thinking/&title=谈谈格式"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2022/01/14/format-thinking/&name=谈谈格式&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2022/01/14/format-thinking/&t=谈谈格式"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%8E%A5%E5%8F%A3%E7%9A%84%E7%BC%96%E7%A0%81%E6%95%B0%E6%8D%AE"><span class="toc-number">1.</span> <span class="toc-text">接口的编码数据</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#JSON"><span class="toc-number">1.1.</span> <span class="toc-text">JSON</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Thrift-amp-amp-Protocol-Buffer-%E5%B8%B8%E8%A7%81%E7%9A%84-rpc-%E6%B6%88%E6%81%AF%E6%A0%BC%E5%BC%8F"><span class="toc-number">1.2.</span> <span class="toc-text">Thrift &amp;&amp; Protocol Buffer: 常见的 rpc 消息格式</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E4%BB%A3%E7%A0%81%E7%94%9F%E6%88%90%E5%92%8C%E6%95%88%E7%8E%87"><span class="toc-number">1.2.1.</span> <span class="toc-text">代码生成和效率</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Avro"><span class="toc-number">1.3.</span> <span class="toc-text">Avro</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-number">1.4.</span> <span class="toc-text">总结</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%A1%8C%E6%A0%BC%E5%BC%8F"><span class="toc-number">2.</span> <span class="toc-text">行格式</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%9C%80%E6%B1%82%E5%92%8C%E5%A4%A7%E6%A6%82%E7%9A%84%E8%AE%BE%E8%AE%A1"><span class="toc-number">2.1.</span> <span class="toc-text">需求和大概的设计</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#PostgreSQL"><span class="toc-number">2.2.</span> <span class="toc-text">PostgreSQL</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E8%AE%A8%E8%AE%BA"><span class="toc-number">2.2.1.</span> <span class="toc-text">讨论</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#InnoDB-Compact"><span class="toc-number">2.3.</span> <span class="toc-text">InnoDB Compact</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%9D%82%E9%A1%B9-Google-FlatBuffers"><span class="toc-number">2.4.</span> <span class="toc-text">杂项: Google FlatBuffers</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Order-Preserving-Row-Encoding"><span class="toc-number">2.5.</span> <span class="toc-text">Order Preserving Row Encoding</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%80%BB%E7%BB%93-1"><span class="toc-number">2.6.</span> <span class="toc-text">总结</span></a></li></ol></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        谈谈格式
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2022-01-14T14:53:55.000Z" itemprop="datePublished">2022-01-14</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>一个程序员的工作可能包括：服务器实现了 HTTP 或者 Rpc 协议，接受用户发送来的 JSON/文本/RPC Idl，然后用 JSON/文本/RPC idl，给一些其他服务发送请求，拿到想要拿到的东西。上述处理完之后，可能对数据库 CRUD，在 RDBMS 中，程序员可能定义了表，表中的一行有多个列。用户可能会更新某几行数据的某几列，然后把请求返回给用户。写完数据库后，可能会有 binlog 流/CDC 流，去异步的把你的写入导出到某个数据仓库里头，这里可能会把行组织成类似 Apache ORC 或者 Apache Parquet  的形式，便于快速做分析。</p>
+<p>在这个流程中，用户可能和 JSON、Protobuf、数据库的行等东西打了交道，而计算机可能最终只知道 0和1，bit 和 byte。这里面隐藏了无数的编码：</p>
+<ol>
+<li>接口请求/返回值的编码：可能是 JSON、Protobuf、Thrift、Avro 等格式。在这里，用户预期 debug 方便，能够对接口进行一定的修改、扩展。</li>
+<li>数据库的行 Schema，本身可能要求读/写性能和存储空间的高效、节约，便于CPU 高效在内存访问行上的数据，这里还有一些小小的区分：<ol>
+<li>Schema-on-read/Schemaless: 不一定要求系统存储同一个模式，可能同时存在多个版本的数据</li>
+<li>某个行集合的数据，拥有相同的 Schema</li>
+</ol>
+</li>
+<li>ORC / Parquet 的 Schema，和行的 Schema 相比，可能还会把列存在一起。</li>
+</ol>
+<p>程序员可能每天或多或少要和它们打交道。这些数据格式需求是不一样的。尽管有一些学术上多维的区分，比如说：</p>
+<ol>
+<li>数据是否有 Schema</li>
+<li>是否支持 nested</li>
+<li>存储的行列</li>
+<li>是否支持 Streaming</li>
+<li>是否 human-readable</li>
+<li>是否是和某个语言绑定的（例如 Python pickle, Java Serialize 等，ddia 认为这些编码的兼容性不是很好，同时可能有些安全隐患、性能缺陷）</li>
+</ol>
+<p>但我们这边还是松散的随便扯扯，而且尽量不讨论语言绑定的东西。下面有一张扯图，图一乐？我们这里也不会涉及消息边界等内容。</p>
+<p><img src="https://image.mwish.me/blog-image/2B9240B1-E512-4373-8666-775B6051EB91.png" alt="2B9240B1-E512-4373-8666-775B6051EB91"></p>
+<p>另外，本文只代表本人个人理解和一些记录。如有错误还烦请各位读者矫正。</p>
+<h2 id="接口的编码数据"><a href="#接口的编码数据" class="headerlink" title="接口的编码数据"></a>接口的编码数据</h2><h3 id="JSON"><a href="#JSON" class="headerlink" title="JSON"></a>JSON</h3><p>一个常用的选项是 HTTP + REST + JSON.  按照分类，JSON 可以视作 弱schema + human-readable 的数据。这样的数据也包括 XML。JSON 被诟病的地方如下：</p>
+<ol>
+<li>格式上性能不一定很好，包括本身空间大小较大</li>
+<li>对二进制数据不一定有很好的支持</li>
+<li>…</li>
+</ol>
+<p>上面这些内容让它可能会受到一定的诟病，但是对于接口而言，它有着开发方便、程序员可读、跨语言等诸多优点，此外，它的工具链相当齐全（当然，这也有 fast-JSON 等问题？）。JSON 已经支持了大规模的 web 系统，相信它还会起到很多的作用。</p>
+<p>关于空间放大就不谈了，都 JSON 了，也别考虑这个了。</p>
+<h3 id="Thrift-amp-amp-Protocol-Buffer-常见的-rpc-消息格式"><a href="#Thrift-amp-amp-Protocol-Buffer-常见的-rpc-消息格式" class="headerlink" title="Thrift &amp;&amp; Protocol Buffer: 常见的 rpc 消息格式"></a>Thrift &amp;&amp; Protocol Buffer: 常见的 rpc 消息格式</h3><p>尽管 pb 有不同版本，thrift 也是不同格式，但是它们原理是类似的。可以看：<a target="_blank" rel="noopener" href="https://thrift.apache.org/static/files/thrift-20070401.pdf">https://thrift.apache.org/static/files/thrift-20070401.pdf</a></p>
+<p>协议上，thrift 本身是二进制的协议，对于给定的格式描述文件，它能够生成出对应语言的 序列化/反序列化 代码。用于处理这样的格式。（当然，不同语言处理可能有一定的问题，比如 thrift-0.9.2 生成的 C++ 代码中，生成了 <code>virtual dtor</code> 和 copy ctor，但是没有生成 <code>move ctor</code> ）。</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://github.com/apache/thrift/blob/master/doc/specs/thrift-binary-protocol.md">https://github.com/apache/thrift/blob/master/doc/specs/thrift-binary-protocol.md</a></li>
+<li><a target="_blank" rel="noopener" href="https://github.com/apache/thrift/blob/master/doc/specs/thrift-compact-protocol.md">https://github.com/apache/thrift/blob/master/doc/specs/thrift-compact-protocol.md</a></li>
+</ul>
+<p>Thrift 本身对于每个字段需要做一些定义，比如：</p>
+<figure class="highlight thrift"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">enum</span> <span class="title">TweetType</span> </span>&#123;</span><br><span class="line">    TWEET,       <span class="comment">// 1</span></span><br><span class="line">    RETWEET = <span class="number">2</span>, <span class="comment">// 2</span></span><br><span class="line">    DM = <span class="number">0</span>xa,    <span class="comment">// 3</span></span><br><span class="line">    REPLY</span><br><span class="line">&#125;                <span class="comment">// 4</span></span><br><span class="line"></span><br><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">Tweet</span> </span>&#123;</span><br><span class="line">    <span class="number">1</span>: <span class="keyword">required</span> <span class="type">i32</span> userId;</span><br><span class="line">    <span class="number">2</span>: <span class="keyword">required</span> <span class="type">string</span> userName;</span><br><span class="line">    <span class="number">3</span>: <span class="keyword">required</span> <span class="type">string</span> text;</span><br><span class="line">    <span class="number">4</span>: <span class="keyword">optional</span> Location loc;</span><br><span class="line">    <span class="number">5</span>: <span class="keyword">optional</span> TweetType tweetType = TweetType.TWEET <span class="comment">// 5</span></span><br><span class="line">    <span class="number">16</span>: <span class="keyword">optional</span> <span class="type">string</span> language = <span class="string">&quot;english&quot;</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>我们不讨论编码细节，它大致会将每个字段做编码，表示成：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">Binary protocol field header and field value:</span><br><span class="line">+--------+--------+--------+--------+...+--------+</span><br><span class="line">|tttttttt| field id        | field value         |</span><br><span class="line">+--------+--------+--------+--------+...+--------+</span><br><span class="line"></span><br><span class="line">Binary protocol stop field:</span><br><span class="line">+--------+</span><br><span class="line">|00000000|</span><br><span class="line">+--------+</span><br></pre></td></tr></table></figure>
+<ol>
+<li>字段类型</li>
+<li><strong>字段 id</strong></li>
+<li>字段值</li>
+<li>Stop field</li>
+</ol>
+<p>Compact 格式与上述类似，不过采取了更紧凑的格式，不影响我们前面介绍的逻辑：<a target="_blank" rel="noopener" href="https://github.com/apache/thrift/blob/master/doc/specs/thrift-compact-protocol.md#struct-encoding">https://github.com/apache/thrift/blob/master/doc/specs/thrift-compact-protocol.md#struct-encoding</a></p>
+<p>需要注意的是，这样的格式花了不少部分在处理兼容性上。可以当作这是字段 id 参与实现的。假设传来的字段没有某个字段 id，这里会在解析后的结果做对应的标记；如果传来的包含自己的 idl 没有定义的 field id，这里也会跳过去。通过这种方式，thrift 完成了一些扩展性的支持。</p>
+<p>当然，这也衍生了一些骚操作。如果你的 thrift 结构有 10个字段，但你又的地方只关心两个字段，你可以写个只有对应两个字段的 idl，让它生成结构来解析。那问题来了，这个停止是什么情况呢？假设原本有 0-10 个字段，然后这个解析检测到 stop field 就会停止，所以不会有问题</p>
+<p>那么，这个结构一些放大在什么地方呢？本身 字段类型、字段 id 会有一部分空间放大，然后变长字段存储也有部分放大。</p>
+<p>thrift 和 pb 经常用于作为一些 Rpc 对应的格式，因为便于增和改，这使得它们在开发上有着一定的优势。同时，虽然它们本身不是 human-readable 的，但是 thrift 会生成一些转化成 <code>DebugString</code> 或者 JSON 的方式。</p>
+<h4 id="代码生成和效率"><a href="#代码生成和效率" class="headerlink" title="代码生成和效率"></a>代码生成和效率</h4><p>默认生成的 cpp 代码其实比较草台，对于 cpp 代码而言，可以指定生成模版代码、生成带 move 的代码、开启一些编译相关的优化来提升性能。</p>
+<h3 id="Avro"><a href="#Avro" class="headerlink" title="Avro"></a>Avro</h3><p>Avro 的编码模式可以见： <a target="_blank" rel="noopener" href="https://avro.apache.org/docs/current/spec.html">https://avro.apache.org/docs/current/spec.html</a> 。这里不讨论 Avro 的 JSON 模式。相对于 Pb/Thrift，Avro 的二进制格式不会携带 <code>type</code> 和 <code>field id</code>. 相对的，它应该标示出写入自己的应该是什么 Schema。</p>
+<p>这里 Avro 的交互可能包含双方的 Schema 交换，因为读者需要知道写者的编码，例如：<a target="_blank" rel="noopener" href="https://avro.apache.org/docs/current/spec.html#Handshake">https://avro.apache.org/docs/current/spec.html#Handshake</a></p>
+<p>如上所述，Avro 的空间少去了 字段类型、字段 id 的空间放大，<strong>是一个还算紧凑的格式</strong>，但本身它需要知道数据是什么版本的。当然，我们最好不需要每条 Avro 数据都带一个 JSON 的格式描述文件，这里可能有不同的方式，来使这个开销变得更小：</p>
+<ol>
+<li>通过 Handshake 交换版本</li>
+<li>有一个版本号 <code>[0, 1, 2, 3]</code>. 然后自己二进制数据带上这个版本号，让读者能够成功解析</li>
+<li>对于一些大文件，可能可以在文件头带上 Avro 格式描述，然后后面存放同一个版本的写入内容。</li>
+</ol>
+<p>Avro 可以用于 RPC，但笔者在生产中少有见到用 Avro 做交换格式的地方。似乎它的使用场景更多还是在存储数据的时候使用。如果有读者知道对应的场景不妨联系笔者。</p>
+<h3 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h3><p>大部分 RPC 格式中，用户希望有一定的 Schema，同时也支持对结构进行一些变更。用户通过 Rpc 发送的信息通常不会很大，而且大部分时候也并不应该很大，例如 pb 在官方文档中<a target="_blank" rel="noopener" href="https://developers.google.com/protocol-buffers/docs/techniques">表示</a>，它不应该处理 Large Data Sets。如果你有数 kB 甚至数 MB 的数据，那么你可能要考虑一下一些其他的方式。毕竟，对这些 RPC 消息的解析一般包含连续或者不连续内存的 memcpy。</p>
+<h2 id="行格式"><a href="#行格式" class="headerlink" title="行格式"></a>行格式</h2><h3 id="需求和大概的设计"><a href="#需求和大概的设计" class="headerlink" title="需求和大概的设计"></a>需求和大概的设计</h3><p>在关系型数据库中，我们有行 (Row/Tuple) 和 列 (Column/Attribute) ，直观的描述如下所述：</p>
+<p><img src="https://image.mwish.me/blog-image/700px-Relational_database_terms.svg.png" alt="700px-Relational_database_terms.svg"></p>
+<p>这样的格式本身是用户定义的，列可以是变长/定长的（行也显然可以）。我们忽略 BLOB 等对象。用户通常会有下列的请求：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">SELECT</span> table.col1, table.col5 <span class="keyword">FROM</span> <span class="keyword">table</span> <span class="keyword">WHERE</span> table.col3 <span class="operator">&lt;</span> <span class="number">100</span>;</span><br></pre></td></tr></table></figure>
+<p>我们不考虑索引等优化，也不考虑 Row 是以 k-v 还是 Page 的形式组织，仅从行的方面考虑，这里需要读到对应每个行的 <code>col1</code> <code>col5</code> 和 <code>col3</code> 字段。</p>
+<p>通常，RPC 协议要求的是对变更敏感，且能够完整解析。而行格式更多不会完全解析，而是要求能在内存中快速寻找到每行中用户指定的列。同时，行的大小会占用盘/内存的空间，故其大小也应受限制。</p>
+<p>一般的数据库当中，会有 <code>Catalog System</code>。大部分情况下，可以认为，在某张表中，每行的 Schema 都是相同的。这给我们提供了很大的便利。当然，这里可能加一列之类的 DDL 执行的时候，系统需要做比较多的事情，来给原来的每行添加一列。之前也看到阿里的数据库团队对这点进行的优化: <a target="_blank" rel="noopener" href="http://mysql.taobao.org/monthly/2020/03/01/">http://mysql.taobao.org/monthly/2020/03/01/</a></p>
+<p>此外，这里还要关注某列数据为 <code>null</code> 的情况。这一点也会影响格式的实现。另外一个影响实现的内容是变长字段（甚至 nested 字段）的存储。</p>
+<p>最后一点需要注意的是，我们刚才谈及 RPC 协议等，它们大部分都是非常通用的协议。但是对于行数据来说，它们通常和数据库系统别的地方实现有很强的相关度：</p>
+<ol>
+<li>是否使用读时模式？</li>
+<li>行是怎么被组织的？是被存储到 kv 中，还是被存储到 Page 中？</li>
+<li>有没有什么特殊的记录和标记，例如行删除、事务标记等？</li>
+<li>有没有什么 hidden column。</li>
+</ol>
+<p>为了简化描述，我们将集中于 <code>Tuple</code> 和 <code>Attribute</code> 相关的内容，并忽略那些上层的部分（尽管它们对实现者或者某些用户来说可能更加重要）</p>
+<h3 id="PostgreSQL"><a href="#PostgreSQL" class="headerlink" title="PostgreSQL"></a>PostgreSQL</h3><p><img src="https://image.mwish.me/blog-image/0A3074B3-A1EA-4CAE-80DC-BA37D2C40CC0.png" alt="0A3074B3-A1EA-4CAE-80DC-BA37D2C40CC0"></p>
+<p>PG 的 Page 格式如上所述。我们关注：</p>
+<ol>
+<li>Tuple Header 里面包含了下面的信息：<ol>
+<li>Tuple 中是否有值为 Null 的 Attribute</li>
+<li>如果有值为 Null 的 Attribute，那么后面会存放一个 BitSet，来表示第 <code>i</code> 个字段的数据是否是 Null</li>
+</ol>
+</li>
+<li>Tuple 里面会存储所有的数据<ol>
+<li>对于 Null 的 Attribute，不会存储对应的值</li>
+<li>对于非 Null 的数据<ol>
+<li>如果是定长的数据，那么，这里直接会存储对应的内容，比如如果是 i32，那就存储 4bytes。</li>
+<li>如果是变长的数据，那么，这里会存储 1b 或者 4b 的长度，再存储对应的内容。</li>
+</ol>
+</li>
+</ol>
+</li>
+</ol>
+<p>我们假设某个表格式是 <code>(i32, i64, bytes, i32)</code>，那么，可能存储的格式如下：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">-- 对于数据 (1, 2, &quot;abc&quot;, 4), 可能是:</span><br><span class="line">[Header: 没有有 Null 的字段] [1(4bytes), 2(8bytes), [3(1bytes), &quot;abc&quot;(3bytes)], 4(4bytes)]</span><br><span class="line"></span><br><span class="line">-- 对于数据 (1, 2, 一个很长的字符串, 4), 可能是:</span><br><span class="line">[Header: 没有有 Null 的字段] [1(4bytes), 2(8bytes), [长度(4bytes), 很长的字符串], 4(4bytes)]</span><br><span class="line"></span><br><span class="line">-- 对于数据 (1, 2, Null, 4), 可能是:</span><br><span class="line">[Header: 有 Null 的字段] [1byte, 表示第三个字段是 Null] [1(4bytes), 2(8bytes), 4(4bytes)]</span><br></pre></td></tr></table></figure>
+<p>当然，对于计算机来说，访问未对齐的数据可能是有额外开销的。PostgreSQL 还指定了让数据对齐的选项。</p>
+<p>比如对 <code>(i32, i64, i32)</code>，如果都不为 Null，<em>可能</em>有：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">i32 存放的: 4bytes</span><br><span class="line">padding: 4bytes &lt;-- 注意这个</span><br><span class="line">i64: 8bytes</span><br><span class="line">i32: 4bytes</span><br></pre></td></tr></table></figure>
+<p>（注：以上例子只作为 padding 的演示，实际上数据可能被编排为 <code>(i32, i32, i64)</code> ）</p>
+<p>下面我们来看看</p>
+<p>如果有变长字段、Null 字段的话，需要读取第 <code>k</code> 列，可能要每列读过来，找到第一列：</p>
+<ol>
+<li>判断它是否是 Null，如果是，那么偏移量不变</li>
+<li>如果不是 Null：<ol>
+<li>是定长的话，跳过对应长度即可</li>
+<li>是变长数据的话，可能要读取它的长度，再跳过对应的长度</li>
+</ol>
+</li>
+</ol>
+<p>比方说，假设像 <code>(i32, i64, i32)</code> 的 Tuple 中，<strong>保证没有数据是 Null</strong>。那我们可以知道（考虑 padding，假设和之前描述的格式一样）：</p>
+<ol>
+<li>第一列偏移量肯定是 <code>0</code></li>
+<li>第二列偏移量肯定是 <code>8</code></li>
+<li>第三列偏移量肯定是 <code>16</code></li>
+</ol>
+<p>具体一些细节优化内容可以在 PostgreSQL 的 <code>src/include/access/htup_details.h</code> 等文件里找到。PG 也可以用 schema cache 加速字段寻址。</p>
+<h4 id="讨论"><a href="#讨论" class="headerlink" title="讨论"></a>讨论</h4><p>PG 的格式本身应该是比较省空间的。空间放大来自于：</p>
+<ol>
+<li>Null BitSet</li>
+<li>存放字符串长度的区域</li>
+</ol>
+<p>同时，读取 PG 偏后的字段，可能会导致较低的性能，所以 PG 可能会这样处理格式：</p>
+<ol>
+<li>先存放 <strong>非 Null</strong> 且<strong>定长</strong>的列</li>
+<li>在存放 <strong>定长</strong> 且 <strong>可能为 Null</strong> 的列</li>
+<li>存放变长的列</li>
+</ol>
+<p>此外，有一些别的格式（非 PG）可能会考虑下面几种变体：</p>
+<ol>
+<li>每隔几列添加一个索引，比方说，每隔8列插入一个偏移量，寻找第 <code>(8n + k)</code> 列的时候，可以通过这个偏移量，先寻找到 <code>8n</code> 列的偏移量，再处理。笔者认为，这种方法相当于空间换 CPU 时间。虽然笔者本人没有试验过，但是这种方法可能对列很多的数据有一定的效果。</li>
+<li>把格式做成偏移量固定的格式。比方说，如果  <code>(i32, i64, i32)</code> 中第二列是 Null，也写对应的 8byte。这种方式让每个字段有一个固定的偏移量，能够快速完成寻址。笔者个人不是很喜欢这种方法，因为对于稀疏格式，它可能带来极大的空间放大。</li>
+</ol>
+<h3 id="InnoDB-Compact"><a href="#InnoDB-Compact" class="headerlink" title="InnoDB Compact"></a>InnoDB Compact</h3><ol>
+<li><a target="_blank" rel="noopener" href="https://mariadb.com/kb/en/innodb-compact-row-format/">https://mariadb.com/kb/en/innodb-compact-row-format/</a></li>
+<li><a target="_blank" rel="noopener" href="https://dev.mysql.com/doc/refman/5.7/en/innodb-row-format.html">https://dev.mysql.com/doc/refman/5.7/en/innodb-row-format.html</a></li>
+</ol>
+<p>InnoDB 是笔者心中的开源的地表最强存储引擎，Compact 格式在 MySQL 5.7 之后，作为 MySQL 的默认存储格式而存在。这种格式有着更小的空间大小，相对来说比 DYNAMIC 格式更耗费 CPU 一些。</p>
+<p><img src="https://image.mwish.me/blog-image/21_619_e2fcf037b107485.jpeg" alt="21_619_e2fcf037b107485"></p>
+<p>（图片来自：<a target="_blank" rel="noopener" href="https://www.alibabacloud.com/forum/read-446）">https://www.alibabacloud.com/forum/read-446）</a></p>
+<p>我们忽略一些特殊字段，可以看到，这个格式除了一些标志位，会有：</p>
+<ol>
+<li>Nullable Bitmap （同我们之前介绍的 Null BitSet）</li>
+<li>Column Length Fields：变长字段的内容</li>
+<li>具体的数据</li>
+</ol>
+<p>这里相当于把之前 PG 存放的变长字段长度放到了一个独立的区域中。</p>
+<h3 id="杂项-Google-FlatBuffers"><a href="#杂项-Google-FlatBuffers" class="headerlink" title="杂项: Google FlatBuffers"></a>杂项: Google FlatBuffers</h3><p>FlatBuffers 是 Google 的一种序列化格式，相对而言，它是更通用的一种格式，强调了快速的解析（甚至不需要解析），我们可以看到它和行格式有一些异曲同工之妙。它的定义如：<a target="_blank" rel="noopener" href="https://google.github.io/flatbuffers/flatbuffers_internals.html">https://google.github.io/flatbuffers/flatbuffers_internals.html</a></p>
+<p><img src="https://image.mwish.me/blog-image/GD4XrgCFBDro_c0FAGwOzSsAAAAAbj0JAAAB.jpeg" alt="GD4XrgCFBDro_c0FAGwOzSsAAAAAbj0JAAAB"></p>
+<p>这里，它会有一些数据来指向数据具体存放的地方，以保证不需要解析即可访问。同时，这个结构还支持 nested 和一定程度上的更新：</p>
+<p><img src="https://image.mwish.me/blog-image/GI9ytQBfig2BZtYCAAZUtV0AAAAAbj0JAAAB.jpeg" alt="GI9ytQBfig2BZtYCAAZUtV0AAAAAbj0JAAAB"></p>
+<p>详细内容可以参考：<a target="_blank" rel="noopener" href="https://engineering.fb.com/2015/07/31/android/improving-facebook-s-performance-on-android-with-flatbuffers/">https://engineering.fb.com/2015/07/31/android/improving-facebook-s-performance-on-android-with-flatbuffers/</a> </p>
+<h3 id="Order-Preserving-Row-Encoding"><a href="#Order-Preserving-Row-Encoding" class="headerlink" title="Order Preserving Row Encoding"></a>Order Preserving Row Encoding</h3><p>如果要把行格式存储到 key-value 的 key 中，对于 ordered key-value，显然会希望这些 key 是可以 scan</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://activesphere.com/blog/2018/08/17/order-preserving-serialization">https://activesphere.com/blog/2018/08/17/order-preserving-serialization</a></li>
+<li><a target="_blank" rel="noopener" href="https://github.com/facebook/mysql-5.6/wiki/MyRocks-record-format">https://github.com/facebook/mysql-5.6/wiki/MyRocks-record-format</a></li>
+</ul>
+<p>上面是通用格式，值得一提的是，对字符串编码，两种格式处理方式不一样：</p>
+<ul>
+<li>FoundationDB 会使用 <code>0x00 0xff</code> 转换 <code>0x00</code>，然后每个类型的字段都有自己的开头（一个固定的 byte）和结尾（0x00）等标志。解析的时候，遇到 0x00，需要前瞻一个 byte，查看下一个 byte 是什么。用 <code>0x00 0xff</code> 是因为一个性质：如果一个字符串包含内容 <code>0x00</code>, 那么它小于所有真实的内容，大于结束在这里的字符串（即 <code>0x00</code> 表示字符串完了的内容），在这里完结的字符串要么就终止了，要么开启下一个 type 标记，下一个 type 标记必定不会用 <code>0xFF</code> 作为开头</li>
+<li>MyRocks 这套把字符串分成 Group，比如 8 个为一组，每一组附赠一个 byte 来描述这个 Group 的状态，这个比较 trickey 的是空字符串的处理，我曾经空字符串不留内容，显然这是个 bug。</li>
+</ul>
+<h3 id="总结-1"><a href="#总结-1" class="headerlink" title="总结"></a>总结</h3><p>关于行格式，大部分时候我们不会和 pb 一样，全部读取/反序列化，通常，访问会只访问对应的 column，这要求我们快速读取 column。当然，有的用户也会定义一些变长字段，然后在里面存放 pb 数据。</p>
+<p>行格式的逻辑通常和数据库的其他组织挂钩，但我们仍然能看到一些相同的工程设计。除了上面我提到的，还可以看看 TiDB / OB 的行格式，并考量它们是如何权衡 CPU开销和格式空间的开销的。</p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%8E%A5%E5%8F%A3%E7%9A%84%E7%BC%96%E7%A0%81%E6%95%B0%E6%8D%AE"><span class="toc-number">1.</span> <span class="toc-text">接口的编码数据</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#JSON"><span class="toc-number">1.1.</span> <span class="toc-text">JSON</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Thrift-amp-amp-Protocol-Buffer-%E5%B8%B8%E8%A7%81%E7%9A%84-rpc-%E6%B6%88%E6%81%AF%E6%A0%BC%E5%BC%8F"><span class="toc-number">1.2.</span> <span class="toc-text">Thrift &amp;&amp; Protocol Buffer: 常见的 rpc 消息格式</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E4%BB%A3%E7%A0%81%E7%94%9F%E6%88%90%E5%92%8C%E6%95%88%E7%8E%87"><span class="toc-number">1.2.1.</span> <span class="toc-text">代码生成和效率</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Avro"><span class="toc-number">1.3.</span> <span class="toc-text">Avro</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-number">1.4.</span> <span class="toc-text">总结</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%A1%8C%E6%A0%BC%E5%BC%8F"><span class="toc-number">2.</span> <span class="toc-text">行格式</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%9C%80%E6%B1%82%E5%92%8C%E5%A4%A7%E6%A6%82%E7%9A%84%E8%AE%BE%E8%AE%A1"><span class="toc-number">2.1.</span> <span class="toc-text">需求和大概的设计</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#PostgreSQL"><span class="toc-number">2.2.</span> <span class="toc-text">PostgreSQL</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E8%AE%A8%E8%AE%BA"><span class="toc-number">2.2.1.</span> <span class="toc-text">讨论</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#InnoDB-Compact"><span class="toc-number">2.3.</span> <span class="toc-text">InnoDB Compact</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%9D%82%E9%A1%B9-Google-FlatBuffers"><span class="toc-number">2.4.</span> <span class="toc-text">杂项: Google FlatBuffers</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Order-Preserving-Row-Encoding"><span class="toc-number">2.5.</span> <span class="toc-text">Order Preserving Row Encoding</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%80%BB%E7%BB%93-1"><span class="toc-number">2.6.</span> <span class="toc-text">总结</span></a></li></ol></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2022/01/14/format-thinking/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2022/01/14/format-thinking/&text=谈谈格式"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2022/01/14/format-thinking/&title=谈谈格式"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2022/01/14/format-thinking/&is_video=false&description=谈谈格式"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=谈谈格式&body=Check out this article: http://blog.mwish.me/2022/01/14/format-thinking/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2022/01/14/format-thinking/&title=谈谈格式"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2022/01/14/format-thinking/&title=谈谈格式"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2022/01/14/format-thinking/&title=谈谈格式"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2022/01/14/format-thinking/&title=谈谈格式"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2022/01/14/format-thinking/&name=谈谈格式&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2022/01/14/format-thinking/&t=谈谈格式"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

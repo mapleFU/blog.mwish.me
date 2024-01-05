@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="上一节我们介绍了 executor, 这节是优化器的入门。用户的 SQL 可以用某种关系代数的表达式表示。同时，我们可以利用关系代数推出某种等价性，两个关系表达式在所有可能的 db 集合都会产生相同元素集，那么这两个表达式是 等价(equivalent) 的。 上面我翻译的有点垃圾，贴下原文：  Two relational-algebra expressions are said to be e">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Notes on Query Optimization">
+<meta property="og:url" content="http://blog.mwish.me/2021/02/08/Notes-on-Query-Cost-Estimation/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="上一节我们介绍了 executor, 这节是优化器的入门。用户的 SQL 可以用某种关系代数的表达式表示。同时，我们可以利用关系代数推出某种等价性，两个关系表达式在所有可能的 db 集合都会产生相同元素集，那么这两个表达式是 等价(equivalent) 的。 上面我翻译的有点垃圾，贴下原文：  Two relational-algebra expressions are said to be e">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/F86C9C0C-6F5F-4EB7-ACC7-9DD1DFA17AF9.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/3CDD7A79-37C8-4B1E-8CA5-2B55F8E8587B.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/513E6593-9478-41F7-A551-5315F009DA2F.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/304D1058-66C2-45B4-8A84-5AE5AF25CFA5.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/FCC0B444-CCC3-4E26-9767-2A887566FBBB.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/68AFA23D-75CC-4247-9468-5E944A08F7CF.png">
+<meta property="article:published_time" content="2021-02-08T15:31:30.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.565Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/F86C9C0C-6F5F-4EB7-ACC7-9DD1DFA17AF9.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>Notes on Query Optimization</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2021/03/10/Linux-API-mmap-flock/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2021/02/08/Notes-on-Query-Execution/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2021/02/08/Notes-on-Query-Cost-Estimation/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2021/02/08/Notes-on-Query-Cost-Estimation/&text=Notes on Query Optimization"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2021/02/08/Notes-on-Query-Cost-Estimation/&title=Notes on Query Optimization"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2021/02/08/Notes-on-Query-Cost-Estimation/&is_video=false&description=Notes on Query Optimization"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Notes on Query Optimization&body=Check out this article: http://blog.mwish.me/2021/02/08/Notes-on-Query-Cost-Estimation/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2021/02/08/Notes-on-Query-Cost-Estimation/&title=Notes on Query Optimization"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2021/02/08/Notes-on-Query-Cost-Estimation/&title=Notes on Query Optimization"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2021/02/08/Notes-on-Query-Cost-Estimation/&title=Notes on Query Optimization"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2021/02/08/Notes-on-Query-Cost-Estimation/&title=Notes on Query Optimization"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2021/02/08/Notes-on-Query-Cost-Estimation/&name=Notes on Query Optimization&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2021/02/08/Notes-on-Query-Cost-Estimation/&t=Notes on Query Optimization"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Estimating-Statictics"><span class="toc-number">1.</span> <span class="toc-text">Estimating Statictics</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Join-size-Estimation"><span class="toc-number">1.1.</span> <span class="toc-text">Join size Estimation</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%85%B6%E4%BB%96%E4%BC%B0%E8%AE%A1"><span class="toc-number">1.2.</span> <span class="toc-text">其他估计</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%9F%A5%E8%AF%A2%E7%BB%93%E6%9E%9C%E7%9A%84%E5%88%86%E6%9E%90"><span class="toc-number">1.3.</span> <span class="toc-text">查询结果的分析</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BF%A1%E6%81%AF%E6%94%B6%E9%9B%86"><span class="toc-number">2.</span> <span class="toc-text">信息收集</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Notes on Query Optimization
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2021-02-08T15:31:30.000Z" itemprop="datePublished">2021-02-08</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>上一节我们介绍了 executor, 这节是优化器的入门。用户的 SQL 可以用某种关系代数的表达式表示。同时，我们可以利用关系代数推出某种等价性，两个关系表达式在所有可能的 db 集合都会产生相同元素集，那么这两个表达式是 等价(equivalent) 的。</p>
+<p>上面我翻译的有点垃圾，贴下原文：</p>
+<blockquote>
+<p>Two relational-algebra expressions are said to be <strong>equivalent</strong> if, on every legal data- base instance, the two expressions generate the same set of tuples. (Recall that a legal database instance is one that satisfies all the integrity constraints specified in the data- base schema.) </p>
+<p>Note that the order of the tuples is irrelevant; the two expressions may generate the tuples in different orders, but would be considered equivalent as long as the set of tuples is the same.</p>
+</blockquote>
+<p>DB 优化的过程需要：</p>
+<ol>
+<li>生成与给定 expression 逻辑等价的表达式</li>
+<li>产生不同的查询计划</li>
+<li>估计每个 Plan 的开销，选择代价最小的</li>
+</ol>
+<p>完成 (1) 需要有一些等价规则：</p>
+<blockquote>
+<p>To implement the first step, the query optimizer must generate expressions equiv- alent to a given expression. It does so by means of <em>equivalence rules</em> that specify how to transform an expression into a logically equivalent one.</p>
+</blockquote>
+<p>随即我们获得2，然后根据一些固定规则或者统计信息来进行优化。</p>
+<p>Equivalent Rules 建议阅读原书，感觉我怎么讲都是把它们图贴一遍…总的来说，这些 rules 有下列的含义：</p>
+<ul>
+<li>关系代数有一些等价规则，我们希望，部分规则适用以后，产生等价于原始关系的结果，但产生较少中间关系</li>
+<li>A set of equivalence rules is said to be <strong>minimal</strong> if no rule can be derived from any combination of the others. </li>
+</ul>
+<p>此外，一些 Join 相关的，也能根据索引、公共属性等 Rules 来处理。</p>
+<p><img src="https://image.mwish.me/blog-image/F86C9C0C-6F5F-4EB7-ACC7-9DD1DFA17AF9.png" alt="F86C9C0C-6F5F-4EB7-ACC7-9DD1DFA17AF9"></p>
+<p>上面的 <code>genAllEquivalent(E)</code> , 对于给定的 Expression <code>E</code> , 生成所有的等价表达式, 中间的部分阶段可以被称为 transformation。</p>
+<p>等等，上面你肯定觉得太废了，实际上，我们可以减少开销：</p>
+<ul>
+<li>E 和 E’ 可以在内存中共享一些表达式，感觉类似 COW-Tree 那样</li>
+<li>如果 Optimizer 在这个阶段分析 cost, 那么它能够减少很多不必要的生成。</li>
+</ul>
+<blockquote>
+<p>Some query optimizers use equivalence rules in a heuristic manner. With such an approach, if the left-hand side of an equivalence rule matches a subtree in a query plan, the subtree is rewritten to match the right-hand side of the rule. This process is repeated till the query plan cannot be further rewritten. Rules must be carefully chosen such that the cost decreases when a rule is applied, and rewriting must eventually terminate. Although this approach can be implemented to execute quite fast, there is no guarantee that it will find the optimal plan.</p>
+</blockquote>
+<p>上述描述的是 RBO 的概念，</p>
+<blockquote>
+<p>Yet other query optimizers focus on join order selection, which is often a key factor in query cost. We discuss algorithms for join-order optimization in Section 16.4.1.</p>
+</blockquote>
+<h2 id="Estimating-Statictics"><a href="#Estimating-Statictics" class="headerlink" title="Estimating Statictics"></a>Estimating Statictics</h2><p>一个操作的代价依赖于统计信息，例如：</p>
+<ul>
+<li>走不走某个索引？如果你要查的数据少的话，走索引能大大优化性能，但是你本身查询数据大，又要回表，那你就相当于白走一趟。</li>
+<li>走哪个索引？我们现在有很多索引，你要挑选可能比较少的一个来走。</li>
+<li>Join 的顺序，我们怎么 Join 才能代价比较小</li>
+</ul>
+<p>同时，我们不能先验知道所有数据，比如用户传了一个 <code>a &gt; 5 &amp;&amp; a &lt; 10</code>, 那对应的行应该有多少呢？这个问题可能影响上述的决策。</p>
+<p>数据库系统的 Catalog 可能包含下列信息：</p>
+<ul>
+<li>$n_r$ , 包含 r 的 tuple 数目</li>
+<li>$b_r$, r 相关的 tuple 数目</li>
+<li>$l_r$ ，关系 r 中每个 tuple 包含的 bytes</li>
+<li>$f_r$, 一个磁盘块能容纳 r 中 tuple 的个数</li>
+<li>$V(A, r)$, 关系 r 中属性 A 的非重复值个数。</li>
+</ul>
+<p>索引相关的，比如 B+Tree 的信息，或者有没有索引，可能也可以维护在 Catalog 中。</p>
+<p>此外，db 可以维护一个 histogram:</p>
+<p><img src="https://image.mwish.me/blog-image/3CDD7A79-37C8-4B1E-8CA5-2B55F8E8587B.png" alt="3CDD7A79-37C8-4B1E-8CA5-2B55F8E8587B"></p>
+<p>通过直方图，来表示细粒度区间的取值。否则，db 可能会只保存最大值和最小值，然后假设数据分布是均匀的。</p>
+<p>那么，我们有以上信息之后，可以做一些基本的估计：</p>
+<ul>
+<li>$\sigma_{A=v}(r)$  均匀分布的情况下，可选有 $n_r / V(A, r)$ 个 tuple, 如果有直方图的话，可以在直方图对应取值定位。</li>
+<li>$\sigma_{A&lt;v}(r)$ 等同理</li>
+<li>Conjunction/Disjunction 中，假设个条件独立，有下列计算方式：<br><img src="https://image.mwish.me/blog-image/513E6593-9478-41F7-A551-5315F009DA2F.png" alt="513E6593-9478-41F7-A551-5315F009DA2F"><br><img src="https://image.mwish.me/blog-image/304D1058-66C2-45B4-8A84-5AE5AF25CFA5.png" alt="304D1058-66C2-45B4-8A84-5AE5AF25CFA5"></li>
+</ul>
+<p>特别地指出，有一些特殊的高频值，可以被特殊的单独记录到一个高频值集合中。然后这些值的估计可以走这个单独的几何，来防止这些特殊值影响统计。</p>
+<h3 id="Join-size-Estimation"><a href="#Join-size-Estimation" class="headerlink" title="Join size Estimation"></a>Join size Estimation</h3><ul>
+<li>笛卡尔积大小就是 * 一下得了，反而最简单，$r \times s$ 就可以了，产生结果每个 tuple 大小 $l_r + l_s$</li>
+</ul>
+<p>估计自然连接的大小会复杂很多：</p>
+<ul>
+<li>$R \cap S = \emptyset $ ，退化为笛卡尔积的计算方式</li>
+<li>如果 join 的是 R 的 key, 那元素至多不会多于 S。这个可以用 $V(A, s)$ 来做一个估计：<ul>
+<li>对一个 R 中的 tuple t，可能会与 $n_s / V(A, s)$ 的产生连接</li>
+<li>所以总共 $(n_r * n_s) / V(A, s)$ 组</li>
+<li>但是上面是在各个概率相等的情况下出现的，实际上可能需要更复杂的区间统计。同时另一种算法会给出  $(n_r * n_s) / V(A, r)$, 一般取小的</li>
+</ul>
+</li>
+</ul>
+<h3 id="其他估计"><a href="#其他估计" class="headerlink" title="其他估计"></a>其他估计</h3><p><img src="https://image.mwish.me/blog-image/FCC0B444-CCC3-4E26-9767-2A887566FBBB.png" alt="FCC0B444-CCC3-4E26-9767-2A887566FBBB"></p>
+<h3 id="查询结果的分析"><a href="#查询结果的分析" class="headerlink" title="查询结果的分析"></a>查询结果的分析</h3><p>假如我们需要 $V(A, \sigma_{\theta}(r))$, 那我们要对他内部分析：</p>
+<ol>
+<li>可以取它为 A 等于单个值，或者 A 等于一个集合</li>
+<li>可以乘以一个系数 $V(A, r) * s$, s 为系数</li>
+<li>可以用一些更精确的概率来分析</li>
+</ol>
+<p>假如我们要估计 Join 的结果：</p>
+<p><img src="https://image.mwish.me/blog-image/68AFA23D-75CC-4247-9468-5E944A08F7CF.png" alt="68AFA23D-75CC-4247-9468-5E944A08F7CF"></p>
+<p>简单来说，看 Join 条件是独立的，跟A有关，跟B有关，还是都有关，然后根据概率来估计</p>
+<h2 id="信息收集"><a href="#信息收集" class="headerlink" title="信息收集"></a>信息收集</h2><p>如果每个 Update 都收集统计信息就太废了。一来系统有 HLL 这些模糊方式，和采样，二来系统可以在一段时间后手动 analyze 或者自动重建统计信息。</p>
+<p>MySQL 的 InnoDB 中，有一个 <code>innodb_table_stats</code> 表，大概内容如下：</p>
+<p>它的配置可以参考：<a target="_blank" rel="noopener" href="https://dev.mysql.com/doc/refman/5.7/en/innodb-performance-optimizer-statistics.html">https://dev.mysql.com/doc/refman/5.7/en/innodb-performance-optimizer-statistics.html</a></p>
+<p>大概信息如：</p>
+<div class="table-container">
+<table>
+<thead>
+<tr>
+<th style="text-align:left">Field</th>
+<th style="text-align:left">Type</th>
+<th style="text-align:left">Null</th>
+<th style="text-align:left">Key</th>
+<th style="text-align:left">Default</th>
+<th style="text-align:left">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left"><code>database_name</code></td>
+<td style="text-align:left"><code>varchar(64)</code></td>
+<td style="text-align:left">NO</td>
+<td style="text-align:left">PRI</td>
+<td style="text-align:left"><code>NULL</code></td>
+<td style="text-align:left">Database name.</td>
+</tr>
+<tr>
+<td style="text-align:left"><code>table_name</code></td>
+<td style="text-align:left"><code>varchar(64)</code></td>
+<td style="text-align:left">NO</td>
+<td style="text-align:left">PRI</td>
+<td style="text-align:left"><code>NULL</code></td>
+<td style="text-align:left">Table, partition or subpartition name.</td>
+</tr>
+<tr>
+<td style="text-align:left"><code>last_update</code></td>
+<td style="text-align:left"><code>timestamp</code></td>
+<td style="text-align:left">NO</td>
+<td style="text-align:left"></td>
+<td style="text-align:left"><code>current_timestamp()</code></td>
+<td style="text-align:left">Time that this row was last updated.</td>
+</tr>
+<tr>
+<td style="text-align:left"><code>n_rows</code></td>
+<td style="text-align:left"><code>bigint(20) unsigned</code></td>
+<td style="text-align:left">NO</td>
+<td style="text-align:left"></td>
+<td style="text-align:left"><code>NULL</code></td>
+<td style="text-align:left">Number of rows in the table.</td>
+</tr>
+<tr>
+<td style="text-align:left"><code>clustered_index_size</code></td>
+<td style="text-align:left"><code>bigint(20) unsigned</code></td>
+<td style="text-align:left">NO</td>
+<td style="text-align:left"></td>
+<td style="text-align:left"><code>NULL</code></td>
+<td style="text-align:left">Size, in pages, of the primary index.</td>
+</tr>
+<tr>
+<td style="text-align:left"><code>sum_of_other_index_sizes</code></td>
+<td style="text-align:left"><code>bigint(20) unsigned</code></td>
+<td style="text-align:left">NO</td>
+<td style="text-align:left"></td>
+<td style="text-align:left"><code>NULL</code></td>
+<td style="text-align:left">Size, in pages, of non-primary indexes.</td>
+</tr>
+</tbody>
+</table>
+</div>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Estimating-Statictics"><span class="toc-number">1.</span> <span class="toc-text">Estimating Statictics</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Join-size-Estimation"><span class="toc-number">1.1.</span> <span class="toc-text">Join size Estimation</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%85%B6%E4%BB%96%E4%BC%B0%E8%AE%A1"><span class="toc-number">1.2.</span> <span class="toc-text">其他估计</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%9F%A5%E8%AF%A2%E7%BB%93%E6%9E%9C%E7%9A%84%E5%88%86%E6%9E%90"><span class="toc-number">1.3.</span> <span class="toc-text">查询结果的分析</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BF%A1%E6%81%AF%E6%94%B6%E9%9B%86"><span class="toc-number">2.</span> <span class="toc-text">信息收集</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2021/02/08/Notes-on-Query-Cost-Estimation/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2021/02/08/Notes-on-Query-Cost-Estimation/&text=Notes on Query Optimization"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2021/02/08/Notes-on-Query-Cost-Estimation/&title=Notes on Query Optimization"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2021/02/08/Notes-on-Query-Cost-Estimation/&is_video=false&description=Notes on Query Optimization"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Notes on Query Optimization&body=Check out this article: http://blog.mwish.me/2021/02/08/Notes-on-Query-Cost-Estimation/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2021/02/08/Notes-on-Query-Cost-Estimation/&title=Notes on Query Optimization"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2021/02/08/Notes-on-Query-Cost-Estimation/&title=Notes on Query Optimization"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2021/02/08/Notes-on-Query-Cost-Estimation/&title=Notes on Query Optimization"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2021/02/08/Notes-on-Query-Cost-Estimation/&title=Notes on Query Optimization"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2021/02/08/Notes-on-Query-Cost-Estimation/&name=Notes on Query Optimization&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2021/02/08/Notes-on-Query-Cost-Estimation/&t=Notes on Query Optimization"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

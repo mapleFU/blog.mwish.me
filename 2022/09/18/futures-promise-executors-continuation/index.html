@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="future 表示一个能拿到某个值的预期 libc++ future逻辑内容：  实现部分在 include&#x2F;c++&#x2F;v1&#x2F;future 和 future 类型如下: 123456789101112template &lt;class _Rp&gt;class _LIBCPP_TEMPLATE_VIS _LIBCPP_AVAILABILITY_FUTURE future&amp;#123;    __as">
+<meta property="og:type" content="article">
+<meta property="og:title" content="future and promise in libc++&#x2F;folly">
+<meta property="og:url" content="http://blog.mwish.me/2022/09/18/futures-promise-executors-continuation/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="future 表示一个能拿到某个值的预期 libc++ future逻辑内容：  实现部分在 include&#x2F;c++&#x2F;v1&#x2F;future 和 future 类型如下: 123456789101112template &lt;class _Rp&gt;class _LIBCPP_TEMPLATE_VIS _LIBCPP_AVAILABILITY_FUTURE future&amp;#123;    __as">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/libcpp-future.jpg">
+<meta property="article:published_time" content="2022-09-18T15:00:00.000Z">
+<meta property="article:modified_time" content="2022-09-18T15:08:01.631Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/libcpp-future.jpg">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>future and promise in libc++/folly</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2022/10/04/Parquet-Part2-arrow-Parquet-code-path/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2022/09/18/Parquet-Part1-Basic/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2022/09/18/futures-promise-executors-continuation/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2022/09/18/futures-promise-executors-continuation/&text=future and promise in libc++/folly"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2022/09/18/futures-promise-executors-continuation/&title=future and promise in libc++/folly"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2022/09/18/futures-promise-executors-continuation/&is_video=false&description=future and promise in libc++/folly"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=future and promise in libc++/folly&body=Check out this article: http://blog.mwish.me/2022/09/18/futures-promise-executors-continuation/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2022/09/18/futures-promise-executors-continuation/&title=future and promise in libc++/folly"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2022/09/18/futures-promise-executors-continuation/&title=future and promise in libc++/folly"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2022/09/18/futures-promise-executors-continuation/&title=future and promise in libc++/folly"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2022/09/18/futures-promise-executors-continuation/&title=future and promise in libc++/folly"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2022/09/18/futures-promise-executors-continuation/&name=future and promise in libc++/folly&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2022/09/18/futures-promise-executors-continuation/&t=future and promise in libc++/folly"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#libc-future"><span class="toc-number">1.</span> <span class="toc-text">libc++ future</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#promise"><span class="toc-number">1.1.</span> <span class="toc-text">promise</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#packaged-task"><span class="toc-number">1.2.</span> <span class="toc-text">packaged_task</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#shared-future"><span class="toc-number">1.3.</span> <span class="toc-text">shared_future</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#std-async"><span class="toc-number">1.4.</span> <span class="toc-text">std::async</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#folly-Future-amp-Executor"><span class="toc-number">2.</span> <span class="toc-text">folly Future &amp; Executor</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Why-are-futures-slow"><span class="toc-number">3.</span> <span class="toc-text">Why are futures slow</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#References"><span class="toc-number">4.</span> <span class="toc-text">References</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        future and promise in libc++/folly
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2022-09-18T15:00:00.000Z" itemprop="datePublished">2022-09-18</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>future 表示一个能拿到某个值的预期</p>
+<h2 id="libc-future"><a href="#libc-future" class="headerlink" title="libc++ future"></a>libc++ future</h2><p>逻辑内容：</p>
+<p><img src="https://image.mwish.me/blog-image/libcpp-future.jpg" alt="libcpp-future"></p>
+<p>实现部分在 <code>include/c++/v1/future</code> 和</p>
+<p>future 类型如下:</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">class</span> <span class="title class_">_Rp</span>&gt;</span><br><span class="line"><span class="keyword">class</span> <span class="title class_">_LIBCPP_TEMPLATE_VIS</span> _LIBCPP_AVAILABILITY_FUTURE future</span><br><span class="line">&#123;</span><br><span class="line">    __assoc_state&lt;_Rp&gt;* __state_;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">explicit</span> <span class="title">future</span><span class="params">(__assoc_state&lt;_Rp&gt;* __state)</span></span>;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">template</span> &lt;<span class="keyword">class</span>&gt; <span class="keyword">friend</span> <span class="keyword">class</span> <span class="title class_">promise</span>;</span><br><span class="line">    <span class="keyword">template</span> &lt;<span class="keyword">class</span>&gt; <span class="keyword">friend</span> <span class="keyword">class</span> <span class="title class_">shared_future</span>;</span><br><span class="line"> <span class="keyword">public</span>:</span><br><span class="line">    <span class="comment">// ... </span></span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>可以看到，future 包装了一层 <code>__assoc_state&lt;_rp&gt;</code>, 我们进 <code>__assoc_state</code> 看看:</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">class</span> <span class="title class_">_Rp</span>&gt;</span><br><span class="line"><span class="keyword">class</span> <span class="title class_">_LIBCPP_AVAILABILITY_FUTURE</span> _LIBCPP_HIDDEN __assoc_state</span><br><span class="line">    : <span class="keyword">public</span> __assoc_sub_state</span><br><span class="line">&#123;<span class="comment">//...</span></span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>哦，他是 <code>__assoc_sub_state&lt;_Rp&gt;</code> 的子类：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">class</span> <span class="title class_">_LIBCPP_TYPE_VIS</span> _LIBCPP_AVAILABILITY_FUTURE __assoc_sub_state</span><br><span class="line">    : <span class="keyword">public</span> __shared_count</span><br><span class="line">&#123;</span><br><span class="line"><span class="comment">// ...</span></span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>这里面包了一层 <code>__shared_count</code>，还记得之前的图吗？这个内部就是一个引用计数，实际上 <code>std::shared_ptr</code> 也搬用了这套实现：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">class</span> <span class="title class_">_LIBCPP_TYPE_VIS</span> __shared_count</span><br><span class="line">&#123;</span><br><span class="line">    __shared_count(<span class="type">const</span> __shared_count&amp;);</span><br><span class="line">    __shared_count&amp; <span class="keyword">operator</span>=(<span class="type">const</span> __shared_count&amp;);</span><br><span class="line"></span><br><span class="line"><span class="keyword">protected</span>:</span><br><span class="line">    <span class="type">long</span> __shared_owners_;</span><br><span class="line">    <span class="keyword">virtual</span> ~__shared_count();</span><br><span class="line"><span class="keyword">private</span>:</span><br><span class="line">    <span class="keyword">virtual</span> <span class="type">void</span> __on_zero_shared() _NOEXCEPT = <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">		_LIBCPP_INLINE_VISIBILITY</span><br><span class="line">    <span class="type">void</span> __add_shared() _NOEXCEPT;</span><br><span class="line">    _LIBCPP_INLINE_VISIBILITY</span><br><span class="line">    <span class="type">bool</span> __release_shared() _NOEXCEPT;</span><br><span class="line"><span class="meta">#<span class="keyword">endif</span></span></span><br><span class="line">    <span class="function">_LIBCPP_INLINE_VISIBILITY</span></span><br><span class="line"><span class="function">    <span class="type">long</span> <span class="title">use_count</span><span class="params">()</span> <span class="type">const</span> _NOEXCEPT</span>;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>这里需要解释一下 <code>__on_zero_shared</code>，这里可以看作是用户调用的 rc == 0 的时候清除资源的函数。</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">class</span> <span class="title class_">_LIBCPP_TYPE_VIS</span> _LIBCPP_AVAILABILITY_FUTURE __assoc_sub_state</span><br><span class="line">    : <span class="keyword">public</span> __shared_count</span><br><span class="line">&#123;</span><br><span class="line"><span class="keyword">protected</span>:</span><br><span class="line">    exception_ptr __exception_;</span><br><span class="line">    <span class="keyword">mutable</span> mutex __mut_;</span><br><span class="line">    <span class="keyword">mutable</span> condition_variable __cv_;</span><br><span class="line">    <span class="type">unsigned</span> __state_;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">virtual</span> <span class="type">void</span> __on_zero_shared() _NOEXCEPT;</span><br><span class="line">    <span class="type">void</span> __sub_wait(unique_lock&lt;mutex&gt;&amp; __lk);</span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">    <span class="keyword">enum</span></span><br><span class="line">    &#123;</span><br><span class="line">        __constructed = <span class="number">1</span>,</span><br><span class="line">        __future_attached = <span class="number">2</span>,</span><br><span class="line">        ready = <span class="number">4</span>,</span><br><span class="line">        deferred = <span class="number">8</span></span><br><span class="line">    &#125;;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>这里内容大概是：</p>
+<ol>
+<li><code>__state</code> 标注了对应的状态</li>
+<li><code>__cv_</code> 和 <code>__mut_</code> 表示了对应的并发状态</li>
+<li><code>__exception_</code> 表示存在这里的异常</li>
+</ol>
+<p>这里也有设置状态对应的成员，包括 <code>__set_value</code> 等，基本上是处理并发和设置状态</p>
+<p>回头看外面：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">class</span> <span class="title class_">_Rp</span>&gt;</span><br><span class="line"><span class="keyword">class</span> <span class="title class_">_LIBCPP_AVAILABILITY_FUTURE</span> _LIBCPP_HIDDEN __assoc_state</span><br><span class="line">    : <span class="keyword">public</span> __assoc_sub_state</span><br><span class="line">&#123;</span><br><span class="line">    <span class="keyword">typedef</span> __assoc_sub_state base;</span><br><span class="line">    <span class="keyword">typedef</span> <span class="keyword">typename</span> aligned_storage&lt;<span class="built_in">sizeof</span>(_Rp), alignment_of&lt;_Rp&gt;::value&gt;::type _Up;</span><br><span class="line"><span class="keyword">protected</span>:</span><br><span class="line">    _Up __value_;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">virtual</span> <span class="type">void</span> __on_zero_shared() _NOEXCEPT;</span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line"></span><br><span class="line">    <span class="keyword">template</span> &lt;<span class="keyword">class</span> <span class="title class_">_Arg</span>&gt;</span><br><span class="line">    <span class="function"><span class="type">void</span> <span class="title">set_value</span><span class="params">(_Arg&amp;&amp; __arg)</span></span>;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">template</span> &lt;<span class="keyword">class</span> <span class="title class_">_Arg</span>&gt;</span><br><span class="line">    <span class="function"><span class="type">void</span> <span class="title">set_value_at_thread_exit</span><span class="params">(_Arg&amp;&amp; __arg)</span></span>;</span><br><span class="line"></span><br><span class="line">    <span class="function">_Rp <span class="title">move</span><span class="params">()</span></span>;</span><br><span class="line">    <span class="keyword">typename</span> add_lvalue_reference&lt;_Rp&gt;::<span class="function">type <span class="title">copy</span><span class="params">()</span></span>;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>这里可以发现 <code>_Up</code> 存储的是对应的值，而 <code>__assoc_sub_state</code> 存储的是状态。之所以是 <code>aligned_storage</code>，是因为这是一块可能没初始化的内存。我们继续看看 <code>wait</code> 之类的：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">class</span> <span class="title class_">_Rp</span>&gt;</span><br><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">class</span> <span class="title class_">_Arg</span>&gt;</span><br><span class="line">_LIBCPP_AVAILABILITY_FUTURE</span><br><span class="line"><span class="type">void</span></span><br><span class="line">__assoc_state&lt;_Rp&gt;::<span class="built_in">set_value</span>(_Arg&amp;&amp; __arg)</span><br><span class="line">&#123;</span><br><span class="line">    unique_lock&lt;mutex&gt; __lk(<span class="keyword">this</span>-&gt;__mut_);</span><br><span class="line">    <span class="keyword">if</span> (<span class="keyword">this</span>-&gt;__has_value())</span><br><span class="line">        __throw_future_error(future_errc::promise_already_satisfied);</span><br><span class="line">    ::<span class="keyword">new</span> ((<span class="type">void</span>*)&amp;__value_) _Rp(_VSTD::forward&lt;_Arg&gt;(__arg));</span><br><span class="line">    <span class="keyword">this</span>-&gt;__state_ |= base::__constructed | base::ready;</span><br><span class="line">    __cv_.<span class="built_in">notify_all</span>();</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">class</span> <span class="title class_">_Rp</span>&gt;</span><br><span class="line">_Rp</span><br><span class="line">__assoc_state&lt;_Rp&gt;::<span class="built_in">move</span>()</span><br><span class="line">&#123;</span><br><span class="line">    unique_lock&lt;mutex&gt; __lk(<span class="keyword">this</span>-&gt;__mut_);</span><br><span class="line">    <span class="keyword">this</span>-&gt;__sub_wait(__lk);</span><br><span class="line">    <span class="keyword">if</span> (<span class="keyword">this</span>-&gt;__exception_ != <span class="literal">nullptr</span>)</span><br><span class="line">        <span class="built_in">rethrow_exception</span>(<span class="keyword">this</span>-&gt;__exception_);</span><br><span class="line">    <span class="keyword">return</span> _VSTD::<span class="built_in">move</span>(*<span class="built_in">reinterpret_cast</span>&lt;_Rp*&gt;(&amp;__value_));</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">class</span> <span class="title class_">_Rp</span>&gt;</span><br><span class="line"><span class="keyword">typename</span> add_lvalue_reference&lt;_Rp&gt;::type</span><br><span class="line">__assoc_state&lt;_Rp&gt;::<span class="built_in">copy</span>()</span><br><span class="line">&#123;</span><br><span class="line">    unique_lock&lt;mutex&gt; __lk(<span class="keyword">this</span>-&gt;__mut_);</span><br><span class="line">    <span class="keyword">this</span>-&gt;__sub_wait(__lk);</span><br><span class="line">    <span class="keyword">if</span> (<span class="keyword">this</span>-&gt;__exception_ != <span class="literal">nullptr</span>)</span><br><span class="line">        <span class="built_in">rethrow_exception</span>(<span class="keyword">this</span>-&gt;__exception_);</span><br><span class="line">    <span class="keyword">return</span> *<span class="built_in">reinterpret_cast</span>&lt;_Rp*&gt;(&amp;__value_);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>首先，<code>__assoc_sub_state</code> 会调用 <code>__sub_wait</code>，这里会等待到 <code>__assoc_sub_state</code> 状态合理：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">void</span></span><br><span class="line">__assoc_sub_state::__sub_wait(unique_lock&lt;mutex&gt;&amp; __lk)</span><br><span class="line">&#123;</span><br><span class="line">    <span class="keyword">if</span> (!__is_ready())</span><br><span class="line">    &#123;</span><br><span class="line">        <span class="keyword">if</span> (__state_ &amp; <span class="built_in">static_cast</span>&lt;<span class="type">unsigned</span>&gt;(deferred))</span><br><span class="line">        &#123;</span><br><span class="line">            __state_ &amp;= ~<span class="built_in">static_cast</span>&lt;<span class="type">unsigned</span>&gt;(deferred);</span><br><span class="line">            __lk.<span class="built_in">unlock</span>();</span><br><span class="line">            __execute();</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">else</span></span><br><span class="line">            <span class="keyword">while</span> (!__is_ready())</span><br><span class="line">                __cv_.<span class="built_in">wait</span>(__lk);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这里相当于：</p>
+<ol>
+<li>设置值：拿到 <code>_sub_state</code> 的锁，然后 placement new，再在 <code>_sub_state</code> 上通知</li>
+<li>读取值(wait) ：等待 <code>_sub_state</code> 状态设置完成，然后拿 <code>__value_</code></li>
+</ol>
+<p>最后，我们看看外层的 <code>future</code>:</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">class</span> <span class="title class_">_Rp</span>&gt;</span><br><span class="line">_Rp</span><br><span class="line">future&lt;_Rp&gt;::<span class="built_in">get</span>()</span><br><span class="line">&#123;</span><br><span class="line">    unique_ptr&lt;__shared_count, __release_shared_count&gt; __(__state_);</span><br><span class="line">    __assoc_state&lt;_Rp&gt;* __s = __state_;</span><br><span class="line">    __state_ = <span class="literal">nullptr</span>;</span><br><span class="line">    <span class="keyword">return</span> __s-&gt;<span class="built_in">move</span>();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="promise"><a href="#promise" class="headerlink" title="promise"></a>promise</h3><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// promise&lt;void&gt;</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">template</span> &lt;&gt;</span><br><span class="line"><span class="keyword">class</span> <span class="title class_">_LIBCPP_TYPE_VIS</span> _LIBCPP_AVAILABILITY_FUTURE promise&lt;<span class="type">void</span>&gt;</span><br><span class="line">&#123;</span><br><span class="line">    __assoc_sub_state* __state_;</span><br><span class="line"></span><br><span class="line">    <span class="function">_LIBCPP_INLINE_VISIBILITY</span></span><br><span class="line"><span class="function">    <span class="keyword">explicit</span> <span class="title">promise</span><span class="params">(<span class="type">nullptr_t</span>)</span> _NOEXCEPT : __state_(nullptr) &#123;</span>&#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">template</span> &lt;<span class="keyword">class</span>&gt; <span class="keyword">friend</span> <span class="keyword">class</span> <span class="title class_">packaged_task</span>;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">		<span class="comment">// ...</span></span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>这里，<code>get_future</code> 会直接返回一个 future:</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">class</span> <span class="title class_">_Rp</span>&gt;</span><br><span class="line">future&lt;_Rp&gt;</span><br><span class="line">promise&lt;_Rp&gt;::<span class="built_in">get_future</span>()</span><br><span class="line">&#123;</span><br><span class="line">    <span class="keyword">if</span> (__state_ == <span class="literal">nullptr</span>)</span><br><span class="line">        __throw_future_error(future_errc::no_state);</span><br><span class="line">    <span class="keyword">return</span> <span class="built_in">future</span>&lt;_Rp&gt;(__state_);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>我们回到 future, 看看它的构造函数：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">class</span> <span class="title class_">_Rp</span>&gt;</span><br><span class="line">future&lt;_Rp&gt;::<span class="built_in">future</span>(__assoc_state&lt;_Rp&gt;* __state)</span><br><span class="line">    : __state_(__state)</span><br><span class="line">&#123;</span><br><span class="line">    __state_-&gt;__attach_future();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这里依靠 <code>__assoc_sub_state&lt;_Rp&gt;::__attach_future</code> 来避免重复使用</p>
+<h3 id="packaged-task"><a href="#packaged-task" class="headerlink" title="packaged_task"></a>packaged_task</h3><p><code>std::packaged_task</code> 类似 <code>std::function</code>，是一个类型擦除的函数，描述任务，这里还允许 <code>get_future</code> 来访问。</p>
+<h3 id="shared-future"><a href="#shared-future" class="headerlink" title="shared_future"></a>shared_future</h3><p><code>shared_future</code> 可以包装一个 <code>future&lt;T&gt;</code>，然后多次使用，它的内容如下：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line">template &lt;class _Rp&gt;</span><br><span class="line">class _LIBCPP_TEMPLATE_VIS shared_future</span><br><span class="line">&#123;</span><br><span class="line">    __assoc_state&lt;_Rp&gt;* __state_;</span><br><span class="line"></span><br><span class="line">public:</span><br><span class="line"></span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line">template &lt;class _Rp&gt;</span><br><span class="line">shared_future&lt;_Rp&gt;::~shared_future()</span><br><span class="line">&#123;</span><br><span class="line">    if (__state_)</span><br><span class="line">        __state_-&gt;__release_shared();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p><code>shared_future</code> 有一堆偏特化的版本，因为它的 <code>get</code> 会非常恶心，<code>future</code> 返回一次咋搞都行，<code>shared_future</code> 可能要处理很多语义：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">class</span> <span class="title class_">_Rp</span>&gt;</span><br><span class="line"><span class="keyword">class</span> <span class="title class_">_LIBCPP_TEMPLATE_VIS</span> shared_future&lt;_Rp&amp;&gt;</span><br><span class="line">&#123;</span><br><span class="line">    __assoc_state&lt;_Rp&amp;&gt;* __state_;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">    <span class="comment">// retrieving the value</span></span><br><span class="line">    <span class="function">_LIBCPP_INLINE_VISIBILITY</span></span><br><span class="line"><span class="function">    _Rp&amp; <span class="title">get</span><span class="params">()</span> <span class="type">const</span> </span>&#123;<span class="keyword">return</span> __state_-&gt;<span class="built_in">copy</span>();&#125;</span><br><span class="line"></span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="keyword">template</span> &lt;&gt;</span><br><span class="line"><span class="keyword">class</span> <span class="title class_">_LIBCPP_TYPE_VIS</span> _LIBCPP_AVAILABILITY_FUTURE shared_future&lt;<span class="type">void</span>&gt;</span><br><span class="line">&#123;</span><br><span class="line">    __assoc_sub_state* __state_;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line"></span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<h3 id="std-async"><a href="#std-async" class="headerlink" title="std::async"></a>std::async</h3><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">class</span> <span class="title class_">_Fp</span>, <span class="keyword">class</span>... _Args&gt;</span><br><span class="line">_LIBCPP_NODISCARD_AFTER_CXX17</span><br><span class="line">future&lt;<span class="keyword">typename</span> __invoke_of&lt;<span class="keyword">typename</span> decay&lt;_Fp&gt;::type, <span class="keyword">typename</span> decay&lt;_Args&gt;::type...&gt;::type&gt;</span><br><span class="line"><span class="built_in">async</span>(launch __policy, _Fp&amp;&amp; __f, _Args&amp;&amp;... __args)</span><br><span class="line">&#123;</span><br><span class="line">    <span class="keyword">typedef</span> __async_func&lt;<span class="keyword">typename</span> decay&lt;_Fp&gt;::type, <span class="keyword">typename</span> decay&lt;_Args&gt;::type...&gt; _BF;</span><br><span class="line">    <span class="keyword">typedef</span> <span class="keyword">typename</span> _BF::_Rp _Rp;</span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="keyword">ifndef</span> _LIBCPP_NO_EXCEPTIONS</span></span><br><span class="line">    <span class="keyword">try</span></span><br><span class="line">    &#123;</span><br><span class="line"><span class="meta">#<span class="keyword">endif</span></span></span><br><span class="line">        <span class="keyword">if</span> (__does_policy_contain(__policy, launch::async))</span><br><span class="line">        <span class="keyword">return</span> _VSTD::__make_async_assoc_state&lt;_Rp&gt;(_BF(_VSTD::__decay_copy(_VSTD::forward&lt;_Fp&gt;(__f)),</span><br><span class="line">                                                     _VSTD::__decay_copy(_VSTD::forward&lt;_Args&gt;(__args))...));</span><br><span class="line"><span class="meta">#<span class="keyword">ifndef</span> _LIBCPP_NO_EXCEPTIONS</span></span><br><span class="line">    &#125;</span><br><span class="line">    <span class="built_in">catch</span> ( ... ) &#123; <span class="keyword">if</span> (__policy == launch::async) <span class="keyword">throw</span> ; &#125;</span><br><span class="line"><span class="meta">#<span class="keyword">endif</span></span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (__does_policy_contain(__policy, launch::deferred))</span><br><span class="line">        <span class="keyword">return</span> _VSTD::__make_deferred_assoc_state&lt;_Rp&gt;(_BF(_VSTD::__decay_copy(_VSTD::forward&lt;_Fp&gt;(__f)),</span><br><span class="line">                                                        _VSTD::__decay_copy(_VSTD::forward&lt;_Args&gt;(__args))...));</span><br><span class="line">    <span class="keyword">return</span> future&lt;_Rp&gt;&#123;&#125;;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>里面实现大概是：</p>
+<ol>
+<li>创建 <code>__async_assoc_state</code> 或者 <code>__defered_assoc_state</code></li>
+<li>lazy 或者动态的创建线程</li>
+<li>创建 future</li>
+</ol>
+<h2 id="folly-Future-amp-Executor"><a href="#folly-Future-amp-Executor" class="headerlink" title="folly Future &amp; Executor"></a>folly Future &amp; Executor</h2><p>folly Future 相对于 future，原理并没有太大差异，但是外层和实现丰富了很多：</p>
+<ol>
+<li>使用 <code>folly::Function</code>，函数对象支持了 SBO 等</li>
+<li><code>then</code> 等组合子，方便处理代码</li>
+<li><p><code>via</code> 等，支持绑定 executor，并抽出了 <code>Future</code> 和 <code>SemiFuture</code> 等类型</p>
+<p>folly 对 Future 的支持相当复杂，继承链大概包括：</p>
+</li>
+</ol>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">CoreBase</span><br><span class="line">- Core&lt;T&gt;</span><br><span class="line"></span><br><span class="line">FutureBase&lt;T&gt; (包含 Core&lt;T&gt;)</span><br><span class="line">- Future&lt;T&gt; / SemiFuture&lt;T&gt;</span><br></pre></td></tr></table></figure>
+<p>这里的 Future 允许链式、<code>poll</code> 来查看是否成功等。<code>SemiFuture</code> 则是状态的描述。<code>Future</code> 有对应的 Executor，靠 <code>KeepAlive</code> 来指向 Executor，<code>SemiFuture</code> 则没有，除了 inline 执行（即在本线程就地执行），不会允许对应的逻辑出现。</p>
+<p><code>CoreBase</code> 描述了 <code>Future</code> 基本的对应状态：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">///   +----------------------------------------------------------------+</span></span><br><span class="line"><span class="comment">///   |                       ---&gt; OnlyResult -----                    |</span></span><br><span class="line"><span class="comment">///   |                     /                       \                  |</span></span><br><span class="line"><span class="comment">///   |                  (setResult())             (setCallback())     |</span></span><br><span class="line"><span class="comment">///   |                   /                           \                |</span></span><br><span class="line"><span class="comment">///   |   Start ---------&gt;                              ------&gt; Done   |</span></span><br><span class="line"><span class="comment">///   |     \             \                           /                |</span></span><br><span class="line"><span class="comment">///   |      \           (setCallback())           (setResult())       |</span></span><br><span class="line"><span class="comment">///   |       \             \                       /                  |</span></span><br><span class="line"><span class="comment">///   |        \              ---&gt; OnlyCallback ---                    |</span></span><br><span class="line"><span class="comment">///   |         \           or OnlyCallbackAllowInline                 |</span></span><br><span class="line"><span class="comment">///   |          \                                  \                  |</span></span><br><span class="line"><span class="comment">///   |      (setProxy())                          (setProxy())        |</span></span><br><span class="line"><span class="comment">///   |            \                                  \                |</span></span><br><span class="line"><span class="comment">///   |             \                                   ------&gt; Empty  |</span></span><br><span class="line"><span class="comment">///   |              \                                /                |</span></span><br><span class="line"><span class="comment">///   |               \                            (setCallback())     |</span></span><br><span class="line"><span class="comment">///   |                \                            /                  |</span></span><br><span class="line"><span class="comment">///   |                  --------&gt; Proxy ----------                    |</span></span><br><span class="line"><span class="comment">///   +----------------------------------------------------------------+</span></span><br></pre></td></tr></table></figure>
+<p>因为要描述下一个任务这样的 chain，所以这套逻辑还是比较恶心的。此外，<code>folly::Future</code> 逻辑涉及了对应的 <code>Executor</code>，每个 future 会有 dispatch 给谁的逻辑，这个和链式一样，引入了复杂度。</p>
+<h2 id="Why-are-futures-slow"><a href="#Why-are-futures-slow" class="headerlink" title="Why are futures slow"></a>Why are futures slow</h2><p>future 在 C++ 中出现在 C++11 的标准库，而别的语言也常有类似的东西。它是由库来实现的。类似 <code>std::function</code>，<code>std::future</code> 是堆上的、类型擦除的。这两部分抽象都带来了一定的开销。</p>
+<p>之后会分别介绍 Seastar future、Rust future、C++ executors，来看看它们是怎么抽象的。简单来说：</p>
+<ol>
+<li>C++ executors 会有 sender / receiver，用模版类型来封装他们，然后提供了各种算法来做抽象</li>
+<li>Rust 靠 <code>Future&lt;T&gt;</code> 来抽象，<code>Box&lt;Future&lt;T&gt;&gt;</code> 来表示动态一些的对象。<code>Future&lt;T&gt;</code> 需要可以 <code>poll()</code>，上层的状态机来 polling，做查询</li>
+<li>seastar 靠模型的抽象，来简化了相关的逻辑。</li>
+</ol>
+<h2 id="References"><a href="#References" class="headerlink" title="References"></a>References</h2><ol>
+<li><p>libcxx future</p>
+</li>
+<li><p>folly future</p>
+</li>
+<li><p>浅谈The C++ Executors <a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/395250667">https://zhuanlan.zhihu.com/p/395250667</a> (绝世好文)</p>
+</li>
+</ol>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#libc-future"><span class="toc-number">1.</span> <span class="toc-text">libc++ future</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#promise"><span class="toc-number">1.1.</span> <span class="toc-text">promise</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#packaged-task"><span class="toc-number">1.2.</span> <span class="toc-text">packaged_task</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#shared-future"><span class="toc-number">1.3.</span> <span class="toc-text">shared_future</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#std-async"><span class="toc-number">1.4.</span> <span class="toc-text">std::async</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#folly-Future-amp-Executor"><span class="toc-number">2.</span> <span class="toc-text">folly Future &amp; Executor</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Why-are-futures-slow"><span class="toc-number">3.</span> <span class="toc-text">Why are futures slow</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#References"><span class="toc-number">4.</span> <span class="toc-text">References</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2022/09/18/futures-promise-executors-continuation/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2022/09/18/futures-promise-executors-continuation/&text=future and promise in libc++/folly"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2022/09/18/futures-promise-executors-continuation/&title=future and promise in libc++/folly"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2022/09/18/futures-promise-executors-continuation/&is_video=false&description=future and promise in libc++/folly"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=future and promise in libc++/folly&body=Check out this article: http://blog.mwish.me/2022/09/18/futures-promise-executors-continuation/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2022/09/18/futures-promise-executors-continuation/&title=future and promise in libc++/folly"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2022/09/18/futures-promise-executors-continuation/&title=future and promise in libc++/folly"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2022/09/18/futures-promise-executors-continuation/&title=future and promise in libc++/folly"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2022/09/18/futures-promise-executors-continuation/&title=future and promise in libc++/folly"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2022/09/18/futures-promise-executors-continuation/&name=future and promise in libc++/folly&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2022/09/18/futures-promise-executors-continuation/&t=future and promise in libc++/folly"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

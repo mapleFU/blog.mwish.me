@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="鉴于网上讲 LevelDB 代码的文章没有一万也有一千了，本文肯定比他们还烂。所以这篇文章就简单讲讲 LevelDB 的读流程。 我们对这个的事先印象是：  用户 Get 一个 key 从 memtable 里面找这个 key . memtable 里面，key 在写入的时候，被 WriteBatch::Put 变成了 &lt;写类型, key 长度, key 内容, value 长度, valu">
+<meta property="og:type" content="article">
+<meta property="og:title" content="LevelDB: Read path">
+<meta property="og:url" content="http://blog.mwish.me/2021/05/13/LevelDB-Read-path/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="鉴于网上讲 LevelDB 代码的文章没有一万也有一千了，本文肯定比他们还烂。所以这篇文章就简单讲讲 LevelDB 的读流程。 我们对这个的事先印象是：  用户 Get 一个 key 从 memtable 里面找这个 key . memtable 里面，key 在写入的时候，被 WriteBatch::Put 变成了 &lt;写类型, key 长度, key 内容, value 长度, valu">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://blog.mwish.me/2021/05/13/LevelDB-Read-path/static/2021-05-14/C32EA624-79EA-43BD-8E24-1D018E3212A3.png">
+<meta property="article:published_time" content="2021-05-13T15:22:44.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.550Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://blog.mwish.me/2021/05/13/LevelDB-Read-path/static/2021-05-14/C32EA624-79EA-43BD-8E24-1D018E3212A3.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>LevelDB: Read path</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2021/05/22/Note-on-System-Design-Interview/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2021/04/23/Notes-on-LSM-based-Storage-Techniques-A-Survey-Part-2/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2021/05/13/LevelDB-Read-path/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2021/05/13/LevelDB-Read-path/&text=LevelDB: Read path"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2021/05/13/LevelDB-Read-path/&title=LevelDB: Read path"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2021/05/13/LevelDB-Read-path/&is_video=false&description=LevelDB: Read path"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=LevelDB: Read path&body=Check out this article: http://blog.mwish.me/2021/05/13/LevelDB-Read-path/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2021/05/13/LevelDB-Read-path/&title=LevelDB: Read path"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2021/05/13/LevelDB-Read-path/&title=LevelDB: Read path"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2021/05/13/LevelDB-Read-path/&title=LevelDB: Read path"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2021/05/13/LevelDB-Read-path/&title=LevelDB: Read path"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2021/05/13/LevelDB-Read-path/&name=LevelDB: Read path&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2021/05/13/LevelDB-Read-path/&t=LevelDB: Read path"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-3"><a class="toc-link" href="#System-API-amp-amp-env"><span class="toc-number">1.</span> <span class="toc-text">System API &amp;&amp; env</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Block-Read"><span class="toc-number">2.</span> <span class="toc-text">Block Read</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Iterators"><span class="toc-number">3.</span> <span class="toc-text">Iterators</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Version-amp-amp-snapshot"><span class="toc-number">4.</span> <span class="toc-text">Version &amp;&amp; snapshot</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%B5%84%E6%BA%90%E5%9B%9E%E6%94%B6"><span class="toc-number">5.</span> <span class="toc-text">资源回收</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AF%B9-Compaction-%E7%9A%84%E5%BD%B1%E5%93%8D"><span class="toc-number">6.</span> <span class="toc-text">对 Compaction 的影响</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        LevelDB: Read path
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2021-05-13T15:22:44.000Z" itemprop="datePublished">2021-05-13</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>鉴于网上讲 LevelDB 代码的文章没有一万也有一千了，本文肯定比他们还烂。所以这篇文章就简单讲讲 LevelDB 的读流程。</p>
+<p>我们对这个的事先印象是：</p>
+<ol>
+<li>用户 <code>Get</code> 一个 key</li>
+<li>从 memtable 里面找这个 <code>key</code> . memtable 里面，key 在写入的时候，被 <code>WriteBatch::Put</code> 变成了 <code>&lt;写类型, key 长度, key 内容, value 长度, value 内容&gt;</code> 的字符串，然后在 <code>MemTableInserter::Put</code> 和 <code>Memtable::Add</code> 里面变成了 <code>&lt;sequence, type, key 长度, key 内容&gt;</code> <code>&lt;value 长度, value 内容&gt;</code> 的 <code>InternalKey</code> 和 <code>value</code></li>
+<li>如果在正在写入的 memtable 和 immutable memtable 都没有，那么它回到 SST 里面去查找。</li>
+</ol>
+<p>此外，读可以拿到 iterator 和 snapshot, 并且用 iterator 和 snapshot 来读：</p>
+<p>leveldb 可以拿到 iterator 读，也可以拿到 snapshot 去读，注意这里还是有生命周期：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">leveldb::Iterator* it = db-&gt;<span class="built_in">NewIterator</span>(leveldb::<span class="built_in">ReadOptions</span>());</span><br><span class="line"><span class="keyword">for</span> (it-&gt;<span class="built_in">SeekToFirst</span>(); it-&gt;<span class="built_in">Valid</span>(); it-&gt;<span class="built_in">Next</span>()) &#123;</span><br><span class="line">  cout &lt;&lt; it-&gt;<span class="built_in">key</span>().<span class="built_in">ToString</span>() &lt;&lt; <span class="string">&quot;: &quot;</span>  &lt;&lt; it-&gt;<span class="built_in">value</span>().<span class="built_in">ToString</span>() &lt;&lt; endl;</span><br><span class="line">&#125;</span><br><span class="line"><span class="built_in">assert</span>(it-&gt;<span class="built_in">status</span>().<span class="built_in">ok</span>());  <span class="comment">// Check for any errors found during the scan</span></span><br><span class="line"><span class="keyword">delete</span> it;</span><br></pre></td></tr></table></figure>
+<p>和 snapshot</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">leveldb::ReadOptions options;</span><br><span class="line">options.snapshot = db-&gt;<span class="built_in">GetSnapshot</span>();</span><br><span class="line">... apply some updates to db ...</span><br><span class="line">leveldb::Iterator* iter = db-&gt;<span class="built_in">NewIterator</span>(options);</span><br><span class="line">... read <span class="keyword">using</span> iter to view the state when the snapshot was created ...</span><br><span class="line"><span class="keyword">delete</span> iter;</span><br><span class="line">db-&gt;<span class="built_in">ReleaseSnapshot</span>(options.snapshot);</span><br></pre></td></tr></table></figure>
+<p>LevelDB 内部大量使用 <code>slice</code> 类型，表示“没有所有权的字符串”。这个有点类似 <code>std::string_view</code>, 不过功能弱不少。</p>
+<p>那么，我们今天要给上面的流程填充一些细节：</p>
+<ol>
+<li>读文件相关的 system api</li>
+<li>LevelDB 对 SST 相关的读处理：<ol>
+<li>SST 文件的读取</li>
+<li>Block Cache / mmap</li>
+<li>Iterator 类型</li>
+</ol>
+</li>
+<li>LevelDB 读相关的内容回收</li>
+</ol>
+<h3 id="System-API-amp-amp-env"><a href="#System-API-amp-amp-env" class="headerlink" title="System API &amp;&amp; env"></a>System API &amp;&amp; env</h3><p>env 定义在文件的 <code>util/env.h</code> 和 <code>util/env_&#123;平台&#125;.cc</code> 下面, 定义了这个平台默认的行为。和文件相关的内容全部封装在这个接口里。</p>
+<p>这里定义了：</p>
+<p> <code>RandomAccessFile</code> 随机读的文件，用 <code>pread</code> 或者 <code>mmap</code> 来实现。提供一个带 <code>offset</code> 和 <code>size</code> 的 read 接口；需要注意的是，这里使用了 Limit, 限制数量为 1000 的 <code>mmap</code> 的 <code>RandomAccessFile</code> （这个配置参数是可以修改的）。作者认为：</p>
+<ol>
+<li>mmap 本身可以在 random access 的情况下优化读（感觉这是因为 LevelDB 本身 Block Cache 使用的 LRU 策略比较简单）</li>
+<li>Mmap 本身限制在了 1000 个：作者认为这样可以优化性能。我看了一下相关的讨论，作者认为 leveldb 本身存储的是小文件，而 compaction 过多导致系统 <code>RSS</code> 会变得巨大。所以作者把这个量限制在了 1000 个</li>
+</ol>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// A file abstraction for randomly reading the contents of a file.</span></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">LEVELDB_EXPORT</span> RandomAccessFile &#123;</span><br><span class="line"> <span class="keyword">public</span>:</span><br><span class="line">  <span class="built_in">RandomAccessFile</span>() = <span class="keyword">default</span>;</span><br><span class="line"></span><br><span class="line">  <span class="built_in">RandomAccessFile</span>(<span class="type">const</span> RandomAccessFile&amp;) = <span class="keyword">delete</span>;</span><br><span class="line">  RandomAccessFile&amp; <span class="keyword">operator</span>=(<span class="type">const</span> RandomAccessFile&amp;) = <span class="keyword">delete</span>;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">virtual</span> ~<span class="built_in">RandomAccessFile</span>();</span><br><span class="line"></span><br><span class="line">  <span class="comment">// Read up to &quot;n&quot; bytes from the file starting at &quot;offset&quot;.</span></span><br><span class="line">  <span class="comment">// &quot;scratch[0..n-1]&quot; may be written by this routine.  Sets &quot;*result&quot;</span></span><br><span class="line">  <span class="comment">// to the data that was read (including if fewer than &quot;n&quot; bytes were</span></span><br><span class="line">  <span class="comment">// successfully read).  May set &quot;*result&quot; to point at data in</span></span><br><span class="line">  <span class="comment">// &quot;scratch[0..n-1]&quot;, so &quot;scratch[0..n-1]&quot; must be live when</span></span><br><span class="line">  <span class="comment">// &quot;*result&quot; is used.  If an error was encountered, returns a non-OK</span></span><br><span class="line">  <span class="comment">// status.</span></span><br><span class="line">  <span class="comment">//</span></span><br><span class="line">  <span class="comment">// Safe for concurrent use by multiple threads.</span></span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> Status <span class="title">Read</span><span class="params">(<span class="type">uint64_t</span> offset, <span class="type">size_t</span> n, Slice* result,</span></span></span><br><span class="line"><span class="params"><span class="function">                      <span class="type">char</span>* scratch)</span> <span class="type">const</span> </span>= <span class="number">0</span>;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>LevelDB 调用 <code>NewRandomAccessFile</code> 的时候，会先尝试走 <code>PosixMmapReadableFile</code> ，没有就 fallback 到 <code>PosixRandomAccessFile</code>.</p>
+<p>LevelDB 给整个需要的链路都加入了 <code>Env*</code>, 来支持各个平台系统方面的调用</p>
+<h3 id="Block-Read"><a href="#Block-Read" class="headerlink" title="Block Read"></a>Block Read</h3><p>LevelDB 的数据是以 SST 组织的，SST 内切分成了不同的 block, 以便提供 Index/CRC/缓存。Block Size 和性能有比较大的关系。LevelDB 文档里面提示：</p>
+<ol>
+<li>Scan 居多的话，那么 Block Size 可以设置小一点。</li>
+<li>Point Get 居多的话，Block Size 可以设大一点。</li>
+</ol>
+<p>RocksDB 文档也有对应内容。</p>
+<p>LevelDB 用户可以配置 BlockCache, 而且一定有(不用配置) TableCache. 关于 LevelDB 的 Cache, 可以简单看看：</p>
+<p><a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/363382898">https://zhuanlan.zhihu.com/p/363382898</a></p>
+<p>前者是 Block 内容的缓存，后者是 SST 的元信息的缓存。简单的说，可以通过后者索引到前者。</p>
+<p>Block cache: <code>options.block_cache</code> 设置读文件的时候用的 block cache, 当执行一些不希望用到 block cache 的操作的时候，可以使用 <code>options.fill_cache = false</code> 的配置。</p>
+<p>那么回到程序中，具体读取文件的时候，程序会从 <code>TableCache::Get</code> 来从元信息定位到 Block 相关的内容。然后调用 <code>Table::BlockReader</code> 和 <code>ReadBlock</code>. 在 ReadBlock 的时候，程序对上述的 <code>mmap</code> 和 用<code>pread</code>的文件作出了区分：</p>
+<ol>
+<li>如果没有提供 <code>block_cache</code>, 那么不会存 block cache, 但是 <code>mmap</code> 仍然可能使用</li>
+<li>如果提供了 <code>block_cache</code>:<ol>
+<li>如果是 <code>mmap</code> 的文件，不会走 Block cache</li>
+<li>否则把内容缓存到 block cache 里，使用的 charge 是 compression 之前的 size.</li>
+</ol>
+</li>
+</ol>
+<h3 id="Iterators"><a href="#Iterators" class="headerlink" title="Iterators"></a>Iterators</h3><p><code>Iterator</code> 接口定义在 <code>include/leveldb/iterator.h</code>, 是 LevelDB 里面一个很包罗万象的类型。跟 Iterator 相关的类型有：</p>
+<ol>
+<li><code>DBIter</code>, 这个接口提供的 <code>key()</code> <code>value()</code> 都是 user 的 key, value, 提供给上层用户使用。</li>
+<li><code>MemTableIterator</code>: 给 <code>MemTable::Table::Iterator</code> 封装了一层，后者的 <code>key()</code> 包含了 <code>InternalKey</code> 和 <code>value</code> , 这个 <code>MemTableIterator</code> 对外提供 <code>InternalKey</code> 和 <code>value</code></li>
+<li><code>Block::Iter</code>: 这个类型是给单个 <code>data block</code>  和 <code>index block</code>准备的（leveldb 还有一些存放别的元信息的 block）: 会走上一节我们提到的 <code>ReadBlock</code> 相关的接口，从 Block 里面读取 <code>InternalKey</code> 和 <code>value</code><ol>
+<li>这里 Data Block 存放数据，index block 存放对 data block 的索引。</li>
+</ol>
+</li>
+</ol>
+<p><img src="static/2021-05-14/C32EA624-79EA-43BD-8E24-1D018E3212A3.png" alt="C32EA624-79EA-43BD-8E24-1D018E3212A3"></p>
+<p>如果说上面三个 <code>Iterator</code> 还比较清晰，那我们可以看看下面的一个奇怪的 Iterator:</p>
+<ol>
+<li><code>Version::LevelFileNumIterator</code>: 这个迭代器很奇怪（你马上就知道为什么了），它丢出的信息是 Iterator 的元信息(不是用户的 <code>key</code>, <code>value</code>, 而是 “文件的 &lt;最大key&gt;” 和 <code>&lt;(文件号, 文件大小)&gt;</code></li>
+</ol>
+<p>下面，是时候组织起这些 Iterator 了：</p>
+<p><code>TwoLevelIterator</code> : 重点来了，难得来了！<code>TwoLevelIterator</code> 提供了一种“两级” 的抽象：一个提供索引，一个提供数据。提供数据的结束之后，提供索引的去找下一项，具体使用的地方有两个：</p>
+<ol>
+<li><code>Table::NewIterator</code>: Table 创建的是 TwoLevelIterator, 首先是 IndexBlock 的 iterator, 然后是对应的 block reader. 实际上这里就是拿到 index 信息，然后能够读到 block 的信息。</li>
+<li>读某一层的数据。index_iter 是单层文件元信息的迭代器 <code>Version::LevelFileNumIterator</code>，BlockFunction 是 (1) 中的整合。见 <code>Version::NewConcatenatingIterator</code>.</li>
+</ol>
+<p>怎么样，是不是连起来了～</p>
+<p>再来一个：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">Iterator* <span class="title">NewMergingIterator</span><span class="params">(<span class="type">const</span> Comparator* comparator, Iterator** children,</span></span></span><br><span class="line"><span class="params"><span class="function">                             <span class="type">int</span> n)</span></span>;</span><br></pre></td></tr></table></figure>
+<p>这个地方会创建一个 <code>MergingIterator</code>, 合并所有的 Iterator, 找到 <code>key</code> 最小的一个。需要注意的是，目前使用的时候，这里 <code>key</code> 最小指的还是 <code>InternalKey</code>.</p>
+<p>此外，还要注意 <code>RegisterCleanup</code>, 这个函数是 <code>Iterator</code> 清理自身资源用的。</p>
+<h3 id="Version-amp-amp-snapshot"><a href="#Version-amp-amp-snapshot" class="headerlink" title="Version &amp;&amp; snapshot"></a>Version &amp;&amp; snapshot</h3><p>我们上面提供了各种各样的 <code>Iterator</code>, 这下我们读的时候可有工具了。但是这里需要注意的是，读的时候还可以选择一个 snapshot, 然后，还需要考虑读的时候，中途发生了 compaction 要怎么处理。</p>
+<p>LevelDB 提供了一个 <code>sequence_id</code> 来指定顺序。它定义的是读相对于写的偏序, 他存储在 <code>VersionSet</code> 里：</p>
+<ol>
+<li>写会推高 <code>last_sequence_</code>, 而且是一次性推高很多，等同于写入的 batch</li>
+<li>读会拿到 <code>last_sequence_</code> , 并根据这个值来决定自己读到什么。</li>
+</ol>
+<p>实际上，即使不外部创建 Snapshot, 内部也会拿到一个最近的 sequence id, 来决定这个时候的行为。</p>
+<p>LevelDB 拿到了这个 <code>sequence_id</code> 之后, 需要接下来决定自己要读什么。然后它会找到最新的 <code>Version</code>. <code>Version</code> 是 LevelDB 中 SST 文件布局的一个版本，有任何的 compaction 发生，都会生成新的 Version。那么为什么它每次都会找到新的 Version, 而不是根据 snapshot 来找版本链呢？（其实这个地方我还没仔细考虑过，记个 TODO….）</p>
+<p>拿到 Version 之后，单个 Version 里面，内容是不变的。Version 可以提供每层的 <code>Iterator</code>, 拿到这些就可以构建 <code>MergingIterator</code> 去读啦~</p>
+<h3 id="资源回收"><a href="#资源回收" class="headerlink" title="资源回收"></a>资源回收</h3><p>实际上，LevelDB 大部分采用了读者来回收内存的模式，同时使用了很多引用计数。这些引用计数通常都不是线程安全的。</p>
+<p>很多类提供了 <code>Ref()</code> <code>Unref()</code> 的方法。感觉 LevelDB 最好提供个侵入式智能指针（虽然它没有）。</p>
+<p>那么在读的时候，<code>Version</code>, <code>Memtable</code> 对象会被 <code>Ref()</code> 一下。然后，有的时候是手动<code>Unref</code>, 有的时候，是给 <code>Iterator</code> 使用了 <code>RegisterCleanup</code>，让它们在正确的时间 <code>Unref</code>. </p>
+<h3 id="对-Compaction-的影响"><a href="#对-Compaction-的影响" class="headerlink" title="对 Compaction 的影响"></a>对 Compaction 的影响</h3><p>读行为会启发式的导致 seek compaction. 这个可以看到 <code>DBIter</code> 和  <code>Stats</code>相关的代码，有两种更新方式：</p>
+<ol>
+<li>点查的时候，如果这层 SST 没找到对应的内容（同时 bloom filter 也没有回避这次读），而下层有，则记录</li>
+<li>seek 的时候，会有一个采样算法，记录</li>
+</ol>
+<p>当记录到达一定值的时候，leveldb 认为应该错峰的去 compaction，这个叫 Seek Compaction.</p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-3"><a class="toc-link" href="#System-API-amp-amp-env"><span class="toc-number">1.</span> <span class="toc-text">System API &amp;&amp; env</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Block-Read"><span class="toc-number">2.</span> <span class="toc-text">Block Read</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Iterators"><span class="toc-number">3.</span> <span class="toc-text">Iterators</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Version-amp-amp-snapshot"><span class="toc-number">4.</span> <span class="toc-text">Version &amp;&amp; snapshot</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%B5%84%E6%BA%90%E5%9B%9E%E6%94%B6"><span class="toc-number">5.</span> <span class="toc-text">资源回收</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AF%B9-Compaction-%E7%9A%84%E5%BD%B1%E5%93%8D"><span class="toc-number">6.</span> <span class="toc-text">对 Compaction 的影响</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2021/05/13/LevelDB-Read-path/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2021/05/13/LevelDB-Read-path/&text=LevelDB: Read path"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2021/05/13/LevelDB-Read-path/&title=LevelDB: Read path"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2021/05/13/LevelDB-Read-path/&is_video=false&description=LevelDB: Read path"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=LevelDB: Read path&body=Check out this article: http://blog.mwish.me/2021/05/13/LevelDB-Read-path/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2021/05/13/LevelDB-Read-path/&title=LevelDB: Read path"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2021/05/13/LevelDB-Read-path/&title=LevelDB: Read path"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2021/05/13/LevelDB-Read-path/&title=LevelDB: Read path"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2021/05/13/LevelDB-Read-path/&title=LevelDB: Read path"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2021/05/13/LevelDB-Read-path/&name=LevelDB: Read path&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2021/05/13/LevelDB-Read-path/&t=LevelDB: Read path"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

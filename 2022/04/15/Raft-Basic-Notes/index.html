@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="本来打算介绍 Etcd 的 Raft，然后抽离开视线来讲讲 etcd-raft 怎么用，它怎么抽象的。但是读了一下 raftexample 发现不太现实，感觉 etcd-raft 的外部逻辑和实现是严重耦合的，所以或许我们不得不从实现开始，了解一下 etcd-raft 大概提供了什么样的抽象, 然后再介绍一下官方的  raftexample 的内容，便于我们实现简单的 raft 服务器。 这里先复">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Raft Basic Notes">
+<meta property="og:url" content="http://blog.mwish.me/2022/04/15/Raft-Basic-Notes/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="本来打算介绍 Etcd 的 Raft，然后抽离开视线来讲讲 etcd-raft 怎么用，它怎么抽象的。但是读了一下 raftexample 发现不太现实，感觉 etcd-raft 的外部逻辑和实现是严重耦合的，所以或许我们不得不从实现开始，了解一下 etcd-raft 大概提供了什么样的抽象, 然后再介绍一下官方的  raftexample 的内容，便于我们实现简单的 raft 服务器。 这里先复">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/170FFACD-191C-474F-833E-06A1A36E1150.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/CABFCF9B-9C07-48C1-9718-380E659F5DD7.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/057E9A5F-8EAF-4482-B9C9-47E4BC31BC64.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/committed.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/v2-45dd50e08934f1dfc42dbc83251bfe76_r.jpeg">
+<meta property="og:image" content="https://image.mwish.me/blog-image/487347AA-3308-4821-B662-2F8EE3720BFB.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/DDAC89FE-87C2-4E59-9657-CEC2EB3721B8.png">
+<meta property="article:published_time" content="2022-04-14T16:12:44.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.552Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/170FFACD-191C-474F-833E-06A1A36E1150.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>Raft Basic Notes</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2022/04/20/Notes-LLAMA/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2022/04/06/xv6-labs-2021-report/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2022/04/15/Raft-Basic-Notes/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2022/04/15/Raft-Basic-Notes/&text=Raft Basic Notes"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2022/04/15/Raft-Basic-Notes/&title=Raft Basic Notes"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2022/04/15/Raft-Basic-Notes/&is_video=false&description=Raft Basic Notes"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Raft Basic Notes&body=Check out this article: http://blog.mwish.me/2022/04/15/Raft-Basic-Notes/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2022/04/15/Raft-Basic-Notes/&title=Raft Basic Notes"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2022/04/15/Raft-Basic-Notes/&title=Raft Basic Notes"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2022/04/15/Raft-Basic-Notes/&title=Raft Basic Notes"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2022/04/15/Raft-Basic-Notes/&title=Raft Basic Notes"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2022/04/15/Raft-Basic-Notes/&name=Raft Basic Notes&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2022/04/15/Raft-Basic-Notes/&t=Raft Basic Notes"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Raft-%E5%A4%8D%E4%B9%A0"><span class="toc-number">1.</span> <span class="toc-text">Raft 复习</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Leader-Election"><span class="toc-number">1.1.</span> <span class="toc-text">Leader Election</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Log-Replication"><span class="toc-number">1.2.</span> <span class="toc-text">Log Replication</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Safety"><span class="toc-number">1.3.</span> <span class="toc-text">Safety</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E4%B8%80%E4%B8%AA%E8%AF%AF%E5%8C%BA"><span class="toc-number">1.3.1.</span> <span class="toc-text">一个误区</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#CommitIndex-%E5%92%8C-ApplyIndex-%E7%9A%84%E6%8C%81%E4%B9%85%E5%8C%96"><span class="toc-number">1.3.2.</span> <span class="toc-text">CommitIndex 和 ApplyIndex 的持久化</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%97%B6%E9%97%B4%E5%92%8C%E5%8F%AF%E7%94%A8%E6%80%A7"><span class="toc-number">1.4.</span> <span class="toc-text">时间和可用性</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%9B%86%E7%BE%A4%E6%88%90%E5%91%98%E5%8F%98%E6%9B%B4"><span class="toc-number">1.5.</span> <span class="toc-text">集群成员变更</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Snapshot-%E5%92%8C-Log-Compaction"><span class="toc-number">1.6.</span> <span class="toc-text">Snapshot 和 Log Compaction</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Client-%E4%BA%A4%E4%BA%92"><span class="toc-number">1.7.</span> <span class="toc-text">Client 交互</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E4%B8%80%E8%88%AC%E7%9A%84%E8%AF%BB%E5%86%99%E6%93%8D%E4%BD%9C"><span class="toc-number">1.7.1.</span> <span class="toc-text">一般的读写操作</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%86%99%E9%87%8D%E8%AF%95"><span class="toc-number">1.7.2.</span> <span class="toc-text">写重试</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Some-Quiz"><span class="toc-number">2.</span> <span class="toc-text">Some Quiz</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Qihoo360-floyd"><span class="toc-number">3.</span> <span class="toc-text">Qihoo360&#x2F;floyd</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Leader-Election-1"><span class="toc-number">3.1.</span> <span class="toc-text">Leader Election</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Sender"><span class="toc-number">3.1.1.</span> <span class="toc-text">Sender</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Receiver"><span class="toc-number">3.1.2.</span> <span class="toc-text">Receiver</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E7%AB%9E%E9%80%89%E5%A4%B1%E8%B4%A5"><span class="toc-number">3.1.3.</span> <span class="toc-text">竞选失败</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Log-Replication-1"><span class="toc-number">3.2.</span> <span class="toc-text">Log Replication</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Receiver-1"><span class="toc-number">3.2.1.</span> <span class="toc-text">Receiver</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Client"><span class="toc-number">3.3.</span> <span class="toc-text">Client</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Recall-%E7%BA%BF%E7%A8%8B%E6%A8%A1%E5%9E%8B"><span class="toc-number">3.4.</span> <span class="toc-text">Recall: 线程模型</span></a></li></ol></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Raft Basic Notes
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2022-04-14T16:12:44.000Z" itemprop="datePublished">2022-04-15</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>本来打算介绍 Etcd 的 Raft，然后抽离开视线来讲讲 etcd-raft 怎么用，它怎么抽象的。但是读了一下 raftexample 发现不太现实，感觉 etcd-raft 的外部逻辑和实现是严重耦合的，所以或许我们不得不从实现开始，了解一下 etcd-raft 大概提供了什么样的抽象, 然后再介绍一下官方的  raftexample 的内容，便于我们实现简单的 raft 服务器。</p>
+<p>这里先复习一下 Basic Raft，然后 Paper 是一回事，怎么响应这个并发的事件这些也没啥问题，然后看看 <a target="_blank" rel="noopener" href="https://github.com/Qihoo360/floyd">floyd</a> 这个项目是怎么实现的。</p>
+<h2 id="Raft-复习"><a href="#Raft-复习" class="headerlink" title="Raft 复习"></a>Raft 复习</h2><p>基本上来面试的大佬都会 Raft，但我其实已经忘光了，这里尝试用最快的方式建起 Raft 的基本概念。以后有更新也尽量直接在这个地方补充。</p>
+<p>另外，这里只介绍小论文里面的基础部分，小论文没提到的我都不太想介绍。工程优化太多了，最开始入门的时候还是不要搞太复杂，那么开始吧。</p>
+<p>Raft 使用一个 RSM 模型：</p>
+<p><img src="https://image.mwish.me/blog-image/170FFACD-191C-474F-833E-06A1A36E1150.png" alt="170FFACD-191C-474F-833E-06A1A36E1150"></p>
+<p>额，这图其实做了一些暗示：</p>
+<ol>
+<li>Log 和 State Machine 是分开来存储的</li>
+<li>通过某种回调来写 State Machine，写完之后才能通知 client</li>
+</ol>
+<p>那么进入算法部分，Raft 除了成员变更，基础算法包括：</p>
+<ol>
+<li>Leader Election</li>
+<li>Log Replication</li>
+<li>Safety</li>
+</ol>
+<p>同时，这里有需要持久化的内容表（暂不包括 snapshot）：</p>
+<p><img src="https://image.mwish.me/blog-image/CABFCF9B-9C07-48C1-9718-380E659F5DD7.png" alt="CABFCF9B-9C07-48C1-9718-380E659F5DD7"></p>
+<p>其实可以发现这部分非常非常精简。而 Log 包含的内容如下：</p>
+<ol>
+<li>Command for state machine (用户定义)</li>
+<li>Leader Term (我感觉也相当于确定了 Leader)</li>
+</ol>
+<p>Raft 的 Invariant 有：</p>
+<ol>
+<li>对于一个给定的 Term，至多只有一个 Leader</li>
+<li>Leader 不会 Truncate 自己的日志，它是 Append Only 的（这里涉及安全性一节）</li>
+<li>对于任何两条日志，如果 <code>index</code> 和 <code>term</code> 相同，那么它们之前的内容都相同</li>
+<li>如果某个 <code>term</code> 的 <code>Log</code> 被 Commit, 那么 <code>term</code> 比它大的所有 Leader 都应该包含它</li>
+<li>一条已经 Apply 到状态机的日志，不会被在同一个位置提交（感觉是 trivial 的，推出 Commit 了才能 Apply？）</li>
+</ol>
+<p>RPC 包含：</p>
+<ol>
+<li>AppendEntries: 维护心跳包、同步 Log</li>
+<li>RequestVote: 投票</li>
+</ol>
+<h3 id="Leader-Election"><a href="#Leader-Election" class="headerlink" title="Leader Election"></a>Leader Election</h3><ol>
+<li>启动的时候，集群都是 follower</li>
+<li>没有收到 Leader 的心跳包或者 Candidate 的选举，在 <code>electionTimeout</code> 的时间后，<strong>发起选举</strong></li>
+</ol>
+<p>若发起选举：</p>
+<ol>
+<li><code>++term</code>, 状态变成 <code>candidate</code>，广播 requestVoteRPC</li>
+<li>给自己投票</li>
+<li>在 <code>electionTimeout</code> 内收到 <code>1/n</code> 以上的选票，成为 <code>term</code> 的 leader</li>
+</ol>
+<p>对于 follower:</p>
+<ol>
+<li>对同一个 <code>term</code> 只能给出一个成功的 RequestVote</li>
+</ol>
+<p>(个人好奇，某个 candidate 收到了 term 更高的 candidate 的 RequestVote 信息，也会变为 follower)</p>
+<h3 id="Log-Replication"><a href="#Log-Replication" class="headerlink" title="Log Replication"></a>Log Replication</h3><p>Leader 可以为 client 提供服务, 日志复制有几个位点：</p>
+<ul>
+<li><code>[snapshot/0, applied, committed, current log]</code></li>
+</ul>
+<p>Commit 的日志 Apply 到状态机是安全的，当:</p>
+<ol>
+<li>Leader 将 Log 复制到 1/2 以上的服务器时，就可以 Commit</li>
+<li>在 Leader 将自己 term 的日志复制后，Leader 之前的日志 <em>可以 Commit</em> （这里有个问题，是说 Leader 之前的日志可以 commit，但不代表 Leader 自己的日志可以 Commit，然后这是可以 Commit）<ol>
+<li>这里细节上有个 match 操作，会匹配到相同的日志，根据之前的性质，这之前的东西都相同了。然后可以覆盖。这个日志号叫 <code>nextIndex</code>, 不需要持久化</li>
+<li>大部分情况是没有问题的，只有 Leader crash 的时候，可能出现这个问题</li>
+</ol>
+</li>
+</ol>
+<p>Leader 会给每个成员提供 <code>nextIndex</code> 和 <code>matchIndex</code>. <code>nextIndex</code> 表示下一次尝试对齐/同步的起始位置，<code>matchIndex</code> 表示已经对齐的位置。</p>
+<p>上面说的部分是 Leader 做日志同步和提交的部分，日志同步的时候，Leader 的 <code>committed</code> 水位可能比 follower 高，需要推高 <code>follower</code> 的 <code>committed</code> 水位。Leader Committed 的推高应该是 <code>match</code> 成功才能使用的（就是同步成功）。</p>
+<h3 id="Safety"><a href="#Safety" class="headerlink" title="Safety"></a>Safety</h3><p>这是最需要理解的一节。我们要保证 <code>Commit</code> 过的日志不会被覆盖。这一节的限制包括了 Leader Election 的限制，和选上之后如何处理之前未 <code>Commit</code> 的条目（其实我瞎想的是选 Commit 最大的，然后把别的都 Truncate 了，不过实际上这可能导致 Leader 最新推进的 <code>Commit</code> 没有提交）</p>
+<p>选举限制：Candidate 的 RPC 包含日志信息，这里会给 <code>current log</code>, <code>follower</code> 在投票的时候，会拒绝掉 <code>candidate.current.term &lt; current_log.current.term || (candidate.current.term == current_log.current.term &amp;&amp; candidate.current.index &lt; current_log.current.index)</code> 的日志</p>
+<blockquote>
+<p>5.4.3 使用了反证法来证明它的正确性，任何 commit 日志必定复制到了 1/2 以上的机器，投票也要 1/2 以上的机器。新 Leader 拿到投票，必定已经包含了这条日志。</p>
+</blockquote>
+<p>之前 term 提交的限制：此外，Leader 必须靠提交一条自己 term 的日志，来保证之前的日志提交。</p>
+<blockquote>
+<p>Figure8 描述了这种场景，如果 Leader 单独提交之前的日志，那就会挂：<br><img src="https://image.mwish.me/blog-image/057E9A5F-8EAF-4482-B9C9-47E4BC31BC64.png" alt="057E9A5F-8EAF-4482-B9C9-47E4BC31BC64"></p>
+</blockquote>
+<p>对于 Follower Crash, 这里会发送 AppendEntities RPC, 直到日志对齐。</p>
+<h4 id="一个误区"><a href="#一个误区" class="headerlink" title="一个误区"></a>一个误区</h4><p>之前看到下图，感觉很 confusing，不知道 <code>1 1 1 3</code> 那个是咋当选的：</p>
+<p><img src="https://image.mwish.me/blog-image/committed.png" alt="committed"></p>
+<p>后来发现，我原来的想法是有一点误区的。Leader 的 Commit 必须要日志过半，但能够被选为 Leader，它一定包含已 Commit 的最后日志，所以，覆盖别的日志是安全的。然后我的误区是，<code>AppendEntities RPC</code> 必须和 Commit 类似，要一下补齐用户丢失的所有 Log。但 <code>AppendEntities RPC</code> 的 Logs 实际上是可以一条一条发的。</p>
+<h4 id="CommitIndex-和-ApplyIndex-的持久化"><a href="#CommitIndex-和-ApplyIndex-的持久化" class="headerlink" title="CommitIndex 和 ApplyIndex 的持久化"></a>CommitIndex 和 ApplyIndex 的持久化</h4><p>本来这部分在作者 PHD 论文里面介绍的很细，本质上 commitIndex 和 applyIndex 都是可以恢复出来的。不过工程上，可以根据幂等之类的语义，持久化以优化 applyIndex.</p>
+<p>话说我前年在逼乎好像提过这个问题：<a target="_blank" rel="noopener" href="https://www.zhihu.com/question/382888510">https://www.zhihu.com/question/382888510</a></p>
+<h3 id="时间和可用性"><a href="#时间和可用性" class="headerlink" title="时间和可用性"></a>时间和可用性</h3><p><code>broadcastTime &lt;&lt; electionTimeout &lt;&lt; MTBF</code> 以 TiKV 为例，这个 timeout 是 10S: <a target="_blank" rel="noopener" href="https://asktug.com/t/tikv-raft-election-timeout-10s/999">https://asktug.com/t/tikv-raft-election-timeout-10s/999</a> 。</p>
+<p>broadcastTime 也应该比 electionTimeout 小一个数量级。这里有个问题是，这个时间是怎么决定的呢？实际上 <code>broadcastTime</code> 一多，本身心跳也会多，然后 TiKV 本身是 multi-raft 什么的，心跳包数量会非常多，然后这个时间短会把集群打爆，所以时间可以设置长点。论文里推荐的时间是：</p>
+<blockquote>
+<p>Raft’s RPCs typically require the recipient to persist information to stable storage, so the broadcast time may range from 0.5ms to 20ms, depending on storage technology. As a result, the election timeout is likely to be somewhere between 10ms and 500ms.</p>
+</blockquote>
+<p>这几个时间还是很重要的，我感觉很多是在 0-1.5 倍这个时间选出来的？</p>
+<h3 id="集群成员变更"><a href="#集群成员变更" class="headerlink" title="集群成员变更"></a>集群成员变更</h3><p>Raft Group 可能一般就是 3、5个成员，但是因为机器变更导致的 membership change 会是线上低频但一直有的行为。我们首先想的是，通过一条内部的 Log，即 <code>旧配置 -&gt; 新配置</code> 的 Log，来切换到新配置的状态。但有个问题是，配置从 $C<em>{old}$ 切成 $C</em>{new}$ 的时候，可能有下图所示的状态：</p>
+<p><img src="https://image.mwish.me/blog-image/v2-45dd50e08934f1dfc42dbc83251bfe76_r.jpeg" alt="v2-45dd50e08934f1dfc42dbc83251bfe76_r"></p>
+<p>在这里，$C<em>{old}$ 是 <code>&#123;1, 2, 3&#125;</code>，$C</em>{new}$ 是 <code>&#123;1, 2, 3, 4, 5&#125;</code>，比方说 Server 3 是 Leader，同步了 membership change 的日志，然后 commit 了，1和2收到了信息，但是没有 Commit，这个时候，1、2 中的选举可以给对方投票，因为满足安全性；3、4、5 同理，结果是这里有两个 Majority 了（<code>2/3</code> 和 <code>3/5</code>）。</p>
+<p>这个时候，Raft 会切入到一个过渡时期，叫 <code>Joint Consensus</code>，它需要理解两种配置：</p>
+<ol>
+<li>$C<em>{new}$ 和 $C</em>{old}$ 任何一个机器都可以成为 Leader</li>
+<li>Election 和 Commit 都需要 $C<em>{new}$ 和 $C</em>{old}$ <strong>双方</strong> 的 Majority</li>
+</ol>
+<p>Joint Consensus 引入了一个 $C_{old, new}$ 中间状态，如下图：</p>
+<p><img src="https://image.mwish.me/blog-image/487347AA-3308-4821-B662-2F8EE3720BFB.png" alt="487347AA-3308-4821-B662-2F8EE3720BFB"></p>
+<p>加入 $C<em>{old, new}$ 这样的配置变更日志之后，**即使这条变更日志没有 Commit, 集群也会采用它指定的 Conf，这表示，变更日志会在 $C</em>{old, new}$ 达成 Majority 后提交**. 一旦 $C<em>{old, new}$ 提交了，那么，只有采用这个配置的集群可以成为 Leader。这个时候，Leader 可以再创建一条 $C</em>{new}$ 的日志，提交完成之后，$C<em>{new} - C</em>{old}$ 集合中的服务器可以关掉了。</p>
+<blockquote>
+<p>正确性: $C<em>{old}$ 和 $C</em>{new}$ 如 Figure 11，会在不同的时间内生效，由 $C_{old, new}$ 提交为 Barrier。</p>
+</blockquote>
+<p>问题：</p>
+<ol>
+<li>新加入的机器，没有任何日志，可能要 <code>InstallSnapshot</code> 或经过长期同步？<ol>
+<li>这里引入了 Learner，不需要投票、只接收 Leader 日志的阶段。</li>
+</ol>
+</li>
+<li>在 Propose $C<em>{new}$ 的时候，Leader 可能并不在 $C</em>{new}$ 中。这个协议还是可以运行的，但是 <code>Majority</code> 并不包括 Leader。在 $C_{new}$ 提交之后，才能发生 Leader 转移。</li>
+<li>采用新配置时，旧配置没有收到 Heartbeat，可能 <code>++term</code> 然后变 candidate，随之会影响一些没收到 $C_{new}$ 日志的机器，把它们 term 也搞起来。这里的方案是，Leader 存在的时候，不会切 Leader 重新选举；然后 Server 在一次选举之间，如果收到了更高 <code>term</code> 的请求，也要等待一定时间，防止心跳把自己打炸</li>
+</ol>
+<p>那么，为什么 <code>Conf</code> 需要直接用 new 的呢？走 Committed 在进入下一阶段的目的是在第一阶段达成两方的 Majority，第二阶段只需要新的 Majority，它们不相交。而直接用的目的是不用追踪大部分机器的 <code>CommitIndex</code>:</p>
+<blockquote>
+<p>If servers adopted $C<em>{new}$ only when they learned that $C</em>{new}$ was committed, Raft leaders would have a difficult time knowing when a majority of the old cluster had adopted it. They would need to track which servers know of the entry’s commitment, and the servers would need to persist their commit index to disk; neither of these mechanisms is required in Raft. Instead, each server adopts $C<em>{new}$ as soon as that entry exists in its log, and the leader knows it’s safe to allow further conﬁguration changes as soon as the $C</em>{new}$ entry has been committed. Unfortunately, this decision does imply that a log entry for a conﬁguration change can be removed (if leadership changes); in this case, a server must be prepared to fall back to the previous conﬁguration in its log.</p>
+</blockquote>
+<p>有的地方实现会采用单步变更，但是实际上单步变更会导致一定的集群不可用问题，详见：作者的 <a target="_blank" rel="noopener" href="https://github.com/ongardie/dissertation#chapter-4-cluster-membership-changes">https://github.com/ongardie/dissertation#chapter-4-cluster-membership-changes</a> 和二手文章 <a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/359206808">https://zhuanlan.zhihu.com/p/359206808</a></p>
+<h3 id="Snapshot-和-Log-Compaction"><a href="#Snapshot-和-Log-Compaction" class="headerlink" title="Snapshot 和 Log Compaction"></a>Snapshot 和 Log Compaction</h3><p>Snapshot 的职责归功于状态机，而非 Raft。它应用于已经 <code>Applied</code> 的数据，然后由各个机器 <strong>分别</strong> 进行，通过 InstallSnapshot 传输。（InstallSnapshot 还可以分多次发，神必）</p>
+<p>作者认为，Log Compaction 是非 Leader 主导的，但是毕竟是已经 Applied 的数据了，所以也没那么 Care。</p>
+<p>在收到 Snapshot 之后，可以 Truncate 后续的 Log，等 AppendEntities 把自己整活了。这个时候估摸着也可以是个 Learner 啥的，不给系统瞎 vote 添乱。</p>
+<h3 id="Client-交互"><a href="#Client-交互" class="headerlink" title="Client 交互"></a>Client 交互</h3><h4 id="一般的读写操作"><a href="#一般的读写操作" class="headerlink" title="一般的读写操作"></a>一般的读写操作</h4><p>Raft 是一个 Leader-Based 的一致性协议，下面的形式是为了保证 Linearizable 而要求的</p>
+<p>一般的写消息要么会让 client 走到 Leader 上，要么从节点负责转发给 Leader，而 Apply 之后能够收到消息。如果 Leader Crash 了，这些操作可能就 Timeout。而读操作可以依靠在读发出后，写一条 no-op 或者等待写操作完成，来做相关的保证（总之，收到读请求到读状态机之间，一定要有一条日志，来保证同步完成）。读也可以使用大论文描述的 Lease。</p>
+<p>当然，Zookeeper 允许本地读，这种方式只能保证 Serializable (Zookeeper 论文提的是 A-Linearizable)。</p>
+<h4 id="写重试"><a href="#写重试" class="headerlink" title="写重试"></a>写重试</h4><p>对于写，可以给每个请求一个 Seq，重试的时候，论文提到，可以维护一个 seq，发现 FSM 里面有这个 seq，可以直接返回成功。当然这肯定没问题，但万一是没 commit 或者 commit 了的没同步，怎么办呢？这里可以：</p>
+<ol>
+<li>Apply 的阶段，做 Seq 的去重</li>
+<li>维护一个集合，来区分 <code>&#123;Commit 但没有 Apply&#125;</code> 和 <code>&#123;没有 Commit&#125;</code> 的 Seq 集合。</li>
+</ol>
+<h2 id="Some-Quiz"><a href="#Some-Quiz" class="headerlink" title="Some Quiz"></a>Some Quiz</h2><p>Quiz 可以见：<a target="_blank" rel="noopener" href="https://ongardie.net/static/raft/userstudy/quizzes.html">https://ongardie.net/static/raft/userstudy/quizzes.html</a></p>
+<p>老实说我 2 错了，因为实在不知道那个为 <code>1 1 1 3</code> 的是怎么当选的…详细原因可以看我 Safety 那节下面的勘误。</p>
+<h2 id="Qihoo360-floyd"><a href="#Qihoo360-floyd" class="headerlink" title="Qihoo360/floyd"></a>Qihoo360/floyd</h2><p>Qihoo360/floyd 是一个简单的 Raft 实现，它提供了 KV、分布式锁的功能。相对 Etcd 提供一个轻量的 Raft 模块，floyd 耦合的比较重，甚至把存储数据、Log、Raft 的 Index 等信息都丢到了一个 CF，很多 C++ 代码感觉也写的比较乱。但它差不多只有数千行，而且展示了如何实现一个 Basic Raft。这些还是比较重要的，因为本身实现一个并发的状态机就要有各种坑，你可能还要处理 RPC 的各种 corner case。所以有个简单的项目借鉴还是求之不得。</p>
+<p>它对 Raft 论文支持如下：</p>
+<div class="table-container">
+<table>
+<thead>
+<tr>
+<th style="text-align:center">功能</th>
+<th>是否支持</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">领导选举/日志同步/安全性</td>
+<td>是</td>
+</tr>
+<tr>
+<td style="text-align:center">Client</td>
+<td>是</td>
+</tr>
+<tr>
+<td style="text-align:center">Log Compaction</td>
+<td>否</td>
+</tr>
+<tr>
+<td style="text-align:center">Membership Change</td>
+<td>有支持单步变更的接口，但没实现</td>
+</tr>
+<tr>
+<td style="text-align:center">Learner</td>
+<td>无</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p><code>floyd/include/floyd.h</code> 表示了它对外的接口，简单表示如下：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">class</span> <span class="title class_">Floyd</span>  &#123;</span><br><span class="line"> <span class="keyword">public</span>:</span><br><span class="line">  <span class="function"><span class="type">static</span> Status <span class="title">Open</span><span class="params">(<span class="type">const</span> Options&amp; options, Floyd** floyd)</span></span>;</span><br><span class="line"></span><br><span class="line">  <span class="built_in">Floyd</span>() &#123; &#125;</span><br><span class="line">  <span class="keyword">virtual</span> ~<span class="built_in">Floyd</span>();</span><br><span class="line"></span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> Status <span class="title">Write</span><span class="params">(<span class="type">const</span> std::string&amp; key, <span class="type">const</span> std::string&amp; value)</span> </span>= <span class="number">0</span>;</span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> Status <span class="title">Delete</span><span class="params">(<span class="type">const</span> std::string&amp; key)</span> </span>= <span class="number">0</span>;</span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> Status <span class="title">Read</span><span class="params">(<span class="type">const</span> std::string&amp; key, std::string* value)</span> </span>= <span class="number">0</span>;</span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> Status <span class="title">DirtyRead</span><span class="params">(<span class="type">const</span> std::string&amp; key, std::string* value)</span> </span>= <span class="number">0</span>;</span><br><span class="line">  <span class="comment">// ttl is millisecond</span></span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> Status <span class="title">TryLock</span><span class="params">(<span class="type">const</span> std::string&amp; name, <span class="type">const</span> std::string&amp; holder, <span class="type">uint64_t</span> ttl)</span> </span>= <span class="number">0</span>;</span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> Status <span class="title">UnLock</span><span class="params">(<span class="type">const</span> std::string&amp; name, <span class="type">const</span> std::string&amp; holder)</span> </span>= <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// return true if leader has been elected</span></span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> <span class="type">bool</span> <span class="title">GetLeader</span><span class="params">(std::string* ip_port)</span> </span>= <span class="number">0</span>;</span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> <span class="type">bool</span> <span class="title">GetLeader</span><span class="params">(std::string* ip, <span class="type">int</span>* port)</span> </span>= <span class="number">0</span>;</span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> <span class="type">bool</span> <span class="title">HasLeader</span><span class="params">()</span> </span>= <span class="number">0</span>;</span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> <span class="type">bool</span> <span class="title">IsLeader</span><span class="params">()</span> </span>= <span class="number">0</span>;</span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> Status <span class="title">GetAllServers</span><span class="params">(std::set&lt;std::string&gt;* nodes)</span> </span>= <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// used for debug</span></span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> <span class="type">bool</span> <span class="title">GetServerStatus</span><span class="params">(std::string* msg)</span> </span>= <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// log level can be modified</span></span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> <span class="type">void</span> <span class="title">set_log_level</span><span class="params">(<span class="type">const</span> <span class="type">int</span> log_level)</span> </span>= <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line"> <span class="keyword">private</span>:</span><br><span class="line">  <span class="comment">// No coping allowed</span></span><br><span class="line">  <span class="built_in">Floyd</span>(<span class="type">const</span> Floyd&amp;);</span><br><span class="line">  <span class="type">void</span> <span class="keyword">operator</span>=(<span class="type">const</span> Floyd&amp;);</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>而 <code>example/simple/t.cc</code> 描述了一个简单的使用 Case，非常简单易懂：<a target="_blank" rel="noopener" href="https://github.com/mapleFU/floyd-notes/blob/mwish-notes/floyd/example/simple/t.cc#L18">https://github.com/mapleFU/floyd-notes/blob/mwish-notes/floyd/example/simple/t.cc#L18</a></p>
+<p>它内部实现如下（我图画的有点乱，以自己看得懂为准，有修改意见可以随便喷）：</p>
+<p><img src="https://image.mwish.me/blog-image/DDAC89FE-87C2-4E59-9657-CEC2EB3721B8.png" alt="DDAC89FE-87C2-4E59-9657-CEC2EB3721B8"></p>
+<ul>
+<li>部分消息的结构体定义在 <code>proto/floyd.proto</code>，包括 Raft 日志的结构和状态机的日志结构</li>
+<li>持久状态存储在 RocksDB 中，有下列两类<ul>
+<li><code>RaftLog</code>: 存储论文中的 <code>Log[]</code></li>
+<li><code>RaftMeta</code>: 存储 Term, VoteFor, commitIndex, applyIndex，后两者在 Raft Paper 中不要求持久化, 不过工程上持久化一下也没啥毛病。任何一个 Get/Set 接口, RaftMeta 本身都不会走缓存(可能有 RocksDB 的 Cache), 直接进 RocksDB.</li>
+</ul>
+</li>
+<li>共享的状态被封装到 <code>FloydContext</code> 中，它持有 <code>RaftLog</code> 和 <code>RaftMeta</code> 的状态，在各个对象间共享，Commit 推高 Commit 后，会提高 <code>FloydContext</code> 中的内存状态，而触发 <code>Apply</code>，同时，Apply 也会更新这个状态。它负责逻辑比较混杂：<ul>
+<li>[Persistent] 负责读取 <code>RaftMeta</code>，维护 <code>commitIndex</code>、<code>applyIndex</code>、<code>voteFor</code>、<code>term</code> 等</li>
+<li>[Volatile] 负责集群的 Role，一些内存 <code>BecomeLeader</code> <code>BecomeFollower</code> 的逻辑会走它。</li>
+</ul>
+</li>
+<li>FloydApply 将 Committed 的用户日志 <code>Apply</code> 到数据存储中</li>
+<li>Peers会存放一些配置的 IP，以及仅对 Leader 有用的 <code>nextIndex</code> 和 <code>matchIndex</code></li>
+</ul>
+<p>在这里，系统中也有不少线程，最主要的是：</p>
+<ol>
+<li><code>floyd_primary_thread</code>：只有一个的线程，负责定时发起 HeartBeat（<code>AppendEntities RPC</code>）、检查 Leader （查看是否 electionTimeout）、处理用户的 RPC</li>
+<li><code>floyd_peer_thread</code>：理论上，Raft Group 每个成员，这里都会多一个 <code>floyd_peer_thread</code>。它负责给每个成员发送 RPC，并通过 <code>FloydContext</code> 来变更状态.</li>
+</ol>
+<h3 id="Leader-Election-1"><a href="#Leader-Election-1" class="headerlink" title="Leader Election"></a>Leader Election</h3><h4 id="Sender"><a href="#Sender" class="headerlink" title="Sender"></a>Sender</h4><p>一个 <code>FloydImpl</code> 启动后，<code>floyd_primary_thread</code> 会检查自己的状态，如果 timeout 了，可能要变更为 Candidate. 注意变成 Candidate 之后，递增了 Term，然后给了自己一票。</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//! 如果没有 Leader, 把自身变成 Candidate, 然后通知 Peer 线程.</span></span><br><span class="line"><span class="comment">//! 再触发一个 CheckLeader, 相当于 ElectionTimeout.</span></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">FloydPrimary::LaunchCheckLeader</span><span class="params">()</span> </span>&#123;</span><br><span class="line">  <span class="function">slash::MutexLock <span class="title">l</span><span class="params">(&amp;context_-&gt;global_mu)</span></span>;</span><br><span class="line">  <span class="keyword">if</span> (context_-&gt;role == Role::kFollower || context_-&gt;role == Role::kCandidate) &#123;</span><br><span class="line">    <span class="keyword">if</span> (options_.single_mode) &#123;</span><br><span class="line">      <span class="comment">// 忽略 SingleMode</span></span><br><span class="line">			...</span><br><span class="line">    &#125; <span class="keyword">else</span> <span class="keyword">if</span> (context_-&gt;last_op_time + options_.check_leader_us &lt; slash::<span class="built_in">NowMicros</span>()) &#123;</span><br><span class="line">      context_-&gt;<span class="built_in">BecomeCandidate</span>();</span><br><span class="line"></span><br><span class="line">      <span class="comment">// 吐槽: 实现上下面进行了 3次 RocksDB Batch 写, 因为每次 Set 都会写, 这是真的牛批...</span></span><br><span class="line">      raft_meta_-&gt;<span class="built_in">SetCurrentTerm</span>(context_-&gt;current_term);</span><br><span class="line">      raft_meta_-&gt;<span class="built_in">SetVotedForIp</span>(context_-&gt;voted_for_ip);</span><br><span class="line">      raft_meta_-&gt;<span class="built_in">SetVotedForPort</span>(context_-&gt;voted_for_port);</span><br><span class="line">      <span class="built_in">NoticePeerTask</span>(kHeartBeat);</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="comment">// 在 ElectionTimeout 之后, 尝试再次调度 checkLeader</span></span><br><span class="line">  <span class="built_in">AddTask</span>(kCheckLeader);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// when adding task to peer thread, we can consider that this job have been in the network</span></span><br><span class="line"><span class="comment">// even it is still in the peer thread&#x27;s queue</span></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">FloydPrimary::NoticePeerTask</span><span class="params">(TaskType type)</span> </span>&#123;</span><br><span class="line">  <span class="keyword">for</span> (<span class="keyword">auto</span>&amp; peer : (*peers_)) &#123;</span><br><span class="line">    <span class="keyword">switch</span> (type) &#123;</span><br><span class="line">    <span class="keyword">case</span> kHeartBeat:</span><br><span class="line">      peer.second-&gt;<span class="built_in">AddRequestVoteTask</span>();</span><br><span class="line">      <span class="keyword">break</span>;</span><br><span class="line">    <span class="keyword">case</span> kNewCommand:</span><br><span class="line">      peer.second-&gt;<span class="built_in">AddAppendEntriesTask</span>();</span><br><span class="line">      <span class="keyword">break</span>;</span><br><span class="line">    <span class="keyword">default</span>:</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这里会用 <code>RequestVote</code> 来做 kHeartbeat（你可能会很奇怪，Heartbeat 不是 AppendEntry 吗？不过它 AppendEntry 又会走到 <code>kNewCommand</code>，我觉得有点乱），然后触发所有 <code>Peer</code> 线程的 <code>RequestVote</code>，触发如下内容：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">Peer::RequestVoteRPC</span><span class="params">()</span> </span>&#123;</span><br><span class="line">  <span class="type">uint64_t</span> last_log_term;</span><br><span class="line">  <span class="type">uint64_t</span> last_log_index;</span><br><span class="line">  CmdRequest req;</span><br><span class="line">	<span class="comment">// 初始化 RequestVote RPC</span></span><br><span class="line">  &#123;</span><br><span class="line">    <span class="function">slash::MutexLock <span class="title">l</span><span class="params">(&amp;context_-&gt;global_mu)</span></span>;</span><br><span class="line">    raft_log_-&gt;<span class="built_in">GetLastLogTermAndIndex</span>(&amp;last_log_term, &amp;last_log_index);</span><br><span class="line"></span><br><span class="line">    req.<span class="built_in">set_type</span>(Type::kRequestVote);</span><br><span class="line">    CmdRequest_RequestVote* request_vote = req.<span class="built_in">mutable_request_vote</span>();</span><br><span class="line">    request_vote-&gt;<span class="built_in">set_ip</span>(options_.local_ip);</span><br><span class="line">    request_vote-&gt;<span class="built_in">set_port</span>(options_.local_port);</span><br><span class="line">    request_vote-&gt;<span class="built_in">set_term</span>(context_-&gt;current_term);</span><br><span class="line">    request_vote-&gt;<span class="built_in">set_last_log_term</span>(last_log_term);</span><br><span class="line">    request_vote-&gt;<span class="built_in">set_last_log_index</span>(last_log_index);</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// 同步发送请求.</span></span><br><span class="line">  CmdResponse res;</span><br><span class="line">  Status result = pool_-&gt;<span class="built_in">SendAndRecv</span>(peer_addr_, req, &amp;res);</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span> (!result.<span class="built_in">ok</span>()) &#123;</span><br><span class="line">    <span class="keyword">return</span>;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  &#123;</span><br><span class="line">  <span class="function">slash::MutexLock <span class="title">l</span><span class="params">(&amp;context_-&gt;global_mu)</span></span>;</span><br><span class="line">  <span class="comment">// RequestVote 发生 RPC 错误</span></span><br><span class="line">  <span class="keyword">if</span> (!result.<span class="built_in">ok</span>()) &#123;</span><br><span class="line">    <span class="keyword">return</span>;</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="comment">/***</span></span><br><span class="line"><span class="comment">   * 下列为正常的 Raft 处理逻辑</span></span><br><span class="line"><span class="comment">   */</span></span><br><span class="line"></span><br><span class="line">  <span class="comment">// 对方的 Term 比自身高, 设置状态为 Follower, 更新 Term.</span></span><br><span class="line">  <span class="keyword">if</span> (res.<span class="built_in">request_vote_res</span>().<span class="built_in">term</span>() &gt; context_-&gt;current_term) &#123;</span><br><span class="line">    <span class="comment">// RequestVote fail, maybe opposite has larger term, or opposite has</span></span><br><span class="line">    <span class="comment">// longer log. if opposite has larger term, this node will become follower</span></span><br><span class="line">    <span class="comment">// otherwise we will do nothing</span></span><br><span class="line">    context_-&gt;<span class="built_in">BecomeFollower</span>(res.<span class="built_in">request_vote_res</span>().<span class="built_in">term</span>());</span><br><span class="line">    raft_meta_-&gt;<span class="built_in">SetCurrentTerm</span>(context_-&gt;current_term);</span><br><span class="line">    <span class="comment">// 实际上相当于清空 ip/port.</span></span><br><span class="line">    raft_meta_-&gt;<span class="built_in">SetVotedForIp</span>(context_-&gt;voted_for_ip);</span><br><span class="line">    raft_meta_-&gt;<span class="built_in">SetVotedForPort</span>(context_-&gt;voted_for_port);</span><br><span class="line">    <span class="keyword">return</span>;</span><br><span class="line">  &#125;</span><br><span class="line">  </span><br><span class="line">  <span class="comment">// 如果自身状态还是 Follower, 且对方的 Term 不比自己高, 那么要么投给自己, 要么没投.</span></span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span> (context_-&gt;role == Role::kCandidate) &#123;</span><br><span class="line">    <span class="comment">// kOk means RequestVote success, opposite vote for me</span></span><br><span class="line">    <span class="keyword">if</span> (res.<span class="built_in">request_vote_res</span>().<span class="built_in">vote_granted</span>() == <span class="literal">true</span>) &#123;    <span class="comment">// granted</span></span><br><span class="line">      <span class="comment">// However, we need check whether this vote is vote for old term</span></span><br><span class="line">      <span class="comment">// we need ignore these type of vote.</span></span><br><span class="line">      <span class="comment">//</span></span><br><span class="line">      <span class="comment">// 可以成为 Leader 啦!</span></span><br><span class="line">      <span class="keyword">if</span> (<span class="built_in">CheckAndVote</span>(res.<span class="built_in">request_vote_res</span>().<span class="built_in">term</span>())) &#123;</span><br><span class="line">        context_-&gt;<span class="built_in">BecomeLeader</span>();</span><br><span class="line">        <span class="built_in">UpdatePeerInfo</span>();</span><br><span class="line">        primary_-&gt;<span class="built_in">AddTask</span>(kHeartBeat, <span class="literal">false</span>);</span><br><span class="line">      &#125;</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">      <span class="comment">// Note(mwish): 对方没有投票给自己, 怎么就变成 Follower 了.</span></span><br><span class="line">      <span class="comment">// 这个地方没有 Bug(因为 context_ 变更不会导致错误), 但是会很容易引起 bug</span></span><br><span class="line">      <span class="comment">// 我觉得可以全部 comment 掉.</span></span><br><span class="line">      context_-&gt;<span class="built_in">BecomeFollower</span>(res.<span class="built_in">request_vote_res</span>().<span class="built_in">term</span>());</span><br><span class="line">      raft_meta_-&gt;<span class="built_in">SetCurrentTerm</span>(context_-&gt;current_term);</span><br><span class="line">      raft_meta_-&gt;<span class="built_in">SetVotedForIp</span>(context_-&gt;voted_for_ip);</span><br><span class="line">      raft_meta_-&gt;<span class="built_in">SetVotedForPort</span>(context_-&gt;voted_for_port);</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="keyword">return</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这里在状态变更的时候，持有了 <code>global_mu_</code>，然后有个「半数选票」的逻辑：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//! 如果非本 term, 则无效, 否则 increment vote_quorum, 然后返回本 term 是否达到 1/2.</span></span><br><span class="line"><span class="function"><span class="type">bool</span> <span class="title">Peer::CheckAndVote</span><span class="params">(<span class="type">uint64_t</span> vote_term)</span> </span>&#123;</span><br><span class="line">  <span class="comment">// 检测 ABA 问题.</span></span><br><span class="line">  <span class="keyword">if</span> (context_-&gt;current_term != vote_term) &#123;</span><br><span class="line">    <span class="keyword">return</span> <span class="literal">false</span>;</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="comment">// 半数检查</span></span><br><span class="line">  <span class="keyword">return</span> (++context_-&gt;vote_quorum) &gt; (options_.members.<span class="built_in">size</span>() / <span class="number">2</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h4 id="Receiver"><a href="#Receiver" class="headerlink" title="Receiver"></a>Receiver</h4><p>此外，对应处理 <code>RequestVote RPC</code> 的逻辑涉及选举和安全性, 内容如下：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//! 响应投票 RPC.</span></span><br><span class="line"><span class="function"><span class="type">int</span> <span class="title">FloydImpl::ReplyRequestVote</span><span class="params">(<span class="type">const</span> CmdRequest&amp; request, CmdResponse* response)</span> </span>&#123;</span><br><span class="line">  <span class="function">slash::MutexLock <span class="title">l</span><span class="params">(&amp;context_-&gt;global_mu)</span></span>;</span><br><span class="line">  <span class="type">bool</span> granted = <span class="literal">false</span>;</span><br><span class="line">  CmdRequest_RequestVote request_vote = request.<span class="built_in">request_vote</span>();</span><br><span class="line"></span><br><span class="line">  <span class="comment">/*</span></span><br><span class="line"><span class="comment">   * If RPC request or response contains term T &gt; currentTerm: set currentTerm = T, convert to follower (5.1)</span></span><br><span class="line"><span class="comment">   *</span></span><br><span class="line"><span class="comment">   * 变成 follower, 然后设置 VoteFor.</span></span><br><span class="line"><span class="comment">   */</span></span><br><span class="line">  <span class="keyword">if</span> (request_vote.<span class="built_in">term</span>() &gt; context_-&gt;current_term) &#123;</span><br><span class="line">    context_-&gt;<span class="built_in">BecomeFollower</span>(request_vote.<span class="built_in">term</span>()); <span class="comment">// 推高自己的 term.</span></span><br><span class="line">    raft_meta_-&gt;<span class="built_in">SetCurrentTerm</span>(context_-&gt;current_term);</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="comment">// if caller&#x27;s term smaller than my term, then I will notice him</span></span><br><span class="line">  <span class="keyword">if</span> (request_vote.<span class="built_in">term</span>() &lt; context_-&gt;current_term) &#123;</span><br><span class="line">    <span class="built_in">LOGV</span>(INFO_LEVEL, info_log_, <span class="string">&quot;FloydImpl::ReplyRequestVote: Leader %s:%d term %lu is smaller than my %s:%d current term %lu&quot;</span>,</span><br><span class="line">        request_vote.<span class="built_in">ip</span>().<span class="built_in">c_str</span>(), request_vote.<span class="built_in">port</span>(), request_vote.<span class="built_in">term</span>(), options_.local_ip.<span class="built_in">c_str</span>(), options_.local_port,</span><br><span class="line">        context_-&gt;current_term);</span><br><span class="line">    <span class="built_in">BuildRequestVoteResponse</span>(context_-&gt;current_term, granted, response);</span><br><span class="line">    <span class="keyword">return</span> <span class="number">-1</span>;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// 论文: 安全性, 不能给 Log 比自己旧的投票.</span></span><br><span class="line"></span><br><span class="line">  <span class="type">uint64_t</span> my_last_log_term = <span class="number">0</span>;</span><br><span class="line">  <span class="type">uint64_t</span> my_last_log_index = <span class="number">0</span>;</span><br><span class="line">  raft_log_-&gt;<span class="built_in">GetLastLogTermAndIndex</span>(&amp;my_last_log_term, &amp;my_last_log_index);</span><br><span class="line">  <span class="comment">// if votedfor is null or candidateId, and candidated&#x27;s log is at least as up-to-date</span></span><br><span class="line">  <span class="comment">// as receiver&#x27;s log, grant vote</span></span><br><span class="line">  <span class="keyword">if</span> ((request_vote.<span class="built_in">last_log_term</span>() &lt; my_last_log_term) ||</span><br><span class="line">      ((request_vote.<span class="built_in">last_log_term</span>() == my_last_log_term) &amp;&amp; (request_vote.<span class="built_in">last_log_index</span>() &lt; my_last_log_index))) &#123;</span><br><span class="line">    <span class="built_in">BuildRequestVoteResponse</span>(context_-&gt;current_term, granted, response);</span><br><span class="line">    <span class="keyword">return</span> <span class="number">-1</span>;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// vote_for 不能给这个 term 已经投过票的做操作.</span></span><br><span class="line">  <span class="keyword">if</span> (vote_for_.<span class="built_in">find</span>(request_vote.<span class="built_in">term</span>()) != vote_for_.<span class="built_in">end</span>()</span><br><span class="line">      &amp;&amp; vote_for_[request_vote.<span class="built_in">term</span>()] != std::<span class="built_in">make_pair</span>(request_vote.<span class="built_in">ip</span>(), request_vote.<span class="built_in">port</span>())) &#123;</span><br><span class="line">    <span class="keyword">return</span> <span class="number">-1</span>;</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="comment">// 给予选票.</span></span><br><span class="line">  vote_for_[request_vote.<span class="built_in">term</span>()] = std::<span class="built_in">make_pair</span>(request_vote.<span class="built_in">ip</span>(), request_vote.<span class="built_in">port</span>());</span><br><span class="line">  context_-&gt;<span class="built_in">BecomeFollower</span>(request_vote.<span class="built_in">term</span>());</span><br><span class="line">  <span class="comment">// Note(mwish): -&gt; 难道这个地方不应该做一个 Batch Op 的吗, orz...</span></span><br><span class="line">  raft_meta_-&gt;<span class="built_in">SetCurrentTerm</span>(context_-&gt;current_term);</span><br><span class="line">  raft_meta_-&gt;<span class="built_in">SetVotedForIp</span>(context_-&gt;voted_for_ip);</span><br><span class="line">  raft_meta_-&gt;<span class="built_in">SetVotedForPort</span>(context_-&gt;voted_for_port);</span><br><span class="line">  <span class="comment">// Got my vote</span></span><br><span class="line">  <span class="built_in">GrantVote</span>(request_vote.<span class="built_in">term</span>(), request_vote.<span class="built_in">ip</span>(), request_vote.<span class="built_in">port</span>());</span><br><span class="line">  granted = <span class="literal">true</span>;</span><br><span class="line"></span><br><span class="line">  context_-&gt;last_op_time = slash::<span class="built_in">NowMicros</span>();</span><br><span class="line">  <span class="built_in">BuildRequestVoteResponse</span>(context_-&gt;current_term, granted, response);</span><br><span class="line">  <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h4 id="竞选失败"><a href="#竞选失败" class="headerlink" title="竞选失败"></a>竞选失败</h4><p>如果没有 Leader, <code>floyd_primary_thread</code> 会不停调用 <code>CheckLeader</code>，这里的条件是：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">context_-&gt;last_op_time + options_.check_leader_us &lt; slash::<span class="built_in">NowMicros</span>()</span><br></pre></td></tr></table></figure>
+<p>这里会根据 <code>last_op_time</code> 来 Leader 相关的操作时间。接收成功的 <code>RequestVote</code> 和任何 <code>AppendEntities</code> 都会更新这个时间（题外话，这里不是有效 Leader 的 <code>AppendEntities</code> 都会更新，可能是 Leader 心跳包是 <code>RequestVote</code>，我觉得 tmd 好诡异）</p>
+<h3 id="Log-Replication-1"><a href="#Log-Replication-1" class="headerlink" title="Log Replication"></a>Log Replication</h3><p>外部的请求会走到 <code>AppendEntries</code></p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">FloydPrimary::NoticePeerTask</span><span class="params">(TaskType type)</span> </span>&#123;</span><br><span class="line">  <span class="keyword">for</span> (<span class="keyword">auto</span>&amp; peer : (*peers_)) &#123;</span><br><span class="line">    <span class="keyword">switch</span> (type) &#123;</span><br><span class="line">    <span class="keyword">case</span> kHeartBeat:</span><br><span class="line">			...</span><br><span class="line">      <span class="keyword">break</span>;</span><br><span class="line">    <span class="keyword">case</span> kNewCommand:</span><br><span class="line">      peer.second-&gt;<span class="built_in">AddAppendEntriesTask</span>();</span><br><span class="line">      <span class="keyword">break</span>;</span><br><span class="line">    <span class="keyword">default</span>:</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>我们回忆一下，选上 Leader 的时候会做一些初始化：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//! 成为了 Leader, 可以更新 Peer 的信息了.</span></span><br><span class="line"><span class="comment">//! Q: 这个地方不会有并发吗...</span></span><br><span class="line"><span class="comment">//! A: 你本机理论上只有 Leader 线程会改，相对论保证你没有并发.</span></span><br><span class="line"><span class="comment">//!</span></span><br><span class="line"><span class="comment">//! 初始化 nextIndex 为 Leader 的 index, matchIndex 为 0.</span></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">Peer::UpdatePeerInfo</span><span class="params">()</span> </span>&#123;</span><br><span class="line">  <span class="keyword">for</span> (<span class="keyword">auto</span>&amp; pt : (*peers_)) &#123;</span><br><span class="line">    pt.second-&gt;<span class="built_in">set_next_index</span>(raft_log_-&gt;<span class="built_in">GetLastLogIndex</span>() + <span class="number">1</span>);</span><br><span class="line">    pt.second-&gt;<span class="built_in">set_match_index</span>(<span class="number">0</span>);</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这个函数比较长，我们会分几部分讲，并顺便介绍 <code>Peer</code> 。第一部分是构造和发送请求：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">Peer::AppendEntriesRPC</span><span class="params">()</span> </span>&#123;</span><br><span class="line">  <span class="type">uint64_t</span> prev_log_index = <span class="number">0</span>;</span><br><span class="line">  <span class="type">uint64_t</span> num_entries = <span class="number">0</span>;</span><br><span class="line">  <span class="type">uint64_t</span> prev_log_term = <span class="number">0</span>;</span><br><span class="line">  <span class="type">uint64_t</span> last_log_index = <span class="number">0</span>;</span><br><span class="line">  <span class="type">uint64_t</span> current_term = <span class="number">0</span>;</span><br><span class="line">  CmdRequest req;</span><br><span class="line">  CmdRequest_AppendEntries* append_entries = req.<span class="built_in">mutable_append_entries</span>();</span><br><span class="line">  &#123;</span><br><span class="line">  <span class="function">slash::MutexLock <span class="title">l</span><span class="params">(&amp;context_-&gt;global_mu)</span></span>;</span><br><span class="line">  prev_log_index = next_index_ - <span class="number">1</span>;</span><br><span class="line">  last_log_index = raft_log_-&gt;<span class="built_in">GetLastLogIndex</span>();</span><br><span class="line">  <span class="comment">/*</span></span><br><span class="line"><span class="comment">   * LOGV(INFO_LEVEL, info_log_, &quot;Peer::AppendEntriesRPC: next_index_ %d last_log_index %d peer_last_op_time %lu nowmicros %lu&quot;,</span></span><br><span class="line"><span class="comment">   *     next_index_.load(), last_log_index, peer_last_op_time, slash::NowMicros());</span></span><br><span class="line"><span class="comment">   */</span></span><br><span class="line">  <span class="keyword">if</span> (next_index_ &gt; last_log_index &amp;&amp; peer_last_op_time + options_.heartbeat_us &gt; slash::<span class="built_in">NowMicros</span>()) &#123;</span><br><span class="line">    <span class="keyword">return</span>;</span><br><span class="line">  &#125;</span><br><span class="line">  peer_last_op_time = slash::<span class="built_in">NowMicros</span>();</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span> (prev_log_index != <span class="number">0</span>) &#123;</span><br><span class="line">    Entry entry;</span><br><span class="line">    <span class="keyword">if</span> (raft_log_-&gt;<span class="built_in">GetEntry</span>(prev_log_index, &amp;entry) != <span class="number">0</span>) &#123;</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">      prev_log_term = entry.<span class="built_in">term</span>();</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">  current_term = context_-&gt;current_term;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// 下面这些和论文一样.</span></span><br><span class="line">  </span><br><span class="line">  req.<span class="built_in">set_type</span>(Type::kAppendEntries);</span><br><span class="line">  append_entries-&gt;<span class="built_in">set_ip</span>(options_.local_ip);</span><br><span class="line">  append_entries-&gt;<span class="built_in">set_port</span>(options_.local_port);</span><br><span class="line">  append_entries-&gt;<span class="built_in">set_term</span>(current_term);</span><br><span class="line">  append_entries-&gt;<span class="built_in">set_prev_log_index</span>(prev_log_index);</span><br><span class="line">  append_entries-&gt;<span class="built_in">set_prev_log_term</span>(prev_log_term);</span><br><span class="line">  append_entries-&gt;<span class="built_in">set_leader_commit</span>(context_-&gt;commit_index);</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// 获取 [next_index_, last_log_index] 之间的 LogEntry.</span></span><br><span class="line">  <span class="comment">// 发送受到 `Options` 的限制, 最多发送 append_entries_count_once 个</span></span><br><span class="line">  <span class="comment">//  或者 `append_entries_size_once` bytes.</span></span><br><span class="line">  Entry *tmp_entry = <span class="keyword">new</span> <span class="built_in">Entry</span>();</span><br><span class="line">  <span class="keyword">for</span> (<span class="type">uint64_t</span> index = next_index_; index &lt;= last_log_index; index++) &#123;</span><br><span class="line">    <span class="keyword">if</span> (raft_log_-&gt;<span class="built_in">GetEntry</span>(index, tmp_entry) == <span class="number">0</span>) &#123;</span><br><span class="line">      <span class="comment">// TODO(ba0tiao) how to avoid memory copy here</span></span><br><span class="line">      Entry *entry = append_entries-&gt;<span class="built_in">add_entries</span>();</span><br><span class="line">      *entry = *tmp_entry;</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">      <span class="keyword">break</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    num_entries++;</span><br><span class="line">    <span class="keyword">if</span> (num_entries &gt;= options_.append_entries_count_once</span><br><span class="line">        || (<span class="type">uint64_t</span>)append_entries-&gt;<span class="built_in">ByteSize</span>() &gt;= options_.append_entries_size_once) &#123;</span><br><span class="line">      <span class="keyword">break</span>;</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="keyword">delete</span> tmp_entry;</span><br><span class="line"></span><br><span class="line">  CmdResponse res;</span><br><span class="line">  Status result = pool_-&gt;<span class="built_in">SendAndRecv</span>(peer_addr_, req, &amp;res);</span><br><span class="line">  </span><br><span class="line">  <span class="comment">// ... </span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>上面的主要内容是 Raft 怎么构造一个 AppendEntry 请求的：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br></pre></td><td class="code"><pre><span class="line">  &#123;</span><br><span class="line">  <span class="function">slash::MutexLock <span class="title">l</span><span class="params">(&amp;context_-&gt;global_mu)</span></span>;</span><br><span class="line">  <span class="keyword">if</span> (!result.<span class="built_in">ok</span>()) &#123;</span><br><span class="line">    <span class="keyword">return</span>;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// here we may get a larger term, and transfer to follower</span></span><br><span class="line">  <span class="comment">// so we need to judge the role here</span></span><br><span class="line">  <span class="keyword">if</span> (context_-&gt;role == Role::kLeader) &#123;</span><br><span class="line">    <span class="comment">/*</span></span><br><span class="line"><span class="comment">     * receiver has higer term than myself, so turn from candidate to follower</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">if</span> (res.<span class="built_in">append_entries_res</span>().<span class="built_in">term</span>() &gt; context_-&gt;current_term) &#123;</span><br><span class="line">      context_-&gt;<span class="built_in">BecomeFollower</span>(res.<span class="built_in">append_entries_res</span>().<span class="built_in">term</span>());</span><br><span class="line">      raft_meta_-&gt;<span class="built_in">SetCurrentTerm</span>(context_-&gt;current_term);</span><br><span class="line">      raft_meta_-&gt;<span class="built_in">SetVotedForIp</span>(context_-&gt;voted_for_ip);</span><br><span class="line">      raft_meta_-&gt;<span class="built_in">SetVotedForPort</span>(context_-&gt;voted_for_port);</span><br><span class="line">    &#125; <span class="keyword">else</span> <span class="keyword">if</span> (res.<span class="built_in">append_entries_res</span>().<span class="built_in">success</span>() == <span class="literal">true</span>) &#123;</span><br><span class="line">      <span class="keyword">if</span> (num_entries &gt; <span class="number">0</span>) &#123;</span><br><span class="line">        match_index_ = prev_log_index + num_entries;</span><br><span class="line">        <span class="comment">// only log entries from the leader&#x27;s current term are committed</span></span><br><span class="line">        <span class="comment">// by counting replicas</span></span><br><span class="line">        <span class="keyword">if</span> (append_entries-&gt;<span class="built_in">entries</span>(num_entries - <span class="number">1</span>).<span class="built_in">term</span>() == context_-&gt;current_term) &#123;</span><br><span class="line">          <span class="built_in">AdvanceLeaderCommitIndex</span>();</span><br><span class="line">          apply_-&gt;<span class="built_in">ScheduleApply</span>();</span><br><span class="line">        &#125;</span><br><span class="line">        next_index_ = prev_log_index + num_entries + <span class="number">1</span>;</span><br><span class="line">      &#125;</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">      <span class="type">uint64_t</span> adjust_index = std::<span class="built_in">min</span>(res.<span class="built_in">append_entries_res</span>().<span class="built_in">last_log_index</span>() + <span class="number">1</span>,</span><br><span class="line">                                       next_index_ - <span class="number">1</span>);</span><br><span class="line">      <span class="keyword">if</span> (adjust_index &gt; <span class="number">0</span>) &#123;</span><br><span class="line">        <span class="comment">// Prev log don&#x27;t match, so we retry with more prev one according to</span></span><br><span class="line">        <span class="comment">// response</span></span><br><span class="line">        next_index_ = adjust_index;</span><br><span class="line">        <span class="built_in">AddAppendEntriesTask</span>();</span><br><span class="line">      &#125;</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="keyword">return</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h4 id="Receiver-1"><a href="#Receiver-1" class="headerlink" title="Receiver"></a>Receiver</h4><p><code>Receiver</code> 的逻辑特别清晰：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">int</span> <span class="title">FloydImpl::ReplyAppendEntries</span><span class="params">(<span class="type">const</span> CmdRequest&amp; request, CmdResponse* response)</span> </span>&#123;</span><br><span class="line">  <span class="type">bool</span> success = <span class="literal">false</span>;</span><br><span class="line">  CmdRequest_AppendEntries append_entries = request.<span class="built_in">append_entries</span>();</span><br><span class="line">  <span class="function">slash::MutexLock <span class="title">l</span><span class="params">(&amp;context_-&gt;global_mu)</span></span>;</span><br><span class="line">  <span class="comment">// update last_op_time to avoid another leader election</span></span><br><span class="line">  context_-&gt;last_op_time = slash::<span class="built_in">NowMicros</span>();</span><br><span class="line">  <span class="comment">// Ignore stale term</span></span><br><span class="line">  <span class="comment">// if the append entries leader&#x27;s term is smaller than my current term, then the caller must an older leader</span></span><br><span class="line">  <span class="keyword">if</span> (append_entries.<span class="built_in">term</span>() &lt; context_-&gt;current_term) &#123;</span><br><span class="line"></span><br><span class="line">    <span class="built_in">BuildAppendEntriesResponse</span>(success, context_-&gt;current_term, raft_log_-&gt;<span class="built_in">GetLastLogIndex</span>(), response);</span><br><span class="line">    <span class="keyword">return</span> <span class="number">-1</span>;</span><br><span class="line">  &#125; <span class="keyword">else</span> <span class="keyword">if</span> ((append_entries.<span class="built_in">term</span>() &gt; context_-&gt;current_term) </span><br><span class="line">      || (append_entries.<span class="built_in">term</span>() == context_-&gt;current_term &amp;&amp; </span><br><span class="line">        (context_-&gt;role == kCandidate || (context_-&gt;role == kFollower &amp;&amp; context_-&gt;leader_ip == <span class="string">&quot;&quot;</span>)))) &#123;</span><br><span class="line"></span><br><span class="line">    context_-&gt;<span class="built_in">BecomeFollower</span>(append_entries.<span class="built_in">term</span>(),</span><br><span class="line">        append_entries.<span class="built_in">ip</span>(), append_entries.<span class="built_in">port</span>());</span><br><span class="line">    raft_meta_-&gt;<span class="built_in">SetCurrentTerm</span>(context_-&gt;current_term);</span><br><span class="line">    raft_meta_-&gt;<span class="built_in">SetVotedForIp</span>(context_-&gt;voted_for_ip);</span><br><span class="line">    raft_meta_-&gt;<span class="built_in">SetVotedForPort</span>(context_-&gt;voted_for_port);</span><br><span class="line">  &#125;</span><br><span class="line">  ...</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>先过滤掉参数，再来：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br></pre></td><td class="code"><pre><span class="line">&#123;</span><br><span class="line">  <span class="keyword">if</span> (append_entries.<span class="built_in">prev_log_index</span>() &gt; raft_log_-&gt;<span class="built_in">GetLastLogIndex</span>()) &#123;</span><br><span class="line">    <span class="built_in">BuildAppendEntriesResponse</span>(success, context_-&gt;current_term, raft_log_-&gt;<span class="built_in">GetLastLogIndex</span>(), response);</span><br><span class="line">    <span class="keyword">return</span> <span class="number">-1</span>;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// Append entry</span></span><br><span class="line">  <span class="keyword">if</span> (append_entries.<span class="built_in">prev_log_index</span>() &lt; raft_log_-&gt;<span class="built_in">GetLastLogIndex</span>()) &#123;</span><br><span class="line">    raft_log_-&gt;<span class="built_in">TruncateSuffix</span>(append_entries.<span class="built_in">prev_log_index</span>() + <span class="number">1</span>);</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// we compare peer&#x27;s prev index and term with my last log index and term</span></span><br><span class="line">  <span class="type">uint64_t</span> my_last_log_term = <span class="number">0</span>;</span><br><span class="line">  Entry entry;</span><br><span class="line">  <span class="keyword">if</span> (append_entries.<span class="built_in">prev_log_index</span>() == <span class="number">0</span>) &#123;</span><br><span class="line">    my_last_log_term = <span class="number">0</span>;</span><br><span class="line">  &#125; <span class="keyword">else</span> <span class="keyword">if</span> (raft_log_-&gt;<span class="built_in">GetEntry</span>(append_entries.<span class="built_in">prev_log_index</span>(), &amp;entry) == <span class="number">0</span>) &#123;</span><br><span class="line">    my_last_log_term = entry.<span class="built_in">term</span>();</span><br><span class="line">  &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">    <span class="keyword">return</span> <span class="number">-1</span>;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span> (append_entries.<span class="built_in">prev_log_term</span>() != my_last_log_term) &#123;</span><br><span class="line">    <span class="built_in">BuildAppendEntriesResponse</span>(success, context_-&gt;current_term, raft_log_-&gt;<span class="built_in">GetLastLogIndex</span>(), response);</span><br><span class="line">    <span class="keyword">return</span> <span class="number">-1</span>;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  std::vector&lt;<span class="type">const</span> Entry*&gt; entries;</span><br><span class="line">  <span class="keyword">for</span> (<span class="type">int</span> i = <span class="number">0</span>; i &lt; append_entries.<span class="built_in">entries</span>().<span class="built_in">size</span>(); i++) &#123;</span><br><span class="line">    entries.<span class="built_in">push_back</span>(&amp;append_entries.<span class="built_in">entries</span>(i));</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="keyword">if</span> (append_entries.<span class="built_in">entries</span>().<span class="built_in">size</span>() &gt; <span class="number">0</span>) &#123;</span><br><span class="line">    <span class="keyword">if</span> (raft_log_-&gt;<span class="built_in">Append</span>(entries) &lt;= <span class="number">0</span>) &#123;</span><br><span class="line">      <span class="built_in">BuildAppendEntriesResponse</span>(success, context_-&gt;current_term, raft_log_-&gt;<span class="built_in">GetLastLogIndex</span>(), response);</span><br><span class="line">      <span class="keyword">return</span> <span class="number">-1</span>;</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="keyword">if</span> (append_entries.<span class="built_in">leader_commit</span>() != context_-&gt;commit_index) &#123;</span><br><span class="line">    <span class="built_in">AdvanceFollowerCommitIndex</span>(append_entries.<span class="built_in">leader_commit</span>());</span><br><span class="line">    apply_-&gt;<span class="built_in">ScheduleApply</span>();</span><br><span class="line">  &#125;</span><br><span class="line">  success = <span class="literal">true</span>;</span><br><span class="line">  <span class="comment">// only when follower successfully do appendentries, we will update commit index</span></span><br><span class="line">  <span class="built_in">BuildAppendEntriesResponse</span>(success, context_-&gt;current_term, raft_log_-&gt;<span class="built_in">GetLastLogIndex</span>(), response);</span><br><span class="line">  <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>其实就很简单。</p>
+<h3 id="Client"><a href="#Client" class="headerlink" title="Client"></a>Client</h3><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">Status <span class="title">FloydImpl::ExecuteCommand</span><span class="params">(<span class="type">const</span> CmdRequest&amp; request,</span></span></span><br><span class="line"><span class="params"><span class="function">                                 CmdResponse *response)</span> </span>&#123;</span><br><span class="line">  <span class="comment">// Append entry local</span></span><br><span class="line">  std::vector&lt;<span class="type">const</span> Entry*&gt; entries;</span><br><span class="line">  Entry entry;</span><br><span class="line">  <span class="built_in">BuildLogEntry</span>(request, context_-&gt;current_term, &amp;entry);</span><br><span class="line">  entries.<span class="built_in">push_back</span>(&amp;entry);</span><br><span class="line">  response-&gt;<span class="built_in">set_type</span>(request.<span class="built_in">type</span>());</span><br><span class="line">  response-&gt;<span class="built_in">set_code</span>(StatusCode::kError);</span><br><span class="line"></span><br><span class="line">  <span class="type">uint64_t</span> last_log_index = raft_log_-&gt;<span class="built_in">Append</span>(entries);</span><br><span class="line">  <span class="keyword">if</span> (last_log_index &lt;= <span class="number">0</span>) &#123;</span><br><span class="line">    <span class="keyword">return</span> Status::<span class="built_in">IOError</span>(<span class="string">&quot;Append Entry failed&quot;</span>);</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// Notify primary then wait for apply</span></span><br><span class="line">  primary_-&gt;<span class="built_in">AddTask</span>(kNewCommand);</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">  &#123;</span><br><span class="line">  <span class="function">slash::MutexLock <span class="title">l</span><span class="params">(&amp;context_-&gt;apply_mu)</span></span>;</span><br><span class="line">  <span class="keyword">while</span> (context_-&gt;last_applied &lt; last_log_index) &#123;</span><br><span class="line">    <span class="keyword">if</span> (!context_-&gt;apply_cond.<span class="built_in">TimedWait</span>(<span class="number">1000</span>)) &#123;</span><br><span class="line">      <span class="keyword">return</span> Status::<span class="built_in">Timeout</span>(<span class="string">&quot;FloydImpl::ExecuteCommand Timeout&quot;</span>);</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>在这里，不管是 <code>Get</code> 还是 <code>Set</code>，都会起一个 Command, 然后走状态机。这里不会根据 Seq 来重试，没了就是没了，没那么多花头。</p>
+<h3 id="Recall-线程模型"><a href="#Recall-线程模型" class="headerlink" title="Recall: 线程模型"></a>Recall: 线程模型</h3><p>这里需要注意到，<code>floyd_primary_thread</code>线程会单线程的维护 <code>kHeartbeat</code>、<code>kNewCommand</code>，这些水位可能会由 Master 和 Peer 变更。<code>Peer</code> 的任务是单线程的，这是说，对单个 <code>Peer</code>，不会有两个并发的写操作。</p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Raft-%E5%A4%8D%E4%B9%A0"><span class="toc-number">1.</span> <span class="toc-text">Raft 复习</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Leader-Election"><span class="toc-number">1.1.</span> <span class="toc-text">Leader Election</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Log-Replication"><span class="toc-number">1.2.</span> <span class="toc-text">Log Replication</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Safety"><span class="toc-number">1.3.</span> <span class="toc-text">Safety</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E4%B8%80%E4%B8%AA%E8%AF%AF%E5%8C%BA"><span class="toc-number">1.3.1.</span> <span class="toc-text">一个误区</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#CommitIndex-%E5%92%8C-ApplyIndex-%E7%9A%84%E6%8C%81%E4%B9%85%E5%8C%96"><span class="toc-number">1.3.2.</span> <span class="toc-text">CommitIndex 和 ApplyIndex 的持久化</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%97%B6%E9%97%B4%E5%92%8C%E5%8F%AF%E7%94%A8%E6%80%A7"><span class="toc-number">1.4.</span> <span class="toc-text">时间和可用性</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%9B%86%E7%BE%A4%E6%88%90%E5%91%98%E5%8F%98%E6%9B%B4"><span class="toc-number">1.5.</span> <span class="toc-text">集群成员变更</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Snapshot-%E5%92%8C-Log-Compaction"><span class="toc-number">1.6.</span> <span class="toc-text">Snapshot 和 Log Compaction</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Client-%E4%BA%A4%E4%BA%92"><span class="toc-number">1.7.</span> <span class="toc-text">Client 交互</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E4%B8%80%E8%88%AC%E7%9A%84%E8%AF%BB%E5%86%99%E6%93%8D%E4%BD%9C"><span class="toc-number">1.7.1.</span> <span class="toc-text">一般的读写操作</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%86%99%E9%87%8D%E8%AF%95"><span class="toc-number">1.7.2.</span> <span class="toc-text">写重试</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Some-Quiz"><span class="toc-number">2.</span> <span class="toc-text">Some Quiz</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Qihoo360-floyd"><span class="toc-number">3.</span> <span class="toc-text">Qihoo360&#x2F;floyd</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Leader-Election-1"><span class="toc-number">3.1.</span> <span class="toc-text">Leader Election</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Sender"><span class="toc-number">3.1.1.</span> <span class="toc-text">Sender</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Receiver"><span class="toc-number">3.1.2.</span> <span class="toc-text">Receiver</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E7%AB%9E%E9%80%89%E5%A4%B1%E8%B4%A5"><span class="toc-number">3.1.3.</span> <span class="toc-text">竞选失败</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Log-Replication-1"><span class="toc-number">3.2.</span> <span class="toc-text">Log Replication</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Receiver-1"><span class="toc-number">3.2.1.</span> <span class="toc-text">Receiver</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Client"><span class="toc-number">3.3.</span> <span class="toc-text">Client</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Recall-%E7%BA%BF%E7%A8%8B%E6%A8%A1%E5%9E%8B"><span class="toc-number">3.4.</span> <span class="toc-text">Recall: 线程模型</span></a></li></ol></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2022/04/15/Raft-Basic-Notes/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2022/04/15/Raft-Basic-Notes/&text=Raft Basic Notes"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2022/04/15/Raft-Basic-Notes/&title=Raft Basic Notes"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2022/04/15/Raft-Basic-Notes/&is_video=false&description=Raft Basic Notes"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Raft Basic Notes&body=Check out this article: http://blog.mwish.me/2022/04/15/Raft-Basic-Notes/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2022/04/15/Raft-Basic-Notes/&title=Raft Basic Notes"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2022/04/15/Raft-Basic-Notes/&title=Raft Basic Notes"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2022/04/15/Raft-Basic-Notes/&title=Raft Basic Notes"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2022/04/15/Raft-Basic-Notes/&title=Raft Basic Notes"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2022/04/15/Raft-Basic-Notes/&name=Raft Basic Notes&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2022/04/15/Raft-Basic-Notes/&t=Raft Basic Notes"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

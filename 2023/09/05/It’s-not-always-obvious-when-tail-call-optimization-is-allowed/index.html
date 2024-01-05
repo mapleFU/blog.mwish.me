@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="原文链接：https:&#x2F;&#x2F;quuxplusone.github.io&#x2F;blog&#x2F;2021&#x2F;01&#x2F;09&#x2F;tail-call-optimization&#x2F; 翻译许可：  我最初本文作为 “A C++ acronym glossary” (2019-08-02) 中的一部分编写，但决定最好将其单独列出来放到一个博客中。 “TCO”代表“tail call optimization”。 这是一种编译器优化，">
+<meta property="og:type" content="article">
+<meta property="og:title" content="翻译: It’s not always obvious when tail-call optimization is allowed">
+<meta property="og:url" content="http://blog.mwish.me/2023/09/05/It%E2%80%99s-not-always-obvious-when-tail-call-optimization-is-allowed/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="原文链接：https:&#x2F;&#x2F;quuxplusone.github.io&#x2F;blog&#x2F;2021&#x2F;01&#x2F;09&#x2F;tail-call-optimization&#x2F; 翻译许可：  我最初本文作为 “A C++ acronym glossary” (2019-08-02) 中的一部分编写，但决定最好将其单独列出来放到一个博客中。 “TCO”代表“tail call optimization”。 这是一种编译器优化，">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/311401252216574504.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/9002952926214148686.png">
+<meta property="article:published_time" content="2023-09-05T13:53:05.000Z">
+<meta property="article:modified_time" content="2023-09-06T04:45:07.596Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/311401252216574504.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>翻译: It’s not always obvious when tail-call optimization is allowed</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2023/09/08/VLDB-23-Query-Partition-in-Napa/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2023/08/21/Arrow-util-File-FileSystem/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2023/09/05/It%E2%80%99s-not-always-obvious-when-tail-call-optimization-is-allowed/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2023/09/05/It%E2%80%99s-not-always-obvious-when-tail-call-optimization-is-allowed/&text=翻译: It’s not always obvious when tail-call optimization is allowed"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2023/09/05/It%E2%80%99s-not-always-obvious-when-tail-call-optimization-is-allowed/&title=翻译: It’s not always obvious when tail-call optimization is allowed"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2023/09/05/It%E2%80%99s-not-always-obvious-when-tail-call-optimization-is-allowed/&is_video=false&description=翻译: It’s not always obvious when tail-call optimization is allowed"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=翻译: It’s not always obvious when tail-call optimization is allowed&body=Check out this article: http://blog.mwish.me/2023/09/05/It%E2%80%99s-not-always-obvious-when-tail-call-optimization-is-allowed/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2023/09/05/It%E2%80%99s-not-always-obvious-when-tail-call-optimization-is-allowed/&title=翻译: It’s not always obvious when tail-call optimization is allowed"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2023/09/05/It%E2%80%99s-not-always-obvious-when-tail-call-optimization-is-allowed/&title=翻译: It’s not always obvious when tail-call optimization is allowed"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2023/09/05/It%E2%80%99s-not-always-obvious-when-tail-call-optimization-is-allowed/&title=翻译: It’s not always obvious when tail-call optimization is allowed"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2023/09/05/It%E2%80%99s-not-always-obvious-when-tail-call-optimization-is-allowed/&title=翻译: It’s not always obvious when tail-call optimization is allowed"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2023/09/05/It%E2%80%99s-not-always-obvious-when-tail-call-optimization-is-allowed/&name=翻译: It’s not always obvious when tail-call optimization is allowed&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2023/09/05/It%E2%80%99s-not-always-obvious-when-tail-call-optimization-is-allowed/&t=翻译: It’s not always obvious when tail-call optimization is allowed"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        翻译: It’s not always obvious when tail-call optimization is allowed
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2023-09-05T13:53:05.000Z" itemprop="datePublished">2023-09-05</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>原文链接：<a target="_blank" rel="noopener" href="https://quuxplusone.github.io/blog/2021/01/09/tail-call-optimization/">https://quuxplusone.github.io/blog/2021/01/09/tail-call-optimization/</a></p>
+<p>翻译许可：</p>
+<p><img src="https://image.mwish.me/blog-image/311401252216574504.png" alt="img"></p>
+<p>我最初本文作为 <a target="_blank" rel="noopener" href="https://quuxplusone.github.io/blog/2019/08/02/the-tough-guide-to-cpp-acronyms/">“A C++ acronym glossary”</a> (2019-08-02) 中的一部分编写，但决定最好将其单独列出来放到一个博客中。</p>
+<p>“TCO”代表“tail call optimization”。 这是一种编译器优化，它将代码中的函数调用（通常会向栈上 push frame）并将其转换为 jump 指令（不会将新的 frame push 到栈上）。 只有 <code>return bar()</code> 这样在函数为尾部发生调用的时候，编译器可能会采用这种优化： 编译器说：“看，我知道 <code>bar</code> 执行完就返回给调用者，就是 <code>return bar()</code> 的这个函数了，让我们直接在本函数的 <code>caller</code> 处调用 <code>bar()</code>”！</p>
+<p>Tail call optimization 通常可以用于 <code>return bar()</code> 这种形式，但不能用于 <code>return bar()+1</code>。</p>
+<p>在 C++ 中，编程者很难准确地弄清楚哪里允许发生 TCO。 主要原因是 non-trivial destructors:</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">foo1</span><span class="params">()</span> </span>&#123; <span class="built_in">bar</span>(); &#125;  <span class="comment">// tail call</span></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">foo2</span><span class="params">()</span> </span>&#123; <span class="function">std::lock_guard <span class="title">lk</span><span class="params">(m)</span></span>; <span class="built_in">bar</span>(); &#125;  <span class="comment">// not a tail call</span></span><br></pre></td></tr></table></figure>
+<p>这也包含 temporary objects 的析构：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">bar</span><span class="params">(std::string_view)</span></span>;</span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">foo1</span><span class="params">()</span> </span>&#123; <span class="built_in">bar</span>(<span class="string">&quot;hello&quot;</span>); &#125;  <span class="comment">// tail call</span></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">foo2</span><span class="params">()</span> </span>&#123; <span class="built_in">bar</span>(<span class="string">&quot;hello&quot;</span>s); &#125;  <span class="comment">// not a tail call</span></span><br></pre></td></tr></table></figure>
+<p>但即使这里所有东西都是 trivially destructible 的，您也可能因为需要 stack pointer 或其他东西，导致阻止发生 TCO 。<a target="_blank" rel="noopener" href="https://godbolt.org/z/vcY3v9">https://godbolt.org/z/vcY3v9</a> ：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">bar</span><span class="params">()</span></span>;</span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">escape</span><span class="params">(<span class="type">const</span> <span class="type">int</span>&amp;)</span></span>;</span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">foo1</span><span class="params">()</span> </span>&#123; <span class="built_in">escape</span>(<span class="number">42</span>); <span class="built_in">bar</span>(); &#125;  <span class="comment">// tail-call on GCC and MSVC</span></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">foo2</span><span class="params">()</span> </span>&#123; <span class="type">const</span> <span class="type">int</span> i = <span class="number">42</span>; <span class="built_in">escape</span>(i); <span class="built_in">bar</span>(); &#125;  <span class="comment">// not a tail-call</span></span><br></pre></td></tr></table></figure>
+<p>有趣的是，在上面的示例中，GCC 和 MSVC 为 <code>foo1</code> 生成 <code>jmp bar</code>，但 Clang 和 ICC 没有该优化。</p>
+<p><img src="https://image.mwish.me/blog-image/9002952926214148686.png" alt="img"></p>
+<p>您可能会合理地问为什么我们不能对 <code>foo2</code> 进行相同的优化。 我认为原因是 C++ 保证每个变量（在其生命周期内）都有一个唯一的地址。 如果我们要像这样实现 <code>bar</code>：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">const</span> <span class="type">int</span> *addr_of_i;</span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">escape</span><span class="params">(<span class="type">const</span> <span class="type">int</span>&amp; i)</span> </span>&#123;</span><br><span class="line">    addr_of_i = &amp;i;</span><br><span class="line">&#125;</span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">bar</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="type">int</span> j;</span><br><span class="line">    <span class="built_in">assert</span>(&amp;j != addr_of_i);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>那么程序可以判断该实现是否（不符合规定）将 <code>j</code> 放入与 <code>i</code> 相同的内存位置。 然而，没有规则规定 <code>j</code>不能与 <code>42</code> 生成的临时对象共享内存位置，因为该临时对象的生命周期与 <code>j</code> 的生命周期不重叠。</p>
+<p>一个实现是否执行 TCO 是可以观察到的，因为从某种意义上说，tail-recursive 函数在使用 TCO 时可能使用 <code>O(1)</code> 的栈空间，但在不使用 TCO 时使用 O(n) 的栈空间——因此，当递归足够深时，会“爆破堆栈” （stack overflow）。 然而，C++ 的抽象机实际上并没有任何「爆破堆栈」的概念。 C++ 程序没有一致的方法来检测或处理该情况。</p>
+<blockquote>
+<p>原文：However, C++’s abstract machine doesn’t really have any notion of blowing the stack. There’s no conforming way for a C++ program to detect that condition or deal with it.  不确定翻译对了…</p>
+</blockquote>
+<p>因此，足够偏执的 C++ 代码合作者将避免非常深的递归。 执行此操作的一种技术是手动进行 tail-recursion optimization：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">int</span> <span class="title">gcd</span><span class="params">(<span class="type">int</span> x, <span class="type">int</span> y)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">if</span> (x == <span class="number">0</span>) <span class="keyword">return</span> y;</span><br><span class="line">    <span class="keyword">return</span> <span class="built_in">gcd</span>(y % x, x);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>改写为:</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">int</span> <span class="title">gcd</span><span class="params">(<span class="type">int</span> x, <span class="type">int</span> y)</span> </span>&#123;</span><br><span class="line">top:</span><br><span class="line">    <span class="keyword">if</span> (x == <span class="number">0</span>) <span class="keyword">return</span> y;</span><br><span class="line">    std::<span class="built_in">tie</span>(x, y) = std::<span class="built_in">tuple</span>(y % x, x);</span><br><span class="line">    <span class="keyword">goto</span> top;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>并改写成</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">int</span> <span class="title">gcd</span><span class="params">(<span class="type">int</span> x, <span class="type">int</span> y)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">while</span> (x != <span class="number">0</span>) &#123;</span><br><span class="line">        std::<span class="built_in">tie</span>(x, y) = std::<span class="built_in">tuple</span>(y % x, x);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> y;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>执行最后一步通常非常重要，这不仅因为这种方式（ <a target="_blank" rel="noopener" href="https://en.wikipedia.org/wiki/Structured_programming">https://en.wikipedia.org/wiki/Structured_programming</a> ）使代码更易读，还因为 goto 是极少数阻止将函数标记为 constexpr 的 C++ 结构之一 （见 <a target="_blank" rel="noopener" href="https://stackoverflow.com/questions/45266577/why-disallow-goto-in-constexpr-functions">https://stackoverflow.com/questions/45266577/why-disallow-goto-in-constexpr-functions</a> ）。 如果您希望函数为 constexpr（无论出于何种原因），则必须避免 goto。 这是 C++ 在风格上固执己见的罕见情况。</p>
+<p>(如果你没有见过 <code>tie = tuple</code> trick , 你可能会喜欢我在 CppCon 2020 上的演讲 <a target="_blank" rel="noopener" href="https://www.youtube.com/watch?v=OJzmWqCCZaM">“Back to Basics: Algebraic Data Types.”</a>.)</p>
+<p><em>Posted 2021-01-09</em></p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2023/09/05/It%E2%80%99s-not-always-obvious-when-tail-call-optimization-is-allowed/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2023/09/05/It%E2%80%99s-not-always-obvious-when-tail-call-optimization-is-allowed/&text=翻译: It’s not always obvious when tail-call optimization is allowed"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2023/09/05/It%E2%80%99s-not-always-obvious-when-tail-call-optimization-is-allowed/&title=翻译: It’s not always obvious when tail-call optimization is allowed"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2023/09/05/It%E2%80%99s-not-always-obvious-when-tail-call-optimization-is-allowed/&is_video=false&description=翻译: It’s not always obvious when tail-call optimization is allowed"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=翻译: It’s not always obvious when tail-call optimization is allowed&body=Check out this article: http://blog.mwish.me/2023/09/05/It%E2%80%99s-not-always-obvious-when-tail-call-optimization-is-allowed/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2023/09/05/It%E2%80%99s-not-always-obvious-when-tail-call-optimization-is-allowed/&title=翻译: It’s not always obvious when tail-call optimization is allowed"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2023/09/05/It%E2%80%99s-not-always-obvious-when-tail-call-optimization-is-allowed/&title=翻译: It’s not always obvious when tail-call optimization is allowed"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2023/09/05/It%E2%80%99s-not-always-obvious-when-tail-call-optimization-is-allowed/&title=翻译: It’s not always obvious when tail-call optimization is allowed"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2023/09/05/It%E2%80%99s-not-always-obvious-when-tail-call-optimization-is-allowed/&title=翻译: It’s not always obvious when tail-call optimization is allowed"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2023/09/05/It%E2%80%99s-not-always-obvious-when-tail-call-optimization-is-allowed/&name=翻译: It’s not always obvious when tail-call optimization is allowed&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2023/09/05/It%E2%80%99s-not-always-obvious-when-tail-call-optimization-is-allowed/&t=翻译: It’s not always obvious when tail-call optimization is allowed"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

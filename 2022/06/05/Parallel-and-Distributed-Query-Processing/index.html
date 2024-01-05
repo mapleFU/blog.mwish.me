@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="这一节对应的是 Database System Concept 的分布式查询执行部分。这一部分可能本身描述的内容是分布式执行（也可以联系到一个现在很流行的词：MPP），但同时可能涉及一些非分布式执行的内容，包括：  在单机系统上，也能用 exchange 等算子做一些并行化。特别是，如果你按照 NUMA &#x2F; Core 切分负载，就可以发现这些部分的事情也是一种分布式执行，当然 bus 可能比网络通">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Parallel and Distributed Query Processing">
+<meta property="og:url" content="http://blog.mwish.me/2022/06/05/Parallel-and-Distributed-Query-Processing/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="这一节对应的是 Database System Concept 的分布式查询执行部分。这一部分可能本身描述的内容是分布式执行（也可以联系到一个现在很流行的词：MPP），但同时可能涉及一些非分布式执行的内容，包括：  在单机系统上，也能用 exchange 等算子做一些并行化。特别是，如果你按照 NUMA &#x2F; Core 切分负载，就可以发现这些部分的事情也是一种分布式执行，当然 bus 可能比网络通">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/51EA3B2A-6300-474A-808E-457F875D5167.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/C055FAB3-9FB7-4133-B8C3-65B37789DDAB.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/01958C33-98F6-47D8-A1A3-3FC18B61C1E2.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/A35B426B-C144-4DB9-A30A-87513D29A332.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/1526690F-EE20-43B5-B6AE-7688D7F76048.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/F31EE37E-F4D4-4105-A093-2A92002DA520.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/750E9CBC-0DBB-4911-A353-C7B4F03764F8.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/1E1CD9BE-B5B7-4DF4-9469-F3B6358AE707.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/76F108B0-F7FA-42B6-BEB4-C121C613108D.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/6706C982-3FA1-4495-898B-9FB669D243AF.png">
+<meta property="article:published_time" content="2022-06-05T11:02:41.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.557Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/51EA3B2A-6300-474A-808E-457F875D5167.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>Parallel and Distributed Query Processing</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2022/06/12/Notes-folly-ThreadLocalPtr/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2022/06/04/crossbeam-epoch/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2022/06/05/Parallel-and-Distributed-Query-Processing/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2022/06/05/Parallel-and-Distributed-Query-Processing/&text=Parallel and Distributed Query Processing"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2022/06/05/Parallel-and-Distributed-Query-Processing/&title=Parallel and Distributed Query Processing"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2022/06/05/Parallel-and-Distributed-Query-Processing/&is_video=false&description=Parallel and Distributed Query Processing"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Parallel and Distributed Query Processing&body=Check out this article: http://blog.mwish.me/2022/06/05/Parallel-and-Distributed-Query-Processing/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2022/06/05/Parallel-and-Distributed-Query-Processing/&title=Parallel and Distributed Query Processing"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2022/06/05/Parallel-and-Distributed-Query-Processing/&title=Parallel and Distributed Query Processing"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2022/06/05/Parallel-and-Distributed-Query-Processing/&title=Parallel and Distributed Query Processing"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2022/06/05/Parallel-and-Distributed-Query-Processing/&title=Parallel and Distributed Query Processing"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2022/06/05/Parallel-and-Distributed-Query-Processing/&name=Parallel and Distributed Query Processing&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2022/06/05/Parallel-and-Distributed-Query-Processing/&t=Parallel and Distributed Query Processing"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%88%86%E5%B8%83%E5%BC%8F%E6%95%B0%E6%8D%AE%E5%BA%93%E7%9A%84%E6%9E%B6%E6%9E%84"><span class="toc-number">1.</span> <span class="toc-text">分布式数据库的架构</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Sort-Join-%E7%AD%89%E6%93%8D%E4%BD%9C%E7%9A%84%E5%B9%B6%E8%A1%8C%E6%89%A7%E8%A1%8C"><span class="toc-number">2.</span> <span class="toc-text">Sort&#x2F;Join 等操作的并行执行</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%B9%B6%E8%A1%8C%E6%8E%92%E5%BA%8F"><span class="toc-number">2.1.</span> <span class="toc-text">并行排序</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%B9%B6%E8%A1%8C-Join"><span class="toc-number">2.2.</span> <span class="toc-text">并行 Join</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Operator-%E7%9A%84%E5%B9%B6%E8%A1%8C%E6%89%A7%E8%A1%8C"><span class="toc-number">3.</span> <span class="toc-text">Operator 的并行执行</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%85%B1%E4%BA%AB%E5%86%85%E5%AD%98%E7%B3%BB%E7%BB%9F%E7%9A%84%E6%9F%A5%E8%AF%A2%E5%A4%84%E7%90%86"><span class="toc-number">3.1.</span> <span class="toc-text">共享内存系统的查询处理</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9F%A5%E8%AF%A2%E4%BC%98%E5%8C%96%E5%92%8C%E4%BB%A3%E4%BB%B7"><span class="toc-number">4.</span> <span class="toc-text">查询优化和代价</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Parallel and Distributed Query Processing
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2022-06-05T11:02:41.000Z" itemprop="datePublished">2022-06-05</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>这一节对应的是 Database System Concept 的分布式查询执行部分。这一部分可能本身描述的内容是分布式执行（也可以联系到一个现在很流行的词：MPP），但同时可能涉及一些非分布式执行的内容，包括：</p>
+<ol>
+<li>在单机系统上，也能用 exchange 等算子做一些并行化。特别是，如果你按照 NUMA / Core 切分负载，就可以发现这些部分的事情也是一种分布式执行，当然 bus 可能比网络通信靠谱很多</li>
+<li>生成 Plan 方面，本身 Plan 就很难生成了，然后又搞这么一套，就更难了</li>
+</ol>
+<p>教科书上这节写的相当相当细，甚至包括一些 fdw 和数据湖的内容。虽然我本人不是很懂分布式查询处理，但是这块内容确实讲的很好。</p>
+<h2 id="分布式数据库的架构"><a href="#分布式数据库的架构" class="headerlink" title="分布式数据库的架构"></a>分布式数据库的架构</h2><p>其实网络还是个挺复杂的东西的，但是目前大家都很能抽象，实际上目前很多地方部署的网络都类似下面的 <code>(e)</code>:</p>
+<p><img src="https://image.mwish.me/blog-image/51EA3B2A-6300-474A-808E-457F875D5167.png" alt="51EA3B2A-6300-474A-808E-457F875D5167"></p>
+<p>当然，随着硬件发展，实际上大家也会有一些其他方案，比如构建 RDMA 网络。</p>
+<p>对于单机而言，博客（<a href="https://blog.mwish.me/2022/05/04/perfbook-notes-hardware/）提到了其中的访问效率，总之访问临近内存">https://blog.mwish.me/2022/05/04/perfbook-notes-hardware/）提到了其中的访问效率，总之访问临近内存</a> bandwidth 是访问远端的数倍，速度也快了很多：</p>
+<p><img src="https://image.mwish.me/blog-image/C055FAB3-9FB7-4133-B8C3-65B37789DDAB.png" alt="C055FAB3-9FB7-4133-B8C3-65B37789DDAB"></p>
+<p>最后是一些共享 XX 的架构，这图既可以是单机房的，也可以是集群概念上的（比如我们经常说 ClickHouse/TiDB 是 Shared Nothing，而 snowflake/Aurora 是 Shared Storage）：</p>
+<p><img src="https://image.mwish.me/blog-image/01958C33-98F6-47D8-A1A3-3FC18B61C1E2.png" alt="01958C33-98F6-47D8-A1A3-3FC18B61C1E2"></p>
+<p>关于并行执行查询，经典的例子是 interquery parallelism 和 intraquery parallelism。这两种操作是互补的。前者比如对 Sort、Join 等操作做并行化，后者例如 Pipeline Execution 的时候，并行处理不同的 Pipeline。并行查询通常和架构相关，这里以 shared nothing 架构为例子做讨论</p>
+<h2 id="Sort-Join-等操作的并行执行"><a href="#Sort-Join-等操作的并行执行" class="headerlink" title="Sort/Join 等操作的并行执行"></a>Sort/Join 等操作的并行执行</h2><h3 id="并行排序"><a href="#并行排序" class="headerlink" title="并行排序"></a>并行排序</h3><p><img src="https://image.mwish.me/blog-image/A35B426B-C144-4DB9-A30A-87513D29A332.png" alt="A35B426B-C144-4DB9-A30A-87513D29A332"></p>
+<p>方案 (1) 是 先做 range partition, 然后再 Local Sort；方案 2 是先 Local Sort，然后再在各个节点串行 Merge。</p>
+<p>对于方案 1，这里我们显然会联想到数据的 Skew 上，对于 <code>(a)</code>，可以用虚拟节点等方式，把数据切碎，当然这个可能引入别的网络通信流程。对于方案 2，实际上，本地排序完后，在走 (2) 可能会变得很奇怪，这里可能会有 execution skew，即在每个节点接收完后，才能处理到下一个节点。这里也有改善成并行处理的方式：这里可能需要提前对数据范围分区，然后按照数据应该被分区到哪 并行 + Chunk 发送。</p>
+<p>观察到，如果数据在每个地方已经排序好，或者是范围分片的话，相当于很多东西已经执行好了，这还是挺爽的。</p>
+<h3 id="并行-Join"><a href="#并行-Join" class="headerlink" title="并行 Join"></a>并行 Join</h3><p>我们可以先回顾一下单机 Join 的执行方式：<a href="https://blog.mwish.me/2021/02/08/Notes-on-Query-Execution/#Join">https://blog.mwish.me/2021/02/08/Notes-on-Query-Execution/#Join</a></p>
+<p>JOIN 有很多形式，一些简单的形式中，比如内连接 + 等值连接，可以使用类似单机 Hash Join 的方式。当然，这里分片可以按照 Range/Hash 任意一种方式分片。Hash Join 的很多优化这里也能用上，比如部分缓存在内存中。</p>
+<p><img src="https://image.mwish.me/blog-image/1526690F-EE20-43B5-B6AE-7688D7F76048.png" alt="1526690F-EE20-43B5-B6AE-7688D7F76048"></p>
+<p>对于一些连接条件非等值的，可以采用 broadcast-join 的方式：将某个关系分区，并且将另一个关系（尽量要小）复制到所有的节点上，这种方式被称为 Asymmetric fragment and replicate。还有更狠的方式，就是两边全部拆了，然后全部拷贝：关系 s, r 都被拆成 m, n 份，分配到 $m * n$ 个节点上，产生 Join。 Fragment and replicate 方式更普适一些。而对于 skew，可以用类似虚拟节点 + work steal 的方式处理或者拆分。</p>
+<p><img src="https://image.mwish.me/blog-image/F31EE37E-F4D4-4105-A093-2A92002DA520.png" alt="F31EE37E-F4D4-4105-A093-2A92002DA520"></p>
+<p>对于其他操作来说，执行方式如下：</p>
+<ol>
+<li>Selection 中，如果有对查询的属性有分区，那么给固定的分区发送查询。如果没有分区，那么需要所有的节点并行走查询</li>
+<li>duplicate elimination 中，可以借助排序 + 去重执行</li>
+<li>对于 Projection，可以按照是否 dedup 来分类，如果去重，那么可能走 2；否则可以直接推下去</li>
+<li>Aggregation: 这里比如说 sum/count/avg 可以分区，然后单机返回对应的 sum/count/(sum, count)，然后对每个机器返回的综合处理</li>
+</ol>
+<p>实际上，这里还可以考虑到 Map-Reduce 的模型：</p>
+<p><img src="https://image.mwish.me/blog-image/750E9CBC-0DBB-4911-A353-C7B4F03764F8.png" alt="750E9CBC-0DBB-4911-A353-C7B4F03764F8"></p>
+<ul>
+<li>Map 可以视为某种类型的 Projection 算子</li>
+<li>Reduce 可以视为一种用户定义的 Agg 算子</li>
+<li>Combine 类似一个 pre-aggregate，相当于部分 agg 的操作</li>
+<li>Shuffle 定义打到 Reduce 上的分片规则</li>
+<li>根据工作进展动态调度</li>
+<li>BSP 模型，执行完 Map 才能执行 Reduce</li>
+</ul>
+<p>实际上，Map-Reduce 还有 Map-side join 和 Reduce-side join:</p>
+<ol>
+<li>Map-side join 会在 map 阶段产生不同的 join-key，这样能够在 Reduce 之前就划分到一起</li>
+<li>Broadcast join 也是一种 map-side join，小关系会被 Map 阶段 broadcast 到所有地方</li>
+<li>Reduce-side join: Each mapper tags each row of two relations to identify which relation the row come from. After that, rows of which keys have the same key value are copied to the same reducer during shuﬄing.</li>
+</ol>
+<p>关于 Map-Reduce，一篇比较好的材料是 KAIST 的 <em>Parallel Data Processing with MapReduce: A Survey</em></p>
+<h2 id="Operator-的并行执行"><a href="#Operator-的并行执行" class="headerlink" title="Operator 的并行执行"></a>Operator 的并行执行</h2><p>首先，Pipeline + Push 的模型，相对 Pull 的模型，实际上是很好并行的。各个阶段都是能并行的，一个很明显的地方是，一些非 blocking operator，可以运行生产者和消费者并行。</p>
+<p>此外，不关联的 Operator 是可以并行完成的。</p>
+<p>最后我们可以引入著名的 Exchange 算子。这个算子最早来源于 Volcano 模型，它对数据进行某种程度的分区，然后按照这种分区来执行：</p>
+<p><img src="https://image.mwish.me/blog-image/1E1CD9BE-B5B7-4DF4-9469-F3B6358AE707.png" alt="1E1CD9BE-B5B7-4DF4-9469-F3B6358AE707"></p>
+<p><img src="https://image.mwish.me/blog-image/76F108B0-F7FA-42B6-BEB4-C121C613108D.png" alt="76F108B0-F7FA-42B6-BEB4-C121C613108D"></p>
+<p>Exchange 算子相当于手动的分区 + 归并，来做数据上的并行。下图为一个分布式执行的 sample:</p>
+<p><img src="https://image.mwish.me/blog-image/6706C982-3FA1-4495-898B-9FB669D243AF.png" alt="6706C982-3FA1-4495-898B-9FB669D243AF"></p>
+<p>上面的内容表示了单部分的 Pipeline 和 Pipeline 之间的依赖关系。</p>
+<p>分布式查询执行还得考虑一些别的东西，比如故障，这里有两种可以参考的方案：</p>
+<ol>
+<li>Map-Reduce 那种 BSP 的方案</li>
+<li>Spark 的 RDD 方案</li>
+</ol>
+<h3 id="共享内存系统的查询处理"><a href="#共享内存系统的查询处理" class="headerlink" title="共享内存系统的查询处理"></a>共享内存系统的查询处理</h3><p>这个类似在单机的 NUMA 系统上并行处理查询。之前的内容也是能用上的，但是有一些比较微妙的不同：</p>
+<ol>
+<li>对于 broadcast join，小表数据可能可以放在共享内存中，用更巧妙的方式共享（不过估摸着也得考虑 cache 什么的，感觉实际区别不大）</li>
+<li>Work-steal 会变得简单很多，尽管多核系统访问别的地方数据也有惩罚，但是会比 shard nothing 系统小很多很多。可以用这种方式避免 skew</li>
+<li>Hash Join 既可以用 shared nothing 的方式处理、也可以让关系 Hash Join 索引表小一些，然后并行 Build -&gt; 并行 Probe （类似 Morsel 调度论文提到的）</li>
+</ol>
+<p>最合适的算法一般都是 NUMA-Aware 的，具体可以参考 Morsel 或者一些查询执行相关的论文。</p>
+<h2 id="查询优化和代价"><a href="#查询优化和代价" class="headerlink" title="查询优化和代价"></a>查询优化和代价</h2><p>这里相对于之前我们介绍的单机 Planner，要考虑的东西更多了：</p>
+<ol>
+<li>怎么对 Operator 进行并行化：包括使用什么算法、怎么分区、怎么插入 Exchange 算子</li>
+<li>如何对计划进行调度，包括：<ol>
+<li>Operator 使用多少节点</li>
+<li>将什么计算 Pipeline 化</li>
+<li>分辨串行/并行的执行</li>
+</ol>
+</li>
+</ol>
+<p>书上举了个有点像 Interesting order 的例子，来说明分布式 Plan 的复杂性:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">r JOIN s ON r.A = s.A AND r.B = s.B</span><br></pre></td></tr></table></figure>
+<p>对于上述内容而言，把 <code>r</code> 和 <code>s</code> 按照 <code>A</code> , <code>B</code>, <code>(A, B)</code> 分区中，<code>(A, B)</code> 显然是最合适的，但是如果查询如：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">SELECT SUM(s.C) from (r JOIN s ON r.A = s.A AND r.B = s.B) GROUP BY s.A;</span><br></pre></td></tr></table></figure>
+<p>那么，如果按照 <code>(A, B)</code> 分区，这里可能又要按照 A 来做一次聚合，可能按照 <code>A</code> 分区代价又是最小的。</p>
+<p>在并行模型中，还有一些关于代价的问题，在 RDBMS 中，我们以之前博客举的例子为例：<a href="https://blog.mwish.me/2021/11/05/An-Overview-of-Query-Optimization-in-Relational-Systems/#Statistics-And-Cost-Estimation">https://blog.mwish.me/2021/11/05/An-Overview-of-Query-Optimization-in-Relational-Systems/#Statistics-And-Cost-Estimation</a></p>
+<p>这里的 Cost 就是资源消耗的 cost，即 IO Cost + CPU cost + memory + bandwidth…</p>
+<p>你可能觉得很自然，但是实际上分布式系统里，两个 Plan 「资源消耗」相同，但是由于并行能力，可能执行时间不一样，这里还要考虑「response-time cost model」：假设 p1, p2 部分能并行，这部分代价可能就是 $max(p1, p2)$ ，它要考虑在多个节点进行运算的启动成本（start-up cost）和 skew。</p>
+<p>最后，对于相关的 Plan 生成，因为这里 Card 又大了不少，所以会非常麻烦。优化器可能会用启发式的方法：生成最佳的单机执行计划，然后分布式化。这里可以参考 CockroachDB 的文档：<a target="_blank" rel="noopener" href="https://github.com/cockroachdb/cockroach/blob/master/docs/RFCS/20160421_distributed_sql.md">https://github.com/cockroachdb/cockroach/blob/master/docs/RFCS/20160421_distributed_sql.md</a></p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%88%86%E5%B8%83%E5%BC%8F%E6%95%B0%E6%8D%AE%E5%BA%93%E7%9A%84%E6%9E%B6%E6%9E%84"><span class="toc-number">1.</span> <span class="toc-text">分布式数据库的架构</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Sort-Join-%E7%AD%89%E6%93%8D%E4%BD%9C%E7%9A%84%E5%B9%B6%E8%A1%8C%E6%89%A7%E8%A1%8C"><span class="toc-number">2.</span> <span class="toc-text">Sort&#x2F;Join 等操作的并行执行</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%B9%B6%E8%A1%8C%E6%8E%92%E5%BA%8F"><span class="toc-number">2.1.</span> <span class="toc-text">并行排序</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%B9%B6%E8%A1%8C-Join"><span class="toc-number">2.2.</span> <span class="toc-text">并行 Join</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Operator-%E7%9A%84%E5%B9%B6%E8%A1%8C%E6%89%A7%E8%A1%8C"><span class="toc-number">3.</span> <span class="toc-text">Operator 的并行执行</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%85%B1%E4%BA%AB%E5%86%85%E5%AD%98%E7%B3%BB%E7%BB%9F%E7%9A%84%E6%9F%A5%E8%AF%A2%E5%A4%84%E7%90%86"><span class="toc-number">3.1.</span> <span class="toc-text">共享内存系统的查询处理</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9F%A5%E8%AF%A2%E4%BC%98%E5%8C%96%E5%92%8C%E4%BB%A3%E4%BB%B7"><span class="toc-number">4.</span> <span class="toc-text">查询优化和代价</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2022/06/05/Parallel-and-Distributed-Query-Processing/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2022/06/05/Parallel-and-Distributed-Query-Processing/&text=Parallel and Distributed Query Processing"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2022/06/05/Parallel-and-Distributed-Query-Processing/&title=Parallel and Distributed Query Processing"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2022/06/05/Parallel-and-Distributed-Query-Processing/&is_video=false&description=Parallel and Distributed Query Processing"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Parallel and Distributed Query Processing&body=Check out this article: http://blog.mwish.me/2022/06/05/Parallel-and-Distributed-Query-Processing/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2022/06/05/Parallel-and-Distributed-Query-Processing/&title=Parallel and Distributed Query Processing"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2022/06/05/Parallel-and-Distributed-Query-Processing/&title=Parallel and Distributed Query Processing"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2022/06/05/Parallel-and-Distributed-Query-Processing/&title=Parallel and Distributed Query Processing"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2022/06/05/Parallel-and-Distributed-Query-Processing/&title=Parallel and Distributed Query Processing"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2022/06/05/Parallel-and-Distributed-Query-Processing/&name=Parallel and Distributed Query Processing&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2022/06/05/Parallel-and-Distributed-Query-Processing/&t=Parallel and Distributed Query Processing"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="stringGolang 里面的 string 是 immutable 的，它的 cap&#x2F;len 是同一个值。我们可能需要涉及两个别的类型：  string 是一个 byte (uint8 ) 组成的对象，形式上可以脑补 Rust 的 &amp;[u8] (感觉我说的不太对，有不是 bytes 组成的 string 么)  我们需要涉及另一个类型 rune ，即 unicode。具体 string">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Types In Golang: Part2">
+<meta property="og:url" content="http://blog.mwish.me/2020/05/01/Types-In-Golang-Part2/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="stringGolang 里面的 string 是 immutable 的，它的 cap&#x2F;len 是同一个值。我们可能需要涉及两个别的类型：  string 是一个 byte (uint8 ) 组成的对象，形式上可以脑补 Rust 的 &amp;[u8] (感觉我说的不太对，有不是 bytes 组成的 string 么)  我们需要涉及另一个类型 rune ，即 unicode。具体 string">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2020-05-01T14:43:29.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.568Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>Types In Golang: Part2</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2020/05/25/LevelDB-Put-How-it-batch/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2020/05/01/Types-In-Golang/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/05/01/Types-In-Golang-Part2/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/05/01/Types-In-Golang-Part2/&text=Types In Golang: Part2"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/05/01/Types-In-Golang-Part2/&title=Types In Golang: Part2"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/05/01/Types-In-Golang-Part2/&is_video=false&description=Types In Golang: Part2"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Types In Golang: Part2&body=Check out this article: http://blog.mwish.me/2020/05/01/Types-In-Golang-Part2/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/05/01/Types-In-Golang-Part2/&title=Types In Golang: Part2"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/05/01/Types-In-Golang-Part2/&title=Types In Golang: Part2"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/05/01/Types-In-Golang-Part2/&title=Types In Golang: Part2"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/05/01/Types-In-Golang-Part2/&title=Types In Golang: Part2"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/05/01/Types-In-Golang-Part2/&name=Types In Golang: Part2&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/05/01/Types-In-Golang-Part2/&t=Types In Golang: Part2"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-4"><a class="toc-link" href="#string"><span class="toc-number">1.</span> <span class="toc-text">string</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%87%BD%E6%95%B0"><span class="toc-number"></span> <span class="toc-text">函数</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#channel"><span class="toc-number">1.</span> <span class="toc-text">channel</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#channel-%E7%9A%84%E7%B1%BB%E5%9E%8B"><span class="toc-number">2.</span> <span class="toc-text">channel 的类型</span></a><ol class="toc-child"><li class="toc-item toc-level-5"><a class="toc-link" href="#channel-%E6%93%8D%E4%BD%9C%E5%92%8C%E8%AF%AD%E4%B9%89"><span class="toc-number">2.1.</span> <span class="toc-text">channel 操作和语义</span></a></li><li class="toc-item toc-level-5"><a class="toc-link" href="#select-channel"><span class="toc-number">2.2.</span> <span class="toc-text">select channel</span></a></li></ol></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#method"><span class="toc-number"></span> <span class="toc-text">method</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#interface"><span class="toc-number"></span> <span class="toc-text">interface</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8F%8D%E5%B0%84%E4%B8%8E%E7%B1%BB%E5%9E%8B"><span class="toc-number"></span> <span class="toc-text">反射与类型</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%B1%BB%E5%9E%8B%E5%86%85%E5%B5%8C"><span class="toc-number"></span> <span class="toc-text">类型内嵌</span></a>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Types In Golang: Part2
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2020-05-01T14:43:29.000Z" itemprop="datePublished">2020-05-01</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <h4 id="string"><a href="#string" class="headerlink" title="string"></a>string</h4><p>Golang 里面的 string 是 immutable 的，它的 cap/len 是同一个值。我们可能需要涉及两个别的类型：</p>
+<ul>
+<li><p>string 是一个 <code>byte</code> (<code>uint8</code> ) 组成的对象，形式上可以脑补 Rust 的 <code>&amp;[u8]</code> (感觉我说的不太对，有不是 bytes 组成的 string 么)</p>
+</li>
+<li><p>我们需要涉及另一个类型 <code>rune</code> ，即 unicode。具体 string 可能由不定长的不同 unicode 构成，所以</p>
+<blockquote>
+<p>在Go中，所有的字符串常量都被视为是UTF-8编码的。 在编译时刻，非法UTF-8编码的字符 串常量将导致编译失败。 在运行时刻，Go运行时无法阻止一个字符串是非法UTF-8编码的。</p>
+</blockquote>
+</li>
+</ul>
+<blockquote>
+<p>字符串类型没有内置的方法。我们可以</p>
+<ul>
+<li>使用strings标准库 􏰀 提供的函数来进行各种字符串操作。</li>
+<li>调用内置函数 len 来获取一个字符串值的长度(此字符串中存储的字节数)。</li>
+<li>使用容器元素索引(第18章)语法aString[i]来获取aString中的第i个 byte。 表达 式 aString[i] 是不可寻址的。换句话说， aString[i] 不可被修改。 使用子切片语法(第18章)aString[start:end]来获取aString的一个子字符串。 这 里， start (包括)和 end (不包括)均为 aString 中存储的字节的下标。</li>
+</ul>
+<p>对于标准编译器来说，一个字符串的赋值完成之后，此赋值中的目标值和源值将共享底层字节。 一个子切片表达式 aString[start:end] 的估值结果也将和基础字符串 aString 共享一部分底层 字节。</p>
+</blockquote>
+<p>比较重要的是：索引的对象是 byte：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">fmt.Printf(&quot;%T \n&quot;, hello[0]) // uint8</span><br></pre></td></tr></table></figure>
+<p>对于字符串而言，我们经常类型转换，比如把某个 string 丢给 etcd 发送请求。</p>
+<blockquote>
+<ol>
+<li><p>一个字符串值可以被显式转换为一个字节切片(byte slice)，反之亦然。 一个字节切片类型是 一个元素类型为内置类型byte的切片类型。 或者说，一个字节切片类型的底层类型为[]byte (亦即 []uint8 )。</p>
+</li>
+<li><p>一个字符串值可以被显式转换为一个码点切片(rune slice)，反之亦然。 一个码点切片类型是一个元素类型为内置类型rune的切片类型。 或者说，一个码点切片类型的底层类型为 []rune (亦即 []int32 )。</p>
+</li>
+</ol>
+<p>在一个从码点切片到字符串的转换中，码点切片中的每个码点值将被UTF-8编码为一到四个字节至结果 字符串中。 如果一个码点值是一个不合法的Unicode码点值，则它将被视为Unicode替换字符(码点) 值0xFFFD(Unicode replacement character)。 替换字符值0xFFFD将被UTF-8编码为三个字节0xef 0xbf 0xbd。</p>
+<p>当一个字符串被转换为一个码点切片时，此字符串中存储的字节序列将被解读为一个一个码点的UTF-8编码序列。 非法的UTF-8编码字节序列将被转化为Unicode替换字符值0xFFFD。</p>
+<p>当一个字符串被转换为一个字节切片时，结果切片中的底层字节序列是此字符串中存储的字节序列的一 份深复制。</p>
+</blockquote>
+<p>所以这个转化过程还是有复制的，TiDB 用这个特点写了个 <code>hack.String</code>, 挺有意思的：<a target="_blank" rel="noopener" href="https://github.com/pingcap/tidb/blob/master/util/hack/hack.go">https://github.com/pingcap/tidb/blob/master/util/hack/hack.go</a></p>
+<p>但是实际上，上述情景存在一些编译器的优化（我吐了），这是标准库中的优化</p>
+<blockquote>
+<ul>
+<li>一个 for-range 循环中跟随 range 关键字的从字符串到字节切片的转换; <code>for i, v := range []byte(s) &#123;&#125;</code></li>
+<li>一个在映射元素索引语法中被用做键值的从字节切片到字符串的转换; <code>v[string(bytes)]</code></li>
+<li>一个字符串比较表达式中被用做比较值的从字节切片到字符串的转换; <code>if s &lt; string(bytes)</code></li>
+<li>一个(至少有一个被衔接的字符串值为非空字符串常量的)字符串衔接表达式中的从字节切片到 字符串的转换。<code>s  += string(bytes)</code></li>
+</ul>
+</blockquote>
+<p>for-range 遍历字符串的时候 key 是 byte start index, value 是 rune. 所以其实很好玩：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">main</span><span class="params">()</span></span>  &#123;</span><br><span class="line">	s := <span class="string">&quot;你妈死了，我是你哥哥，我们俩都是你妈的儿子&quot;</span></span><br><span class="line">	<span class="keyword">for</span> i, rn := <span class="keyword">range</span> s &#123;</span><br><span class="line">		fmt.Println(i, rn, <span class="type">string</span>(rn))</span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>可以试着运行一下这个，至于遍历 bytes, 你可以：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">for</span> i, v := <span class="keyword">range</span> []<span class="type">byte</span>(s) &#123;&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="函数"><a href="#函数" class="headerlink" title="函数"></a>函数</h3><p>函数我其实不是很想介绍，但是我们需要注意一下 builtin 的这种内置函数，这种往往靠开洞之类的方法，在 这些函数声明在 <code>builtin</code> 􏰀 和 <code>unsafe</code> 􏰀 标准库中, 可以支持泛型甚至类型作为参数，其中 <code>len</code> <code>cap</code> 这些也有可能编译期获得值。</p>
+<p>另外，很多时候 Go 编译器会希望你定义完整个函数，但是写个 <code>panic(“unimplemented”)</code> 其实也可以，实际上Go 有个 <a target="_blank" rel="noopener" href="https://golang.org/ref/spec#Terminating_statements">https://golang.org/ref/spec#Terminating_statements</a> ，满足这个标准的可以当函数的结尾。</p>
+<h4 id="channel"><a href="#channel" class="headerlink" title="channel"></a>channel</h4><p>channel 是个 mpmc 的模型，一些 goroutine可以向 此通道发送数据，另外一些goroutine可以从此通道接收数据。</p>
+<blockquote>
+<p>随着一个数据值的传递(发送和接收)，一些数据值的所有权从一个协程转移到了另一个协程。 当一 个协程发送一个值到一个通道，我们可以认为此协程释放了一些值的所有权。 当一个协程从一个通道 接收到一个值，我们可以认为此协程获取了一些值的所有权。</p>
+</blockquote>
+<p>(突然想到 Send 和 Sync 这俩 trait)</p>
+<h4 id="channel-的类型"><a href="#channel-的类型" class="headerlink" title="channel 的类型"></a>channel 的类型</h4><blockquote>
+<p>字面形式chan T表示一个元素类型为T的双向通道类型。 编译器允许从此类型的值中接收和向此 类型的值中发送数据。<br> 字面形式chan&lt;- T表示一个元素类型为T的单向发送通道类型。 编译器不允许从此类型的值中 接收数据。</p>
+<p>字面形式&lt;-chan T表示一个元素类型为T的单向接收通道类型。 编译器不允许向此类型的值中 发送数据。</p>
+</blockquote>
+<p>双向通道chan T的值可以被隐式转换为单向通道类型chan&lt;- T和&lt;-chan T，但反之不行(即使显式 也不行)。 类型chan&lt;- T和&lt;-chan T的值也不能相互转换。</p>
+<blockquote>
+<p>一个容量为0的通道值称为一个非 缓冲通道(unbuffered channel)，一个容量不为0的通道值称为一个缓冲通道(buffered channel)。</p>
+<p>通道类型的零值也使用预声明的nil来表示。 一个非零通道值必须通过内置的make函数来创建。 </p>
+</blockquote>
+<p>所以 channel 比较是靠“内部成员是不是同一个”来判断的。</p>
+<h5 id="channel-操作和语义"><a href="#channel-操作和语义" class="headerlink" title="channel 操作和语义"></a>channel 操作和语义</h5><ol>
+<li><code>close(ch)</code> 关闭非 <code>&lt;-chan</code></li>
+<li><code>ch &lt;- v</code> 给 ch 发送 v</li>
+<li><code>&lt;-ch</code> 接收一个值</li>
+<li><code>cap(ch)</code> 查询容量</li>
+<li><code>len(ch)</code> 查询内部已有元素的长度</li>
+</ol>
+<blockquote>
+<p>Go中大多数的基本操作都是未同步的。换句话说，它们都不是并发安全的。 这些操作包括赋值、传 参、和各种容器值操作等。 但是，除了并发地关闭一个通道和向此通道发送数据这种情形，上面这些 所有列出的操作都已经同步过了，因此它们可以在并发协程中安全运行而无需其它同步操作。 我们在 编程中应该避免并发地关闭一个通道和向此通道发送数据这种情形， 因为这种情形属于不良设计(原 因将在下面解释)。</p>
+</blockquote>
+<p>所以 close 和 send 逻辑应该合理的拆分。</p>
+<blockquote>
+<p>注意:通道的赋值和其它类型值的赋值一样，是未同步的。 同样，将刚从一个通道接收出来的值赋给 另一个值也是未同步的。</p>
+<p>如果被查询的通道为一个nil零值通道，则cap和len函数调用都返回0。 这两个操作是如此简单，所 以后面将不再对它们进行详解。 事实上，这两个操作在实践中很少使用。</p>
+</blockquote>
+<div class="table-container">
+<table>
+<thead>
+<tr>
+<th style="text-align:center">操作</th>
+<th style="text-align:center">nil channel</th>
+<th style="text-align:center">closed channel</th>
+<th style="text-align:center">channel</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">close</td>
+<td style="text-align:center">panic</td>
+<td style="text-align:center">panic</td>
+<td style="text-align:center">close it</td>
+</tr>
+<tr>
+<td style="text-align:center">ch &lt;-</td>
+<td style="text-align:center">blocking forever</td>
+<td style="text-align:center">panic</td>
+<td style="text-align:center">blocking or send success</td>
+</tr>
+<tr>
+<td style="text-align:center">&lt;-ch</td>
+<td style="text-align:center">blocking forever</td>
+<td style="text-align:center">never panic</td>
+<td style="text-align:center">blocking or recv success</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>其实根据我理解，我总结了一下：</p>
+<ul>
+<li>Golang 的 close 是“不可重复调用” 的，close nil, 被 close 的 channel 都会产生 panic</li>
+<li>sender 应该知道 channel 的情况，给 nil 发送会 blocking forever, 给 closed 发送会 panic</li>
+<li>receiver 某种情况下不知道，所以它从 nil 接收会 block forever, 从 closed 接收消息必定不会 blocking</li>
+</ul>
+<p>channel 此外还需要维护 FIFO 的语义，这其实暗示很麻烦的实现，实际上很多内存 channel 都不想做这一点。</p>
+<p>可以认为一个 channel 维护了3个 queue:</p>
+<blockquote>
+<ol>
+<li>接收数据协程队列。此队列是一个没有长度限制的链表。 此队列中的协程均处于阻塞状态，它们 正等待着从此通道接收数据。</li>
+<li>发送数据协程队列。此队列也是一个没有长度限制的链表。 此队列中的协程亦均处于阻塞状态， 它们正等待着向此通道发送数据。 此队列中的每个协程将要发送的值(或者此值的指针，取决于 具体编译器实现)和此协程一起存储在此队列中。</li>
+<li>数据缓冲队列。这是一个循环队列，它的长度为此通道的容量。此队列中存放的值的类型都为此 通道的元素类型。 如果此队列中当前存放的值的个数已经达到此通道的容量，则我们说此通道已 经处于满槽状态。 如果此队列中当前存放的值的个数为零，则我们说此通道处于空槽状态。 对 于一个非缓冲通道(容量为零)，它总是同时处于满槽状态和空槽状态。</li>
+</ol>
+</blockquote>
+<p>注意其中的 blocking 行为，在 select 的时候你会需要它们的。此外：</p>
+<blockquote>
+<p>一个非零通道被关闭之后，此通道上的后续数据接收操作将永不会阻塞。 此通道的 缓冲队列中存储数据仍然可以被接收出来。 伴随着这些接收出来的缓冲数据的第二个可选返回(类型 不确定布尔)值仍然是true。 一旦此缓冲队列变为空，后续的数据接收操作将永不阻塞并且总会返回 此通道的元素类型的零值和值为false的第二个可选返回结果。 </p>
+<p>通道操作情形C: 当一个协程成功获取到一个非零且尚未关闭的通道的锁并且准备关闭此通道时，下面 两步将依次执行:</p>
+<ol>
+<li>如果此通道的接收数据协程队列不为空(这种情况下，缓冲队列必为空)，此队列中的所有协程 将被依个弹出，并且每个协程将接收到此通道的元素类型的一个零值，然后恢复至运行状态。</li>
+<li>如果此通道的发送数据协程队列不为空，此队列中的所有协程将被依个弹出，并且每个协程中都将产生一个panic(因为向已关闭的通道发送数据)。 这就是我们在上面说并发地关闭一个通道和 向此通道发送数据这种情形属于不良设计的原因。 事实上，并发地关闭一个通道和向此通道发送 数据将产生数据竞争。</li>
+</ol>
+</blockquote>
+<p>其他几个 case 也可以看看。</p>
+<p>此外需要注意：</p>
+<ul>
+<li><code>&lt;-</code> 接收到的元素全是值复制（我个人感觉传指针怪怪的？不知有没有什么 例子）</li>
+<li>goroutine 和 channel 中， channel 只有没有 goroutine 引用才会被 gc, goroutine 同理。所以要小心 leak.</li>
+<li>goroutine 允许你从 nil 和 closed 中 recv, 返回一个 ok 的 bool。这也允许你 for-range 使用</li>
+</ul>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">for</span> &#123;</span><br><span class="line">  <span class="keyword">for</span> v, ok &lt;- ch </span><br><span class="line">  <span class="keyword">if</span> !ok &#123;</span><br><span class="line">    <span class="keyword">break</span></span><br><span class="line">  &#125;</span><br><span class="line">  <span class="comment">// ...</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">for</span> v := <span class="keyword">range</span> ch &#123;</span><br><span class="line">  <span class="comment">// ...</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h5 id="select-channel"><a href="#select-channel" class="headerlink" title="select channel"></a>select channel</h5><blockquote>
+<p>所有的非阻塞 case 操作中将有一个被随机选择执行(而不是按照从上到下的顺序)，然后执行此 操作对应的 case 分支代码块。</p>
+<p>在所有的 case 操作均为阻塞的情况下，如果 default 分支存在，则 default 分支代码块将得到执 行; 否则，当前协程将被推入所有阻塞操作中相关的通道的发送数据协程队列或者接收数据协程 队列中，并进入阻塞状态。</p>
+</blockquote>
+<p>一种很常用的模式是：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">select &#123;</span><br><span class="line">case &lt;-ch:</span><br><span class="line">	// do something</span><br><span class="line">default:</span><br><span class="line">	// 跳过</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>select 会评估所有的 arm, 给 channel lock 并且尝试是否是 non-blocking 的</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> <span class="string">&quot;fmt&quot;</span></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">main</span><span class="params">()</span></span>  &#123;</span><br><span class="line">	ch := <span class="built_in">make</span>(<span class="keyword">chan</span> <span class="type">int</span>)</span><br><span class="line">	<span class="keyword">select</span> &#123;</span><br><span class="line">	<span class="keyword">case</span> ch&lt;- <span class="number">114514</span>:</span><br><span class="line">		fmt.Println(<span class="string">&quot;Send done&quot;</span>)</span><br><span class="line">	<span class="keyword">case</span> v := &lt;- ch:</span><br><span class="line">		fmt.Printf(<span class="string">&quot;Receive %d\n&quot;</span>, v)</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	fmt.Println(<span class="string">&quot;done&quot;</span>)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>以上操作会得到：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">fatal error: all goroutines are asleep - deadlock!</span><br><span class="line"></span><br><span class="line">goroutine 1 [select]:</span><br><span class="line">main.main()</span><br><span class="line">        .../cmd/chan_example.go:7 +0xe3</span><br></pre></td></tr></table></figure>
+<h3 id="method"><a href="#method" class="headerlink" title="method"></a>method</h3><p>有 method 需要有几个限制：</p>
+<blockquote>
+<ol>
+<li>T 必须是一个定义类型(第14章);</li>
+<li>T 必须和此方法声明定义在同一个代码包中;</li>
+<li>T 不能是一个指针类型;</li>
+<li>T 不能是一个接口类型。</li>
+</ol>
+</blockquote>
+<p>method 会 implict 生成函数，让 go 编译器去 mangling。</p>
+<blockquote>
+<p>对每一个为值类型属主 T 声明的方法，编译器将自动隐式地为其对应的指针类型属主 <em>T 声明一个相应的 同名方法。 以上面的为类型Book声明的Pages方法为例，编译器将自动为类型</em>Book声明一个同名方 法:</p>
+</blockquote>
+<p>也就是说 <code>(T) call()</code> 被声明后，<code>(*T) call</code> 会被 implicit 的定义，传 <code>(*v)</code> 作为参数，而生成的函数 function call，会是一个值复制。类型T的方法集总是类型<em>T的方法集的子集。上述第一个括号里的被称为 </em>receiver type*。</p>
+<p>这点可以在 Go-FAQ 找到：<a target="_blank" rel="noopener" href="https://golang.org/doc/faq#different_method_sets">https://golang.org/doc/faq#different_method_sets</a></p>
+<p>所以我们需要考虑是<code>(*T)</code> 还是 <code>(T)</code> 实现：</p>
+<blockquote>
+<p>对于值类型属主还是指针类型属主都可以接受的方法声明，下面列出了一些考虑因素:</p>
+<ul>
+<li>太多的指针可能会增加垃圾回收器的负担。 如果一个值类型的尺寸太大，那么属主参数在传参的时候的复制成本将不可忽略。 指针类型都是 小尺寸类型。 关于各种不同类型的尺寸，请阅读值复制代价(第34章)一文。</li>
+<li>在并发场合下，同时调用为值类型属主和指针类型属主方法比较易于产生数据竞争。</li>
+<li>sync 标准库包中的类型的值不应该被复制，所以如果一个结构体类型内嵌(第24章)了这些类 型，则不应该为这个结构体类型声明值类型属主的方法。</li>
+</ul>
+<p>如果实在拿不定主意在一个方法声明中应该使用值类型属主还是指针类型属主，那么请使用指针类型属 主。</p>
+</blockquote>
+<h3 id="interface"><a href="#interface" class="headerlink" title="interface"></a>interface</h3><p>interface 是一个很常用，但是用起来大家其实很模糊的东西。我们需要实际上脑袋想清楚：</p>
+<ul>
+<li><code>i = v</code> 会不会产生复制，还是引用的 copy</li>
+<li><code>i1 = i2</code> 会有如何影响</li>
+<li>interface 内部如何维护具体类型，完整信息。</li>
+</ul>
+<blockquote>
+<p>在Go中，如果类型T实现了一个接口类型I，则类型T的值都可以隐式转换到类型I。 换句话说，类型 T的值可以赋给类型I的可修改值。 当一个T值被转换到类型I(或者赋给一个I值)的时候，</p>
+<ul>
+<li>如果类型T是一个非接口类型，则此T值的<strong>一个复制</strong>将被包裹在结果(或者目标)I值中。 此操作 的时间复杂度为 <em>O</em>(n) ，其中 n 为 T 值的尺寸。</li>
+<li>如果类型 T 也为一个接口类型，则此 T 值中当前包裹的(非接口)值将被复制一份到结果(或者目 标)I值中。 官方标准编译器为此操作做了优化，使得此操作的时间复杂度为<em>O</em>(1)，而不 是<em>O</em>(n)。</li>
+</ul>
+</blockquote>
+<p>也就是说，本身会发生一个 copy 过程。</p>
+<p>可以看一段比较有趣的代码：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">package</span> main</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> <span class="string">&quot;fmt&quot;</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">type</span> Book <span class="keyword">struct</span> &#123;</span><br><span class="line">	name <span class="type">string</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(b Book)</span></span> About() <span class="type">string</span> &#123;</span><br><span class="line">	<span class="keyword">return</span> fmt.Sprintf(<span class="string">&quot;Book(name:%s)&quot;</span>, b.name)</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">type</span> Aboutable <span class="keyword">interface</span> &#123;</span><br><span class="line">	About() <span class="type">string</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">main</span><span class="params">()</span></span>  &#123;</span><br><span class="line">	<span class="keyword">var</span> aboutable Aboutable</span><br><span class="line">	<span class="keyword">if</span> aboutable == <span class="literal">nil</span> &#123;</span><br><span class="line">		fmt.Println(<span class="string">&quot;aboutable is nil&quot;</span>)</span><br><span class="line">	&#125;</span><br><span class="line">	fmt.Println(aboutable) <span class="comment">// &lt;nil&gt;</span></span><br><span class="line">	<span class="keyword">var</span> bookPtr *Book</span><br><span class="line">	aboutable = bookPtr</span><br><span class="line">	<span class="keyword">if</span> aboutable == <span class="literal">nil</span> &#123;</span><br><span class="line">		fmt.Println(<span class="string">&quot;aboutable is nil&quot;</span>)</span><br><span class="line">	&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">		fmt.Println(<span class="string">&quot;aboutable is not nil&quot;</span>)</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	fmt.Println(aboutable) <span class="comment">// &lt;nil&gt;</span></span><br><span class="line"></span><br><span class="line">	<span class="comment">// panic: value method main.Book.About called using nil *Book pointer</span></span><br><span class="line">	<span class="comment">//aboutable.About()</span></span><br><span class="line"></span><br><span class="line"></span><br><span class="line">	b := Book&#123;name: <span class="string">&quot;卡拉马佐夫兄弟&quot;</span>&#125;</span><br><span class="line">	aboutable = b</span><br><span class="line"></span><br><span class="line">	fmt.Println(aboutable.About()) <span class="comment">// Book(name:卡拉马佐夫兄弟)</span></span><br><span class="line">	<span class="comment">//aboutableBook := aboutable.(Book)</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<blockquote>
+<p>对于一个非接口类型和接口类型对，它们的实现关系信息包括两部分的内容:</p>
+<ol>
+<li>动态类型(即此非接口类型)的信息。</li>
+<li>一个方法表(切片类型)，其中存储了所有此接口类型指定的并且为此非接口类型(动态类型)声明的方法。</li>
+</ol>
+</blockquote>
+<p>可以实现 Golang 的多态：</p>
+<blockquote>
+<p>比如，当方法i.m被调用时，其实被调用的是方法t.m。 一个接口值可以通过包裹不同动态类型的动态值来表现出各种不同的行为，这称为多态。</p>
+</blockquote>
+<p>但我觉得还是很鸡肋的，对不同类型需要一堆 builtin 或者写很多遍, 感觉很蛋疼。</p>
+<h3 id="反射与类型"><a href="#反射与类型" class="headerlink" title="反射与类型"></a>反射与类型</h3><p>我们可以注意到之前的：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">b := Book&#123;name: <span class="string">&quot;卡拉马佐夫兄弟&quot;</span>&#125;</span><br><span class="line">aboutable = b</span><br><span class="line"></span><br><span class="line">fmt.Println(aboutable.About()) <span class="comment">// Book(name:卡拉马佐夫兄弟)</span></span><br><span class="line">aboutableBook := aboutable.(Book)</span><br></pre></td></tr></table></figure>
+<p>类比起来，我们已经拥有了对一定的底层类型的转换，可以理解成<code>static_cast</code>,可能需要类似 C++ 的 <code>dynamic_cast&lt;&gt;</code> 的转换，也就是：</p>
+<blockquote>
+<ol>
+<li><p>将一个接口值转换为一个非接口类型(此非接口类型必须实现了此接口值的接口类型)。</p>
+</li>
+<li><p>将一个接口值转换为另一个接口类型(前者接口值的类型可以实现了也可以未实现后者目标接口</p>
+<p>类型)。</p>
+</li>
+</ol>
+</blockquote>
+<p>以上依靠：</p>
+<blockquote>
+<p>在一个类型断言表达式i.(T)中，i称为断言值，T称为断言类型。 一个断言可能成功或者失败。</p>
+</blockquote>
+<p>还是有一些不同的，实际上 <code>dynamic_cast</code> 对象是指针，而这里很难拿到<code>interface</code> 中原对象的引用：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line">b := Book&#123;name: <span class="string">&quot;卡拉马佐夫兄弟&quot;</span>&#125;</span><br><span class="line">aboutable = b</span><br><span class="line"></span><br><span class="line">fmt.Println(aboutable.About()) <span class="comment">// Book(name:卡拉马佐夫兄弟)</span></span><br><span class="line">aboutableBook := aboutable.(Book)</span><br><span class="line">fmt.Println(aboutableBook.About()) <span class="comment">// Book(name:卡拉马佐夫兄弟)</span></span><br><span class="line"></span><br><span class="line">aboutableBook.name = <span class="string">&quot;罪与罚&quot;</span></span><br><span class="line">fmt.Println(aboutable.About()) <span class="comment">// Book(name:卡拉马佐夫兄弟)</span></span><br><span class="line"></span><br><span class="line"><span class="comment">//bptr, ok := (aboutable).(*Book)</span></span><br><span class="line"><span class="comment">//if !ok &#123;</span></span><br><span class="line"><span class="comment">//	fmt.Println(&quot;cast error&quot;)</span></span><br><span class="line"><span class="comment">//&#125; else &#123;</span></span><br><span class="line"><span class="comment">//	fmt.Println(bptr.About())</span></span><br><span class="line"><span class="comment">//&#125;</span></span><br></pre></td></tr></table></figure>
+<p>下面是编译不通过的, 除非你一开始放的就是 <code>*Book</code>, 可以转回来。否则这仍然是一个 copy 行为。</p>
+<p>此外还有个很神秘的语法：switch type:</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">switch</span> x.(<span class="keyword">type</span>) &#123;</span><br><span class="line"><span class="keyword">case</span> []<span class="type">int</span>:</span><br><span class="line">  <span class="comment">//...</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>我真的觉得这个语法太神秘了，这似乎是个 builtin。</p>
+<p>此外，类似 Java 逆变，协变的概念：</p>
+<blockquote>
+<p>一个 <strong>[]T</strong> 类型的值不能直接被转换为类型 <strong>[]I</strong> ，即使类型 <strong>T</strong> 实现了接口类型<strong>I</strong></p>
+</blockquote>
+<h3 id="类型内嵌"><a href="#类型内嵌" class="headerlink" title="类型内嵌"></a>类型内嵌</h3><p>似乎是由于 Go 组合优于继承的哲学，Go 允许类型内嵌，它的规则有点奇怪：</p>
+<blockquote>
+<ol>
+<li>一个类型名 T 只有在它既不表示一个定义的指针类型也不表示一个基类型为指针类型或者接口类型 的指针类型的情况下在可以被用作内嵌字段。</li>
+<li>一个指针类型 *T 只有在 T 为一个类型名并且 T 既不表示一个指针类型也不表示一个接口类型的时 候才能被用作内嵌字段。</li>
+</ol>
+</blockquote>
+<ul>
+<li>T 本身要求不是 pointer/基类型不是 pointer/interface</li>
+<li>*T 要求 T 是类型名 基类型不是 pointer/interface</li>
+<li>（我以前不知道的是，类型竟然能内嵌 interface, 神了）</li>
+</ul>
+<p>被内嵌类型的方法会被提升，这是一个语法糖，如果重复定义，可以参考以下逻辑：</p>
+<blockquote>
+<p>只有深度最浅的一个完整形式的选择器(并且最浅者只有一个)可以被缩写为x.y。 换句话说， x.y 表示深度最浅的一个选择器。其它完整形式的选择器被此最浅者所遮挡(压制)。 如果有多个完整形式的选择器同时拥有最浅深度，则任何完整形式的选择器都不能被缩写为 x.y 。 我们称这些同时拥有最浅深度的完整形式的选择器发生了碰撞。</p>
+</blockquote>
+<p>而外层类型也会 implicit 实现这些方法。</p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-4"><a class="toc-link" href="#string"><span class="toc-number">1.</span> <span class="toc-text">string</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%87%BD%E6%95%B0"><span class="toc-number"></span> <span class="toc-text">函数</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#channel"><span class="toc-number">1.</span> <span class="toc-text">channel</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#channel-%E7%9A%84%E7%B1%BB%E5%9E%8B"><span class="toc-number">2.</span> <span class="toc-text">channel 的类型</span></a><ol class="toc-child"><li class="toc-item toc-level-5"><a class="toc-link" href="#channel-%E6%93%8D%E4%BD%9C%E5%92%8C%E8%AF%AD%E4%B9%89"><span class="toc-number">2.1.</span> <span class="toc-text">channel 操作和语义</span></a></li><li class="toc-item toc-level-5"><a class="toc-link" href="#select-channel"><span class="toc-number">2.2.</span> <span class="toc-text">select channel</span></a></li></ol></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#method"><span class="toc-number"></span> <span class="toc-text">method</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#interface"><span class="toc-number"></span> <span class="toc-text">interface</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8F%8D%E5%B0%84%E4%B8%8E%E7%B1%BB%E5%9E%8B"><span class="toc-number"></span> <span class="toc-text">反射与类型</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%B1%BB%E5%9E%8B%E5%86%85%E5%B5%8C"><span class="toc-number"></span> <span class="toc-text">类型内嵌</span></a>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/05/01/Types-In-Golang-Part2/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/05/01/Types-In-Golang-Part2/&text=Types In Golang: Part2"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/05/01/Types-In-Golang-Part2/&title=Types In Golang: Part2"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/05/01/Types-In-Golang-Part2/&is_video=false&description=Types In Golang: Part2"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Types In Golang: Part2&body=Check out this article: http://blog.mwish.me/2020/05/01/Types-In-Golang-Part2/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/05/01/Types-In-Golang-Part2/&title=Types In Golang: Part2"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/05/01/Types-In-Golang-Part2/&title=Types In Golang: Part2"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/05/01/Types-In-Golang-Part2/&title=Types In Golang: Part2"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/05/01/Types-In-Golang-Part2/&title=Types In Golang: Part2"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/05/01/Types-In-Golang-Part2/&name=Types In Golang: Part2&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/05/01/Types-In-Golang-Part2/&t=Types In Golang: Part2"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

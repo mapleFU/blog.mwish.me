@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="上一期( https:&#x2F;&#x2F;blog.mwish.me&#x2F;2022&#x2F;11&#x2F;05&#x2F;x86-and-SIMD-programming&#x2F; ) 介绍了 x86 和 SIMD 的背景，同时介绍了 x86 Skylake 的架构。这文章写了都整整一年了（我也太摆烂了），所以我们还是需要回顾一下。x86 CPU 上面通过 decode 代码，把 x86 CISC 指令转化为 RISC 的 micro-arch 的指">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Fast Scalar Code and Compiler">
+<meta property="og:url" content="http://blog.mwish.me/2023/11/15/Fast-Scalar-Code-and-Compiler/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="上一期( https:&#x2F;&#x2F;blog.mwish.me&#x2F;2022&#x2F;11&#x2F;05&#x2F;x86-and-SIMD-programming&#x2F; ) 介绍了 x86 和 SIMD 的背景，同时介绍了 x86 Skylake 的架构。这文章写了都整整一年了（我也太摆烂了），所以我们还是需要回顾一下。x86 CPU 上面通过 decode 代码，把 x86 CISC 指令转化为 RISC 的 micro-arch 的指">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/2216018380123463140.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/8601113935312402029.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/4813239862219650588.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/7962189767674737933.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/4911952986514956094.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/2057821884675391120.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/7144858499665429034.png">
+<meta property="article:published_time" content="2023-11-15T02:05:00.000Z">
+<meta property="article:modified_time" content="2023-11-15T02:03:39.015Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/2216018380123463140.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>Fast Scalar Code and Compiler</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2023/12/10/Compiler-Optimizations-Power-Limits-Auto-vetorize/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2023/11/05/CIDR-23-Analyzing-and-Comparing-Lakehouse-Storage-Systems/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2023/11/15/Fast-Scalar-Code-and-Compiler/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2023/11/15/Fast-Scalar-Code-and-Compiler/&text=Fast Scalar Code and Compiler"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2023/11/15/Fast-Scalar-Code-and-Compiler/&title=Fast Scalar Code and Compiler"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2023/11/15/Fast-Scalar-Code-and-Compiler/&is_video=false&description=Fast Scalar Code and Compiler"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Fast Scalar Code and Compiler&body=Check out this article: http://blog.mwish.me/2023/11/15/Fast-Scalar-Code-and-Compiler/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2023/11/15/Fast-Scalar-Code-and-Compiler/&title=Fast Scalar Code and Compiler"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2023/11/15/Fast-Scalar-Code-and-Compiler/&title=Fast Scalar Code and Compiler"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2023/11/15/Fast-Scalar-Code-and-Compiler/&title=Fast Scalar Code and Compiler"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2023/11/15/Fast-Scalar-Code-and-Compiler/&title=Fast Scalar Code and Compiler"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2023/11/15/Fast-Scalar-Code-and-Compiler/&name=Fast Scalar Code and Compiler&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2023/11/15/Fast-Scalar-Code-and-Compiler/&t=Fast Scalar Code and Compiler"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Fast-Scalar-Code"><span class="toc-number">1.</span> <span class="toc-text">Fast Scalar Code</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Parquet-BYTE-STREAM-SPLIT-%E5%8A%A0%E9%80%9F"><span class="toc-number">2.</span> <span class="toc-text">Parquet BYTE_STREAM_SPLIT 加速</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#References"><span class="toc-number">3.</span> <span class="toc-text">References</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Fast Scalar Code and Compiler
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2023-11-15T02:05:00.000Z" itemprop="datePublished">2023-11-15</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>上一期( <a href="https://blog.mwish.me/2022/11/05/x86-and-SIMD-programming/">https://blog.mwish.me/2022/11/05/x86-and-SIMD-programming/</a> ) 介绍了 x86 和 SIMD 的背景，同时介绍了 x86 Skylake 的架构。这文章写了都整整一年了（我也太摆烂了），所以我们还是需要回顾一下。x86 CPU 上面通过 decode 代码，把 x86 CISC 指令转化为 RISC 的 micro-arch 的指令。SuperScalar 的指令被解析后，里面有一组 Port 来执行对应的代码。这样我们的 CPU 可以 OoO 的执行。理论上给定一组代码和 Port 甚至可以算出一个代码执行的上限。</p>
+<p><img src="https://image.mwish.me/blog-image/2216018380123463140.png" alt="img"></p>
+<p>当然上面这里说的还是一个理论的上限值，实际上在上篇文章中，我们还了解了如何衡量一个应用是 bounded by CPU 还是访存。</p>
+<p>在访问内存上，有 L1 — L2 — L3 的 Cache。这里 L1 在每个 CPU 上，L3 则可能涉及一些共享。笔者这里并不做特别细的介绍是因为这块并不属于 ISA，而是 microarch 之类或者实现上应该管的一部分。Prefetch 本身也和高性能的代码相关，但是这个更多只能用来解释。</p>
+<p>这一节我们介绍的是如何写出高性能的 “scalar” 代码，说是 scalar 主要是因为在这里我们不会用到 SIMD 的指令。取而代之的是如何利用 superscalar 之类的性质，写出高性能的 Scalar Code。我们首先会介绍从 fastcode 的代码和生产的代码来分析这块的性能。下一节也会介绍 LLVM 的 Auto-vectorize 和 编译器的优化。</p>
+<h2 id="Fast-Scalar-Code"><a href="#Fast-Scalar-Code" class="headerlink" title="Fast Scalar Code"></a>Fast Scalar Code</h2><p>代码本身可能和 code 执行的汇编数量、访问的负载之类的东西有关。根据我们上篇文章的知识，指令的延迟、吞吐都是不一样的。此外，我们还知道了所谓 Super Scalar 的大致语义。那么，尽管不同架构代码可能 Port 之类的数量会有不同，但是这对我们写出快的 scalar 代码是有指导意义的。</p>
+<p>关于乱序如下面所述</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">t2 = t0 + t1</span><br><span class="line">t5 = t4 * t3</span><br><span class="line">t6 = t2 + t5</span><br></pre></td></tr></table></figure>
+<p>那么 这里 (1) (2) 行的其实可以串行执行。考虑到 Memory Model，Store Load 可能会有一些影响，但是很多东西也走不到 Memory ( 比如看这个链接 <a target="_blank" rel="noopener" href="https://stackoverflow.com/questions/29722676/atomic-operations-on-superscalar-processor">https://stackoverflow.com/questions/29722676/atomic-operations-on-superscalar-processor</a> ，实际上一些 Atomic 操作的时候，CPU 也仿佛不是 Super Scalar 的了）</p>
+<p><img src="https://image.mwish.me/blog-image/8601113935312402029.png" alt="img"></p>
+<p>课程举了个 Sample 来介绍如何写 fast scalar 的代码，sample 如下：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line">template <span class="operator">&lt;</span>typename ArrowType, typename Op<span class="operator">&gt;</span></span><br><span class="line">void BenchmarkOp(benchmark::State<span class="operator">&amp;</span> state) &#123;</span><br><span class="line">  <span class="keyword">using</span> CType <span class="operator">=</span> typename ArrowType::c_type;</span><br><span class="line">  auto rand <span class="operator">=</span> random::RandomArrayGenerator(kSeed);</span><br><span class="line">  auto valueArray <span class="operator">=</span> std::static_pointer_cast<span class="operator">&lt;</span>NumericArray<span class="operator">&lt;</span>ArrowType<span class="operator">&gt;&gt;</span>(rand.Numeric<span class="operator">&lt;</span>ArrowType<span class="operator">&gt;</span>(<span class="number">4096</span> <span class="operator">*</span> <span class="number">16</span>, <span class="number">0</span>, <span class="number">114514</span>));</span><br><span class="line">  int64_t length <span class="operator">=</span> valueArray<span class="operator">-</span><span class="operator">&gt;</span>length();</span><br><span class="line">  auto <span class="keyword">values</span> <span class="operator">=</span> valueArray<span class="operator">-</span><span class="operator">&gt;</span>raw_values();</span><br><span class="line">  <span class="keyword">for</span> (auto s : state) &#123;</span><br><span class="line">    CType sum <span class="operator">=</span> <span class="number">0</span>;</span><br><span class="line">    <span class="keyword">for</span> (int64_t i <span class="operator">=</span> <span class="number">0</span>; i <span class="operator">&lt;</span> length; i<span class="operator">+</span><span class="operator">+</span>) &#123;</span><br><span class="line">      sum <span class="operator">=</span> Op::<span class="keyword">call</span>(sum, <span class="keyword">values</span>[i]);</span><br><span class="line">    &#125;</span><br><span class="line">    benchmark::DoNotOptimize(sum);</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这个代码执行如下图所示，可以说是 Scalar Code:</p>
+<p><img src="https://image.mwish.me/blog-image/4813239862219650588.png" alt="img"></p>
+<p><img src="https://image.mwish.me/blog-image/7962189767674737933.png" alt="img"></p>
+<p>这里的 sequential op 导致流水线并行没有被很好的利用上，都是线性执行这些代码。下面这里提供了 <code>unroll2</code> 的实现：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> ArrowType, <span class="keyword">typename</span> Op&gt;</span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">BenchmarkOp2</span><span class="params">(benchmark::State&amp; state)</span> </span>&#123;</span><br><span class="line">  <span class="keyword">using</span> CType = <span class="keyword">typename</span> ArrowType::c_type;</span><br><span class="line">  <span class="keyword">auto</span> rand = random::<span class="built_in">RandomArrayGenerator</span>(kSeed);</span><br><span class="line">  <span class="keyword">auto</span> valueArray = std::static_pointer_cast&lt;NumericArray&lt;ArrowType&gt;&gt;(rand.<span class="built_in">Numeric</span>&lt;ArrowType&gt;(<span class="number">4096</span> * <span class="number">16</span>, <span class="number">0</span>, <span class="number">114514</span>));</span><br><span class="line">  <span class="type">int64_t</span> length = valueArray-&gt;<span class="built_in">length</span>();</span><br><span class="line">  <span class="keyword">auto</span> values = valueArray-&gt;<span class="built_in">raw_values</span>();</span><br><span class="line">  <span class="keyword">for</span> (<span class="keyword">auto</span> s : state) &#123;</span><br><span class="line">    CType sum = <span class="number">0</span>;</span><br><span class="line">    <span class="type">int64_t</span> i = <span class="number">0</span>;</span><br><span class="line">    <span class="keyword">for</span> (; i &lt; length; i += <span class="number">2</span>) &#123;</span><br><span class="line">      sum = Op::<span class="built_in">call</span>(Op::<span class="built_in">call</span>(sum, values[i]), values[i + <span class="number">1</span>]);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">if</span> (i &lt; length) &#123;</span><br><span class="line">      sum = Op::<span class="built_in">call</span>(sum, values[i]);</span><br><span class="line">    &#125;</span><br><span class="line">    benchmark::<span class="built_in">DoNotOptimize</span>(sum);</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这里的操作相当于把原先循环中一次改成了两个 OP，那么这个会怎么样呢？答案是没怎么变化。</p>
+<p><img src="https://image.mwish.me/blog-image/4911952986514956094.png" alt="img"></p>
+<p>接下来展示 Separate Accumulators 的版本：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> ArrowType, <span class="keyword">typename</span> Op&gt;</span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">BenchmarkOp2SA</span><span class="params">(benchmark::State&amp; state)</span> </span>&#123;</span><br><span class="line">  <span class="keyword">using</span> CType = <span class="keyword">typename</span> ArrowType::c_type;</span><br><span class="line">  <span class="keyword">auto</span> rand = random::<span class="built_in">RandomArrayGenerator</span>(kSeed);</span><br><span class="line">  <span class="keyword">auto</span> valueArray = std::static_pointer_cast&lt;NumericArray&lt;ArrowType&gt;&gt;(rand.<span class="built_in">Numeric</span>&lt;ArrowType&gt;(<span class="number">4096</span> * <span class="number">16</span>, <span class="number">0</span>, <span class="number">114514</span>));</span><br><span class="line">  <span class="type">int64_t</span> length = valueArray-&gt;<span class="built_in">length</span>();</span><br><span class="line">  <span class="keyword">auto</span> values = valueArray-&gt;<span class="built_in">raw_values</span>();</span><br><span class="line">  <span class="keyword">for</span> (<span class="keyword">auto</span> s : state) &#123;</span><br><span class="line">    CType sum0 = <span class="number">0</span>;</span><br><span class="line">    CType sum1 = <span class="number">0</span>;</span><br><span class="line">    <span class="type">int64_t</span> i = <span class="number">0</span>;</span><br><span class="line">    <span class="keyword">for</span> (; i &lt; length; i += <span class="number">2</span>) &#123;</span><br><span class="line">        sum0 = Op::<span class="built_in">call</span>(sum0, values[i]);</span><br><span class="line">        sum1 += Op::<span class="built_in">call</span>(sum1, values[i + <span class="number">1</span>]);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">if</span> (i &lt; length) &#123;</span><br><span class="line">      sum0 = Op::<span class="built_in">call</span>(sum0, values[i]);</span><br><span class="line">    &#125;</span><br><span class="line">    benchmark::<span class="built_in">DoNotOptimize</span>(Op::<span class="built_in">call</span>(sum0, sum1));</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p><img src="https://image.mwish.me/blog-image/2057821884675391120.png" alt="img"></p>
+<p>这里可以得到一定的提升，但是肯定不会超过性能上限。此外，对于浮点数来说，这样的操作可能会<strong>略微变更对应的结果</strong>。</p>
+<p>本质上，这里可以算出来一个并行度，然后来优化对应的操作：</p>
+<p><img src="https://image.mwish.me/blog-image/7144858499665429034.png" alt="img"></p>
+<p>当然，这段其实是个理论分析，某种程度上感觉至少我在 LLVM17 开 O3 编译器会帮忙做很多事情，除了浮点数都会优化到差不多的性能，感兴趣的也可以拿我们上面的代码去跑一下，感受一下这块的具体内容。</p>
+<h2 id="Parquet-BYTE-STREAM-SPLIT-加速"><a href="#Parquet-BYTE-STREAM-SPLIT-加速" class="headerlink" title="Parquet BYTE_STREAM_SPLIT 加速"></a>Parquet BYTE_STREAM_SPLIT 加速</h2><p>下面这里我们再以 BYTE_STREAM_SPLIT 为类型，分析一下 Scalar 代码怎么提速。这是 Parquet 标准中一种浮点类型的无损浮点 Encoding。它要结合压缩来使用。它的算法大概是：</p>
+<ul>
+<li>对于 k Bytes 的 n 个浮点数拆成 k 个 n bytes 的 Stream</li>
+<li>第一个 k Bytes 的浮点数，内容第一位写在第一 Byte；第二位写在第二个 Stream 的第一 byte ，以此类推</li>
+</ul>
+<p>如果你觉得上面不清晰，可以直接看原文：<a target="_blank" rel="noopener" href="https://github.com/apache/parquet-format/blob/master/Encodings.md#byte-stream-split-byte_stream_split--9">https://github.com/apache/parquet-format/blob/master/Encodings.md#byte-stream-split-byte_stream_split--9</a></p>
+<p>这块原先的代码非常好懂：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// Encoding: 对于每个数值，直接写 k 个 Stream 的 Byte</span></span><br><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T&gt;</span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">ByteStreamSplitEncodeScalar</span><span class="params">(<span class="type">const</span> <span class="type">uint8_t</span>* raw_values, <span class="type">const</span> <span class="type">int64_t</span> num_values,</span></span></span><br><span class="line"><span class="params"><span class="function">                                 <span class="type">uint8_t</span>* output_buffer_raw)</span> </span>&#123;</span><br><span class="line">  <span class="keyword">constexpr</span> <span class="type">size_t</span> kNumStreams = <span class="built_in">sizeof</span>(T);</span><br><span class="line">  <span class="keyword">for</span> (<span class="type">size_t</span> i = <span class="number">0U</span>; i &lt; num_values; ++i) &#123;</span><br><span class="line">    <span class="keyword">for</span> (<span class="type">size_t</span> j = <span class="number">0U</span>; j &lt; kNumStreams; ++j) &#123;</span><br><span class="line">      <span class="type">const</span> <span class="type">uint8_t</span> byte_in_value = raw_values[i * kNumStreams + j];</span><br><span class="line">      output_buffer_raw[j * num_values + i] = byte_in_value;</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">/// Encoding: 对于每个数值，直接从 k 个 Stream 的 Byte 中读取</span></span><br><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T&gt;</span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">ByteStreamSplitDecodeScalar</span><span class="params">(<span class="type">const</span> <span class="type">uint8_t</span>* data, <span class="type">int64_t</span> num_values, <span class="type">int64_t</span> stride,</span></span></span><br><span class="line"><span class="params"><span class="function">                                 T* out)</span> </span>&#123;</span><br><span class="line">  <span class="keyword">constexpr</span> <span class="type">size_t</span> kNumStreams = <span class="built_in">sizeof</span>(T);</span><br><span class="line">  <span class="keyword">auto</span> output_buffer_raw = <span class="built_in">reinterpret_cast</span>&lt;<span class="type">uint8_t</span>*&gt;(out);</span><br><span class="line"></span><br><span class="line">  <span class="keyword">for</span> (<span class="type">int64_t</span> i = <span class="number">0</span>; i &lt; num_values; ++i) &#123;</span><br><span class="line">    <span class="keyword">for</span> (<span class="type">size_t</span> b = <span class="number">0</span>; b &lt; kNumStreams; ++b) &#123;</span><br><span class="line">      <span class="type">const</span> <span class="type">size_t</span> byte_index = b * stride + i;</span><br><span class="line">      output_buffer_raw[i * kNumStreams + b] = data[byte_index];</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这段代码在 CPU 上和内存上其实都并不高效。</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// Epilog</span></span><br><span class="line"><span class="keyword">for</span> (<span class="type">int</span> stream = <span class="number">0</span>; stream &lt; width; ++stream) &#123;</span><br><span class="line">  <span class="type">uint8_t</span>* dest = dest_streams[stream];</span><br><span class="line">  <span class="keyword">for</span> (<span class="type">int64_t</span> i = <span class="number">0</span>; i &lt; nvalues; ++i) &#123;</span><br><span class="line">    dest[i] = src[stream + i * width];</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">  <span class="comment">// Epilog</span></span><br><span class="line"><span class="keyword">for</span> (<span class="type">int</span> stream = <span class="number">0</span>; stream &lt; width; ++stream) &#123;</span><br><span class="line">  <span class="type">const</span> <span class="type">uint8_t</span>* src = src_streams[stream];</span><br><span class="line">  <span class="keyword">for</span> (<span class="type">int64_t</span> i = <span class="number">0</span>; i &lt; nvalues; ++i) &#123;</span><br><span class="line">    dest[stream + i * width] = src[i];</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>新的算法在末端会至少以单个 “STREAM” 为单位去读写，避免一些逐个 Value 访问 Stream 的时候把 Cache 搞进来又搞出去</p>
+<p>当然这里不止是这套逻辑，这里把 Encoding 的逻辑拆成了下面的逻辑：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//</span></span><br><span class="line"><span class="comment">// Scalar implementations</span></span><br><span class="line"><span class="comment">//</span></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">inline</span> <span class="type">void</span> <span class="title">DoSplitStreams</span><span class="params">(<span class="type">const</span> <span class="type">uint8_t</span>* src, <span class="type">int</span> width, <span class="type">int64_t</span> nvalues,</span></span></span><br><span class="line"><span class="params"><span class="function">                           <span class="type">uint8_t</span>** dest_streams)</span> </span>&#123;</span><br><span class="line">  <span class="comment">// Value empirically chosen to provide the best performance on the author&#x27;s machine</span></span><br><span class="line">  <span class="keyword">constexpr</span> <span class="type">int</span> kBlockSize = <span class="number">32</span>;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">while</span> (nvalues &gt;= kBlockSize) &#123;</span><br><span class="line">    <span class="keyword">for</span> (<span class="type">int</span> stream = <span class="number">0</span>; stream &lt; width; ++stream) &#123;</span><br><span class="line">      <span class="type">uint8_t</span>* dest = dest_streams[stream];</span><br><span class="line">      <span class="keyword">for</span> (<span class="type">int</span> i = <span class="number">0</span>; i &lt; kBlockSize; i += <span class="number">8</span>) &#123;</span><br><span class="line">        <span class="type">uint64_t</span> a = src[stream + i * width];</span><br><span class="line">        <span class="type">uint64_t</span> b = src[stream + (i + <span class="number">1</span>) * width];</span><br><span class="line">        <span class="type">uint64_t</span> c = src[stream + (i + <span class="number">2</span>) * width];</span><br><span class="line">        <span class="type">uint64_t</span> d = src[stream + (i + <span class="number">3</span>) * width];</span><br><span class="line">        <span class="type">uint64_t</span> e = src[stream + (i + <span class="number">4</span>) * width];</span><br><span class="line">        <span class="type">uint64_t</span> f = src[stream + (i + <span class="number">5</span>) * width];</span><br><span class="line">        <span class="type">uint64_t</span> g = src[stream + (i + <span class="number">6</span>) * width];</span><br><span class="line">        <span class="type">uint64_t</span> h = src[stream + (i + <span class="number">7</span>) * width];</span><br><span class="line"><span class="meta">#<span class="keyword">if</span> ARROW_LITTLE_ENDIAN</span></span><br><span class="line">        <span class="type">uint64_t</span> r = a | (b &lt;&lt; <span class="number">8</span>) | (c &lt;&lt; <span class="number">16</span>) | (d &lt;&lt; <span class="number">24</span>) | (e &lt;&lt; <span class="number">32</span>) | (f &lt;&lt; <span class="number">40</span>) |</span><br><span class="line">                     (g &lt;&lt; <span class="number">48</span>) | (h &lt;&lt; <span class="number">56</span>);</span><br><span class="line"><span class="meta">#<span class="keyword">else</span></span></span><br><span class="line">        <span class="type">uint64_t</span> r = (a &lt;&lt; <span class="number">56</span>) | (b &lt;&lt; <span class="number">48</span>) | (c &lt;&lt; <span class="number">40</span>) | (d &lt;&lt; <span class="number">32</span>) | (e &lt;&lt; <span class="number">24</span>) |</span><br><span class="line">                     (f &lt;&lt; <span class="number">16</span>) | (g &lt;&lt; <span class="number">8</span>) | h;</span><br><span class="line"><span class="meta">#<span class="keyword">endif</span></span></span><br><span class="line">        arrow::util::<span class="built_in">SafeStore</span>(&amp;dest[i], r);</span><br><span class="line">      &#125;</span><br><span class="line">      dest_streams[stream] += kBlockSize;</span><br><span class="line">    &#125;</span><br><span class="line">    src += width * kBlockSize;</span><br><span class="line">    nvalues -= kBlockSize;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// Epilog</span></span><br><span class="line">  <span class="keyword">for</span> (<span class="type">int</span> stream = <span class="number">0</span>; stream &lt; width; ++stream) &#123;</span><br><span class="line">    <span class="type">uint8_t</span>* dest = dest_streams[stream];</span><br><span class="line">    <span class="keyword">for</span> (<span class="type">int64_t</span> i = <span class="number">0</span>; i &lt; nvalues; ++i) &#123;</span><br><span class="line">      dest[i] = src[stream + i * width];</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<ul>
+<li>对于每个 Block，Block Size 会是 8 的倍数</li>
+<li>Block 内，这里会 8 个一组，把 8 个浮点数的 Byte 写到一个 Stream 里面</li>
+</ul>
+<p>这里就是本节介绍的操作方式，可以看到，这里有几个 Trick:</p>
+<ol>
+<li>分离访存操作和 CPU 操作</li>
+<li>对于同质大量计算，高效的处理所有值</li>
+</ol>
+<h2 id="References"><a href="#References" class="headerlink" title="References"></a>References</h2><ol>
+<li><a target="_blank" rel="noopener" href="https://github.com/apache/arrow/pull/38529">https://github.com/apache/arrow/pull/38529</a></li>
+<li>LLVM Auto-Vectorize <a target="_blank" rel="noopener" href="https://llvm.org/docs/Vectorizers.html">https://llvm.org/docs/Vectorizers.html</a></li>
+</ol>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Fast-Scalar-Code"><span class="toc-number">1.</span> <span class="toc-text">Fast Scalar Code</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Parquet-BYTE-STREAM-SPLIT-%E5%8A%A0%E9%80%9F"><span class="toc-number">2.</span> <span class="toc-text">Parquet BYTE_STREAM_SPLIT 加速</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#References"><span class="toc-number">3.</span> <span class="toc-text">References</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2023/11/15/Fast-Scalar-Code-and-Compiler/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2023/11/15/Fast-Scalar-Code-and-Compiler/&text=Fast Scalar Code and Compiler"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2023/11/15/Fast-Scalar-Code-and-Compiler/&title=Fast Scalar Code and Compiler"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2023/11/15/Fast-Scalar-Code-and-Compiler/&is_video=false&description=Fast Scalar Code and Compiler"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Fast Scalar Code and Compiler&body=Check out this article: http://blog.mwish.me/2023/11/15/Fast-Scalar-Code-and-Compiler/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2023/11/15/Fast-Scalar-Code-and-Compiler/&title=Fast Scalar Code and Compiler"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2023/11/15/Fast-Scalar-Code-and-Compiler/&title=Fast Scalar Code and Compiler"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2023/11/15/Fast-Scalar-Code-and-Compiler/&title=Fast Scalar Code and Compiler"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2023/11/15/Fast-Scalar-Code-and-Compiler/&title=Fast Scalar Code and Compiler"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2023/11/15/Fast-Scalar-Code-and-Compiler/&name=Fast Scalar Code and Compiler&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2023/11/15/Fast-Scalar-Code-and-Compiler/&t=Fast Scalar Code and Compiler"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

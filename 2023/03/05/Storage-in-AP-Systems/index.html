@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="上层架构 &#x2F; 对存储的需求相关的论文：  SIGMOD‘16，知名的： The Snowflake Elastic Data Warehouse SIGMOD’22: Amazon Redshift Reinvent NSDI’20: snowflake 的弹性存储：Building An Elastic Query Engine on Disaggregated Storage (BigQuer">
+<meta property="og:type" content="article">
+<meta property="og:title" content="[WIP] Storage in AP Systems">
+<meta property="og:url" content="http://blog.mwish.me/2023/03/05/Storage-in-AP-Systems/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="上层架构 &#x2F; 对存储的需求相关的论文：  SIGMOD‘16，知名的： The Snowflake Elastic Data Warehouse SIGMOD’22: Amazon Redshift Reinvent NSDI’20: snowflake 的弹性存储：Building An Elastic Query Engine on Disaggregated Storage (BigQuer">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2023-03-04T17:55:00.000Z">
+<meta property="article:modified_time" content="2023-03-04T17:54:07.987Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>[WIP] Storage in AP Systems</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2023/03/11/Beyond-Parquet-ORC-and-new-file-format/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2023/02/26/Parquet-C-Statistics/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2023/03/05/Storage-in-AP-Systems/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2023/03/05/Storage-in-AP-Systems/&text=[WIP] Storage in AP Systems"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2023/03/05/Storage-in-AP-Systems/&title=[WIP] Storage in AP Systems"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2023/03/05/Storage-in-AP-Systems/&is_video=false&description=[WIP] Storage in AP Systems"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=[WIP] Storage in AP Systems&body=Check out this article: http://blog.mwish.me/2023/03/05/Storage-in-AP-Systems/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2023/03/05/Storage-in-AP-Systems/&title=[WIP] Storage in AP Systems"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2023/03/05/Storage-in-AP-Systems/&title=[WIP] Storage in AP Systems"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2023/03/05/Storage-in-AP-Systems/&title=[WIP] Storage in AP Systems"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2023/03/05/Storage-in-AP-Systems/&title=[WIP] Storage in AP Systems"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2023/03/05/Storage-in-AP-Systems/&name=[WIP] Storage in AP Systems&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2023/03/05/Storage-in-AP-Systems/&t=[WIP] Storage in AP Systems"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%8A%E5%B1%82%E6%9E%B6%E6%9E%84-%E5%AF%B9%E5%AD%98%E5%82%A8%E7%9A%84%E9%9C%80%E6%B1%82"><span class="toc-number">1.</span> <span class="toc-text">上层架构 &#x2F; 对存储的需求</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%B0%83%E5%BA%A6-%E5%BC%B9%E6%80%A7"><span class="toc-number">1.1.</span> <span class="toc-text">调度 &#x2F; 弹性</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%AE%A1%E7%AE%97-colocate"><span class="toc-number">1.2.</span> <span class="toc-text">计算 ( colocate )</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Cache"><span class="toc-number">1.3.</span> <span class="toc-text">Cache</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#shuffle-service"><span class="toc-number">1.4.</span> <span class="toc-text">shuffle service</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Multi-tanent"><span class="toc-number">1.5.</span> <span class="toc-text">Multi-tanent</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%AE%A1%E7%AE%97%E4%B8%8B%E6%8E%A8"><span class="toc-number">1.6.</span> <span class="toc-text">计算下推</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Metadata"><span class="toc-number">1.7.</span> <span class="toc-text">Metadata</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AD%98%E5%82%A8%E6%A0%BC%E5%BC%8F"><span class="toc-number">2.</span> <span class="toc-text">存储格式</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Encoding"><span class="toc-number">2.1.</span> <span class="toc-text">Encoding</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Query-on-Encoded-Data"><span class="toc-number">2.1.1.</span> <span class="toc-text">Query on Encoded Data</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Lazy-Evaluation"><span class="toc-number">2.1.2.</span> <span class="toc-text">Lazy Evaluation</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%AD%97%E5%85%B8%E5%92%8C%E5%85%A8%E5%B1%80%E5%AD%97%E5%85%B8"><span class="toc-number">2.1.3.</span> <span class="toc-text">字典和全局字典</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%B4%A2%E5%BC%95"><span class="toc-number">2.2.</span> <span class="toc-text">索引</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E7%89%B9%E6%AE%8A%E7%9A%84%E7%B4%A2%E5%BC%95"><span class="toc-number">2.2.1.</span> <span class="toc-text">特殊的索引</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#IO-Pattern"><span class="toc-number">2.3.</span> <span class="toc-text">IO Pattern</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Share-nothing"><span class="toc-number">2.3.1.</span> <span class="toc-text">Share-nothing</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Shared-storage"><span class="toc-number">2.3.2.</span> <span class="toc-text">Shared-storage</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8F%98%E6%9B%B4-Insert-Update-Delete"><span class="toc-number">2.4.</span> <span class="toc-text">变更 (Insert &#x2F; Update &#x2F; Delete)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#MVCC"><span class="toc-number">2.5.</span> <span class="toc-text">MVCC</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%89%B9%E6%AE%8A%E7%B1%BB%E5%9E%8B-struct-array-map-json"><span class="toc-number">2.6.</span> <span class="toc-text">特殊类型: struct &#x2F; array &#x2F; map &#x2F; json</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Schema-Evolution"><span class="toc-number">2.7.</span> <span class="toc-text">Schema Evolution</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Compaction"><span class="toc-number">2.8.</span> <span class="toc-text">Compaction</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Auto-Clustering"><span class="toc-number">2.8.1.</span> <span class="toc-text">Auto Clustering</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E5%AF%BC%E5%85%A5"><span class="toc-number">3.</span> <span class="toc-text">数据导入</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Data-Lake"><span class="toc-number">4.</span> <span class="toc-text">Data Lake</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        [WIP] Storage in AP Systems
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2023-03-04T17:55:00.000Z" itemprop="datePublished">2023-03-05</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <h2 id="上层架构-对存储的需求"><a href="#上层架构-对存储的需求" class="headerlink" title="上层架构 / 对存储的需求"></a>上层架构 / 对存储的需求</h2><p>相关的论文：</p>
+<ol>
+<li>SIGMOD‘16，知名的： <a target="_blank" rel="noopener" href="https://www.snowflake.com/resource/sigmod-2016-paper-snowflake-elastic-data-warehouse/">The Snowflake Elastic Data Warehouse</a></li>
+<li>SIGMOD’22: Amazon Redshift Reinvent</li>
+<li>NSDI’20: snowflake 的弹性存储：Building An Elastic Query Engine on Disaggregated Storage</li>
+<li>(BigQuery) Dremel: A Decade of Interactive SQL Analysis at Web Scale</li>
+<li>PushdownDB / FlexPushdownDB</li>
+</ol>
+<p>我们分成几个子话题</p>
+<p>数据分布：</p>
+<ol>
+<li>[PVLDB’20] Fast and effective distribution-key recommendation for amazon redshift / [SIGMOD’20] Learning a partitioning advisor for cloud databases.</li>
+<li><a target="_blank" rel="noopener" href="https://cloud.google.com/blog/topics/developers-practitioners/bigquery-admin-reference-guide-storage">https://cloud.google.com/blog/topics/developers-practitioners/bigquery-admin-reference-guide-storage</a> / snowflake paper</li>
+</ol>
+<h3 id="调度-弹性"><a href="#调度-弹性" class="headerlink" title="调度 / 弹性"></a>调度 / 弹性</h3><p>这块其实不太完全是 AP 系统的知识</p>
+<ul>
+<li>Yarn / Mesos (机制)</li>
+<li>DRF (策略)</li>
+</ul>
+<h3 id="计算-colocate"><a href="#计算-colocate" class="headerlink" title="计算 ( colocate )"></a>计算 ( colocate )</h3><h3 id="Cache"><a href="#Cache" class="headerlink" title="Cache"></a>Cache</h3><p>相关文章：</p>
+<ol>
+<li><p>facebook 关于 CacheLib 的两篇论文</p>
+</li>
+<li><p>snowflake 弹性存储</p>
+</li>
+<li><p>Crystal: A Unified Cache Storage System for Analytical Databases</p>
+</li>
+<li><p>Alluxio</p>
+</li>
+</ol>
+<h3 id="shuffle-service"><a href="#shuffle-service" class="headerlink" title="shuffle service"></a>shuffle service</h3><ul>
+<li>Cosco: An Efficient Facebook-Scale Shuffle Service</li>
+<li>Dremel: A Decade of Interactive SQL Analysis at Web Scale</li>
+</ul>
+<h3 id="Multi-tanent"><a href="#Multi-tanent" class="headerlink" title="Multi-tanent"></a>Multi-tanent</h3><p>这里感觉得分开来讨论， Dynamo 这些用的都是 quota 之类的，Yarn 之类的是上层调度，我不确定这里合不合适</p>
+<ul>
+<li>StarRocks技术内幕 | 资源隔离原理解析 - <em>StarRocks</em>的文章 - 知乎 <a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/605900476">https://zhuanlan.zhihu.com/p/605900476</a></li>
+</ul>
+<h3 id="计算下推"><a href="#计算下推" class="headerlink" title="计算下推"></a>计算下推</h3><ul>
+<li>PushdownDB: Accelerating a DBMS using S3 Computation (Presto 用了这套逻辑)</li>
+</ul>
+<h3 id="Metadata"><a href="#Metadata" class="headerlink" title="Metadata"></a>Metadata</h3><ul>
+<li>Big Metadata: When Metadata is Big Data</li>
+<li>Delta-Lake</li>
+</ul>
+<h2 id="存储格式"><a href="#存储格式" class="headerlink" title="存储格式"></a>存储格式</h2><p>Parquet: <a target="_blank" rel="noopener" href="https://github.com/apache/parquet-format/blob/master/Encodings.md">https://github.com/apache/parquet-format/blob/master/Encodings.md</a></p>
+<p>ORC: <a target="_blank" rel="noopener" href="https://orc.apache.org/specification/ORCv2/">https://orc.apache.org/specification/ORCv2/</a></p>
+<p>Doris: <a target="_blank" rel="noopener" href="https://xie.infoq.cn/article/4f7d09d6185fb3055d4e7e51c">https://xie.infoq.cn/article/4f7d09d6185fb3055d4e7e51c</a></p>
+<p>ClickHouse MergeTree</p>
+<p>HyPer</p>
+<p>Umbra: 内存数据库的特殊优化</p>
+<p>Kudu: CFile，本质上和 Doris 那些 Unique 是同一套</p>
+<h3 id="Encoding"><a href="#Encoding" class="headerlink" title="Encoding"></a>Encoding</h3><p><a target="_blank" rel="noopener" href="https://github.com/apache/parquet-format/blob/master/Encodings.md">https://github.com/apache/parquet-format/blob/master/Encodings.md</a></p>
+<p>要点：压缩率 / 性能对比，能否 SIMD，针对 pattern 做特定的优化（子问题：如何识别 pattern）</p>
+<p>还有一些 HTAP 的编码方式。</p>
+<p>此外，关注 SIGMOD’21 CodecDB</p>
+<h4 id="Query-on-Encoded-Data"><a href="#Query-on-Encoded-Data" class="headerlink" title="Query on Encoded Data"></a>Query on Encoded Data</h4><p>要点：<a href="https://blog.mwish.me/2022/01/15/format-thinking-2/#DB-%E7%9B%B4%E6%8E%A5%E5%9C%A8%E5%8E%8B%E7%BC%A9%E7%9A%84%E6%95%B0%E6%8D%AE%E4%B8%8A%E8%BF%9B%E8%A1%8C%E8%AE%A1%E7%AE%97">https://blog.mwish.me/2022/01/15/format-thinking-2/#DB-%E7%9B%B4%E6%8E%A5%E5%9C%A8%E5%8E%8B%E7%BC%A9%E7%9A%84%E6%95%B0%E6%8D%AE%E4%B8%8A%E8%BF%9B%E8%A1%8C%E8%AE%A1%E7%AE%97</a></p>
+<p>DB 可以直接在压缩的数据上跑一些简单的计算，但是这个需要让存储知道具体走了什么样的算子</p>
+<h4 id="Lazy-Evaluation"><a href="#Lazy-Evaluation" class="headerlink" title="Lazy Evaluation"></a>Lazy Evaluation</h4><p>要点：行中的列可以需要的时候再 load，不访问可以不加载，加载出来的结构也可以标识自己是 RLE 还是什么样的，来避免：</p>
+<ol>
+<li>访问 Page 的开销</li>
+<li>加载不需要的列的开销</li>
+</ol>
+<p>这部分其实和实现绑定的特别死，主要是 runtime 的实现，甚至有一些是 Query Optimizer 有关的部分</p>
+<h4 id="字典和全局字典"><a href="#字典和全局字典" class="headerlink" title="字典和全局字典"></a>字典和全局字典</h4><p>要点：字典和字符串有序性</p>
+<p>例如：<a target="_blank" rel="noopener" href="https://forum.starrocks.com/t/topic/1469">StarRocks2.0.1低基数全局字典优化测试</a> 和 <a target="_blank" rel="noopener" href="http://mysql.taobao.org/monthly/2022/08/01/">PolarDB MySQL·HTAP·浅析IMCI的列存数据压缩</a> . 这里关心：</p>
+<ol>
+<li>是否走到字典上（有的地方字符串类型之外的类型不会走到字典上）</li>
+<li>字典的顺序是否和原始顺序一样</li>
+<li>是否物化（字典可能不那么急着物化，上层可以根据字典来做 JOIN、DISTINCT 之类的优化）。</li>
+</ol>
+<h3 id="索引"><a href="#索引" class="headerlink" title="索引"></a>索引</h3><p>这里说索引这个词有歧义，TP 方面一般这里指全局的 1:1 的索引，而 AP 这里既有 1:1 的索引，更多还是稀疏索引、Page 上、RowGroup 上的信息统计。因为做 skipping 要考虑这些信息，所以我们汇总到索引这里。</p>
+<p>这里有：</p>
+<ol>
+<li>Page 上的统计信息，例如 Page Index / Zone Map</li>
+<li>Z-ordering，可以当成是拍平的 zone-map</li>
+</ol>
+<p>可参考的：</p>
+<ol>
+<li>pinot: <a target="_blank" rel="noopener" href="https://docs.pinot.apache.org/basics/indexing">https://docs.pinot.apache.org/basics/indexing</a></li>
+</ol>
+<p>有很多统计信息相关的，见：<a target="_blank" rel="noopener" href="http://dimacs.rutgers.edu/~graham/ssbd.html">http://dimacs.rutgers.edu/~graham/ssbd.html</a> 。论文有</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://15721.courses.cs.cmu.edu/spring2023/papers/04-olapindexes/hentschel-sigmod18.pdf">Column Sketches: A Scan Accelerator for Rapid and Robust Predicate Evaluation</a> </li>
+</ul>
+<p>此外，还有一些 SuRF 之类的 Succinct 类型: <a target="_blank" rel="noopener" href="https://6.5210.csail.mit.edu/">https://6.5210.csail.mit.edu/</a></p>
+<p>还需要关注 Inverted Index，见 Lucene。</p>
+<h4 id="特殊的索引"><a href="#特殊的索引" class="headerlink" title="特殊的索引"></a>特殊的索引</h4><p>本来 z-ordering 应该放这里的，但是由于其重要性，我们放到了上面？</p>
+<ol>
+<li>空间索引。</li>
+<li>相似度索引：<a target="_blank" rel="noopener" href="https://github.com/ClickHouse/ClickHouse/blob/master/docs/en/engines/table-engines/mergetree-family/annindexes.md">https://github.com/ClickHouse/ClickHouse/blob/master/docs/en/engines/table-engines/mergetree-family/annindexes.md</a></li>
+</ol>
+<h3 id="IO-Pattern"><a href="#IO-Pattern" class="headerlink" title="IO Pattern"></a>IO Pattern</h3><h4 id="Share-nothing"><a href="#Share-nothing" class="headerlink" title="Share-nothing"></a>Share-nothing</h4><p>ClickHouse</p>
+<p>Doris</p>
+<h4 id="Shared-storage"><a href="#Shared-storage" class="headerlink" title="Shared-storage"></a>Shared-storage</h4><p>Apache-Arrow</p>
+<p>Velox</p>
+<h3 id="变更-Insert-Update-Delete"><a href="#变更-Insert-Update-Delete" class="headerlink" title="变更 (Insert / Update / Delete)"></a>变更 (Insert / Update / Delete)</h3><ul>
+<li><a target="_blank" rel="noopener" href="https://ir.cwi.nl/pub/16172/16172D.pdf">Positional Update Handling in Column Stores</a>：最早用 Positional Delta 描述删除的论文之一</li>
+<li>SQL Server (Delete + Insert 的代表，论文很多地方描述非常详细，包括 Positional Delete 和 Conditional Delete)</li>
+<li>Kudu （Delta File 的代表，机制和 MVCC 是整合的，Update 支持很高效，但是对 Scan / Pruning 不是很友好）</li>
+<li>ClickHouse MergeTree （Merge-on-Read 的代表，暴力实现）</li>
+<li>TiFlash (复杂的树结构)</li>
+<li>S2DB SingleStore</li>
+</ul>
+<h3 id="MVCC"><a href="#MVCC" class="headerlink" title="MVCC"></a>MVCC</h3><h3 id="特殊类型-struct-array-map-json"><a href="#特殊类型-struct-array-map-json" class="headerlink" title="特殊类型: struct / array / map / json"></a>特殊类型: struct / array / map / json</h3><p>dremel and parquet</p>
+<h3 id="Schema-Evolution"><a href="#Schema-Evolution" class="headerlink" title="Schema Evolution"></a>Schema Evolution</h3><p>Iceberg schema evolution</p>
+<h3 id="Compaction"><a href="#Compaction" class="headerlink" title="Compaction"></a>Compaction</h3><p>kudu compaction</p>
+<h4 id="Auto-Clustering"><a href="#Auto-Clustering" class="headerlink" title="Auto Clustering"></a>Auto Clustering</h4><p>snowflake auto clustering</p>
+<h2 id="数据导入"><a href="#数据导入" class="headerlink" title="数据导入"></a>数据导入</h2><p>CDC: databus</p>
+<p>Flink</p>
+<p>Kafka</p>
+<p>Husky</p>
+<p>BigQuery Streaming / Snowflake Unistore</p>
+<h2 id="Data-Lake"><a href="#Data-Lake" class="headerlink" title="Data Lake"></a>Data Lake</h2><ol>
+<li>Iceberg</li>
+<li>Hudi</li>
+<li>DeltaLake</li>
+</ol>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%8A%E5%B1%82%E6%9E%B6%E6%9E%84-%E5%AF%B9%E5%AD%98%E5%82%A8%E7%9A%84%E9%9C%80%E6%B1%82"><span class="toc-number">1.</span> <span class="toc-text">上层架构 &#x2F; 对存储的需求</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%B0%83%E5%BA%A6-%E5%BC%B9%E6%80%A7"><span class="toc-number">1.1.</span> <span class="toc-text">调度 &#x2F; 弹性</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%AE%A1%E7%AE%97-colocate"><span class="toc-number">1.2.</span> <span class="toc-text">计算 ( colocate )</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Cache"><span class="toc-number">1.3.</span> <span class="toc-text">Cache</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#shuffle-service"><span class="toc-number">1.4.</span> <span class="toc-text">shuffle service</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Multi-tanent"><span class="toc-number">1.5.</span> <span class="toc-text">Multi-tanent</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%AE%A1%E7%AE%97%E4%B8%8B%E6%8E%A8"><span class="toc-number">1.6.</span> <span class="toc-text">计算下推</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Metadata"><span class="toc-number">1.7.</span> <span class="toc-text">Metadata</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AD%98%E5%82%A8%E6%A0%BC%E5%BC%8F"><span class="toc-number">2.</span> <span class="toc-text">存储格式</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Encoding"><span class="toc-number">2.1.</span> <span class="toc-text">Encoding</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Query-on-Encoded-Data"><span class="toc-number">2.1.1.</span> <span class="toc-text">Query on Encoded Data</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Lazy-Evaluation"><span class="toc-number">2.1.2.</span> <span class="toc-text">Lazy Evaluation</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%AD%97%E5%85%B8%E5%92%8C%E5%85%A8%E5%B1%80%E5%AD%97%E5%85%B8"><span class="toc-number">2.1.3.</span> <span class="toc-text">字典和全局字典</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%B4%A2%E5%BC%95"><span class="toc-number">2.2.</span> <span class="toc-text">索引</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E7%89%B9%E6%AE%8A%E7%9A%84%E7%B4%A2%E5%BC%95"><span class="toc-number">2.2.1.</span> <span class="toc-text">特殊的索引</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#IO-Pattern"><span class="toc-number">2.3.</span> <span class="toc-text">IO Pattern</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Share-nothing"><span class="toc-number">2.3.1.</span> <span class="toc-text">Share-nothing</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Shared-storage"><span class="toc-number">2.3.2.</span> <span class="toc-text">Shared-storage</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8F%98%E6%9B%B4-Insert-Update-Delete"><span class="toc-number">2.4.</span> <span class="toc-text">变更 (Insert &#x2F; Update &#x2F; Delete)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#MVCC"><span class="toc-number">2.5.</span> <span class="toc-text">MVCC</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%89%B9%E6%AE%8A%E7%B1%BB%E5%9E%8B-struct-array-map-json"><span class="toc-number">2.6.</span> <span class="toc-text">特殊类型: struct &#x2F; array &#x2F; map &#x2F; json</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Schema-Evolution"><span class="toc-number">2.7.</span> <span class="toc-text">Schema Evolution</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Compaction"><span class="toc-number">2.8.</span> <span class="toc-text">Compaction</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Auto-Clustering"><span class="toc-number">2.8.1.</span> <span class="toc-text">Auto Clustering</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E5%AF%BC%E5%85%A5"><span class="toc-number">3.</span> <span class="toc-text">数据导入</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Data-Lake"><span class="toc-number">4.</span> <span class="toc-text">Data Lake</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2023/03/05/Storage-in-AP-Systems/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2023/03/05/Storage-in-AP-Systems/&text=[WIP] Storage in AP Systems"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2023/03/05/Storage-in-AP-Systems/&title=[WIP] Storage in AP Systems"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2023/03/05/Storage-in-AP-Systems/&is_video=false&description=[WIP] Storage in AP Systems"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=[WIP] Storage in AP Systems&body=Check out this article: http://blog.mwish.me/2023/03/05/Storage-in-AP-Systems/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2023/03/05/Storage-in-AP-Systems/&title=[WIP] Storage in AP Systems"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2023/03/05/Storage-in-AP-Systems/&title=[WIP] Storage in AP Systems"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2023/03/05/Storage-in-AP-Systems/&title=[WIP] Storage in AP Systems"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2023/03/05/Storage-in-AP-Systems/&title=[WIP] Storage in AP Systems"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2023/03/05/Storage-in-AP-Systems/&name=[WIP] Storage in AP Systems&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2023/03/05/Storage-in-AP-Systems/&t=[WIP] Storage in AP Systems"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

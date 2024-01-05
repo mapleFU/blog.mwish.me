@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="每一个需要实现锁的人，都需要考虑 Data Locking，在 Btree 上如何进行数据的锁定，特别是 InnoDB &#x2F; PostgreSQL。这篇文章简单介绍一下 InnoDB 是怎么锁定数据的。本身这篇文章参考的是 InnoDB 官方博客中，Kuba Łopuszański 写的几部分 InnoDB Data Locking 的文章，再加上 阿里巴巴数据库月报一些相关的详细一些的介绍。 Lo">
+<meta property="og:type" content="article">
+<meta property="og:title" content="InnoDB Data Locking: Part 1">
+<meta property="og:url" content="http://blog.mwish.me/2023/03/25/InnoDB-Data-Locking/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="每一个需要实现锁的人，都需要考虑 Data Locking，在 Btree 上如何进行数据的锁定，特别是 InnoDB &#x2F; PostgreSQL。这篇文章简单介绍一下 InnoDB 是怎么锁定数据的。本身这篇文章参考的是 InnoDB 官方博客中，Kuba Łopuszański 写的几部分 InnoDB Data Locking 的文章，再加上 阿里巴巴数据库月报一些相关的详细一些的介绍。 Lo">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/innodb-lock-01.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/innodb-02.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/1cfad4ec-a6fa-47e8-aab8-f5e8581f8ad3.png">
+<meta property="article:published_time" content="2023-03-25T09:15:00.000Z">
+<meta property="article:modified_time" content="2023-05-26T16:47:22.864Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/innodb-lock-01.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>InnoDB Data Locking: Part 1</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2023/04/16/Column-Sketches-a-index-for-OLAP-workload/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2023/03/19/Apache-Iceberg-and-changes-above-Hive/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2023/03/25/InnoDB-Data-Locking/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2023/03/25/InnoDB-Data-Locking/&text=InnoDB Data Locking: Part 1"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2023/03/25/InnoDB-Data-Locking/&title=InnoDB Data Locking: Part 1"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2023/03/25/InnoDB-Data-Locking/&is_video=false&description=InnoDB Data Locking: Part 1"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=InnoDB Data Locking: Part 1&body=Check out this article: http://blog.mwish.me/2023/03/25/InnoDB-Data-Locking/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2023/03/25/InnoDB-Data-Locking/&title=InnoDB Data Locking: Part 1"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2023/03/25/InnoDB-Data-Locking/&title=InnoDB Data Locking: Part 1"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2023/03/25/InnoDB-Data-Locking/&title=InnoDB Data Locking: Part 1"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2023/03/25/InnoDB-Data-Locking/&title=InnoDB Data Locking: Part 1"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2023/03/25/InnoDB-Data-Locking/&name=InnoDB Data Locking: Part 1&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2023/03/25/InnoDB-Data-Locking/&t=InnoDB Data Locking: Part 1"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%A1%A8%E5%92%8C%E6%95%B0%E6%8D%AE%E9%94%81%E5%AE%9A"><span class="toc-number">1.</span> <span class="toc-text">表和数据锁定</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Record-Lock-amp-Gap"><span class="toc-number">1.1.</span> <span class="toc-text">Record Lock &amp; Gap</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Lock-Compression"><span class="toc-number">1.2.</span> <span class="toc-text">Lock Compression</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Implicit-Lock"><span class="toc-number">1.3.</span> <span class="toc-text">Implicit Lock</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Lock-Spliting"><span class="toc-number">1.4.</span> <span class="toc-text">Lock Spliting</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Btree-%E5%88%86%E8%A3%82%E5%92%8C%E9%94%81%E7%BB%A7%E6%89%BF"><span class="toc-number">1.5.</span> <span class="toc-text">Btree 分裂和锁继承</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Secondary-Index-amp-Implicit-Lock"><span class="toc-number">1.6.</span> <span class="toc-text">Secondary Index &amp; Implicit Lock</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%85%B3%E4%BA%8E-MVCC-read-view-%E5%92%8C%E9%94%81"><span class="toc-number">1.7.</span> <span class="toc-text">关于 MVCC, read_view 和锁</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%8F%92%E5%85%A5%E5%92%8C%E5%B7%B2%E7%BB%8F%E5%AD%98%E5%9C%A8%E7%9A%84%E8%AE%B0%E5%BD%95"><span class="toc-number">1.8.</span> <span class="toc-text">插入和已经存在的记录</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Not-in-this-article"><span class="toc-number">2.</span> <span class="toc-text">Not in this article</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#References"><span class="toc-number">3.</span> <span class="toc-text">References</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        InnoDB Data Locking: Part 1
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2023-03-25T09:15:00.000Z" itemprop="datePublished">2023-03-25</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>每一个需要实现锁的人，都需要考虑 Data Locking，在 Btree 上如何进行数据的锁定，特别是 InnoDB / PostgreSQL。这篇文章简单介绍一下 InnoDB 是怎么锁定数据的。本身这篇文章参考的是 InnoDB 官方博客中，Kuba Łopuszański 写的几部分 InnoDB Data Locking 的文章，再加上 阿里巴巴数据库月报一些相关的详细一些的介绍。</p>
+<p>Locking 一直是数据库里面非常难的内容，在 InnoDB 里面，难点也在于很多地方：</p>
+<ol>
+<li>不同层次的（database, table, row）的锁定</li>
+<li>不同的隔离级别</li>
+<li>读/写等不同的锁的权限<ol>
+<li>事务冲突</li>
+<li>需要的时候，维护 consistent read view</li>
+</ol>
+</li>
+<li>锁的超时 / 饿死(priority) / 排队</li>
+<li>死锁处理<ol>
+<li>识别冲突</li>
+<li>挑选 victim</li>
+<li>高效，不影响全局</li>
+<li>识别不同模式的，甚至是锁升级引起的冲突</li>
+</ol>
+</li>
+</ol>
+<p>本身，事务这个抽象暗示着 DB 对外层提供的是一种 total-ordering 的语义。但是为了性能，db 会做到行或者一些级别的锁定，来允许并发存在。同时，为了给性能或者使用开一些口子，DB 甚至（也不能说甚至）允许很多低级别的 Isolation Level。其实单纯从取 snapshot 或者一些小地方来看，性能甚至不一定更好（比如 RC 可能每次读要拿一个 read-view，虽然也有一些性能优化），但是降低了总体冲突的概率。</p>
+<p>这里的问题是怎么（高效的）提供锁定和识别冲突并 abort。</p>
+<h2 id="表和数据锁定"><a href="#表和数据锁定" class="headerlink" title="表和数据锁定"></a>表和数据锁定</h2><p>InnoDB 的数据锁定是 MySQL 面试一大坑，比如经典的 GAP_LOCK 和 next-key locking，比较乐子的是，其实数据库业务部门比大部分如今的 DB R&amp;D 更懂这块的内容，因为他们在生产中会实际和这些东西打交道。</p>
+<p>比较常见的内容是表锁和数据锁。表锁是一个 MySQL 级别的概念，但是它可以被转化为 InnoDB 的数据锁然后飘在 InnoDB 上。举博客中的例子：</p>
+<p>数据锁定的 sample:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="operator">&gt;</span> <span class="keyword">SELECT</span> </span><br><span class="line">    ENGINE_TRANSACTION_ID <span class="keyword">as</span> trx_id,</span><br><span class="line">    LOCK_DATA <span class="keyword">as</span> <span class="type">row</span>,</span><br><span class="line">    OBJECT_NAME <span class="keyword">as</span> `<span class="keyword">table</span>`,</span><br><span class="line">    LOCK_MODE,</span><br><span class="line">    LOCK_STATUS </span><br><span class="line">  <span class="keyword">FROM</span> performance_schema.data_locks <span class="keyword">WHERE</span> LOCK_TYPE<span class="operator">=</span><span class="string">&#x27;RECORD&#x27;</span>; </span><br><span class="line"><span class="operator">+</span><span class="comment">--------+-----+--------+-----------+-------------+ </span></span><br><span class="line"><span class="operator">|</span> trx_id <span class="operator">|</span> <span class="type">row</span> <span class="operator">|</span>  <span class="keyword">table</span> <span class="operator">|</span> LOCK_MODE <span class="operator">|</span> LOCK_STATUS <span class="operator">|</span> </span><br><span class="line"><span class="operator">+</span><span class="comment">--------+-----+--------+-----------+-------------+ </span></span><br><span class="line"><span class="operator">|</span>   <span class="number">3305</span> <span class="operator">|</span>   <span class="number">2</span> <span class="operator">|</span> report <span class="operator">|</span>         S <span class="operator">|</span>     GRANTED <span class="operator">|</span> </span><br><span class="line"><span class="operator">|</span>   <span class="number">3305</span> <span class="operator">|</span>   <span class="number">2</span> <span class="operator">|</span> report <span class="operator">|</span>         X <span class="operator">|</span>     GRANTED <span class="operator">|</span> </span><br><span class="line"><span class="operator">|</span>   <span class="number">3306</span> <span class="operator">|</span>   <span class="number">2</span> <span class="operator">|</span> report <span class="operator">|</span>         X <span class="operator">|</span>     WAITING <span class="operator">|</span> </span><br><span class="line"><span class="operator">+</span><span class="comment">--------+-----+--------+-----------+-------------+</span></span><br></pre></td></tr></table></figure>
+<p>上面是很明显的数据锁定，我们还可以看到表锁：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">con2<span class="operator">&gt;</span> <span class="keyword">SELECT</span> LOCK_TYPE,LOCK_STATUS,OWNER_THREAD_ID </span><br><span class="line">      <span class="keyword">FROM</span> performance_schema.metadata_locks </span><br><span class="line">      <span class="keyword">WHERE</span> OBJECT_NAME<span class="operator">=</span><span class="string">&#x27;t&#x27;</span> <span class="keyword">AND</span> OBJECT_TYPE<span class="operator">=</span>&quot;TABLE&quot;;</span><br><span class="line"><span class="operator">+</span><span class="comment">------------------+-------------+-----------------+</span></span><br><span class="line"><span class="operator">|</span> LOCK_TYPE        <span class="operator">|</span> LOCK_STATUS <span class="operator">|</span> OWNER_THREAD_ID <span class="operator">|</span></span><br><span class="line"><span class="operator">+</span><span class="comment">------------------+-------------+-----------------+</span></span><br><span class="line"><span class="operator">|</span> SHARED_READ_ONLY <span class="operator">|</span> GRANTED     <span class="operator">|</span>              <span class="number">53</span> <span class="operator">|</span></span><br><span class="line"><span class="operator">|</span> SHARED_WRITE     <span class="operator">|</span> PENDING     <span class="operator">|</span>              <span class="number">54</span> <span class="operator">|</span></span><br><span class="line"><span class="operator">+</span><span class="comment">------------------+-------------+-----------------+</span></span><br></pre></td></tr></table></figure>
+<p>这里可以看到，<code>performance_schema.metadata_locks</code> 有 <code>SHARED_READ_ONLY</code> 锁的表，这里锁有下面的几种形式：<a target="_blank" rel="noopener" href="https://dev.mysql.com/doc/refman/5.7/en/performance-schema-metadata-locks-table.html">https://dev.mysql.com/doc/refman/5.7/en/performance-schema-metadata-locks-table.html</a></p>
+<blockquote>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">LOCK_TYPE</span><br></pre></td></tr></table></figure>
+<ul>
+<li>The lock type from the metadata lock subsystem. The value is one of <code>INTENTION_EXCLUSIVE</code>, <code>SHARED</code>, <code>SHARED_HIGH_PRIO</code>, <code>SHARED_READ</code>, <code>SHARED_WRITE</code>, <code>SHARED_UPGRADABLE</code>, <code>SHARED_NO_WRITE</code>, <code>SHARED_NO_READ_WRITE</code>, or <code>EXCLUSIVE</code>.</li>
+</ul>
+</blockquote>
+<p>这里想必在 MDL 阶段也会上 X 锁。</p>
+<p>表锁在 InnoDB 中，可能会以意向锁的形式存在（IX IS），其实反过来说，InnoDB 的意向锁也只会在上面表锁的情况下开。我们继续举官方博客中的例子：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br></pre></td><td class="code"><pre><span class="line">mysql<span class="operator">&gt;</span> <span class="keyword">SET</span> autocommit <span class="operator">=</span> <span class="number">0</span>;</span><br><span class="line">Query OK, <span class="number">0</span> <span class="keyword">rows</span> affected (<span class="number">0.00</span> sec)</span><br><span class="line"> </span><br><span class="line">mysql<span class="operator">&gt;</span> LOCK <span class="keyword">TABLE</span> t READ, t1 WRITE;</span><br><span class="line">Query OK, <span class="number">0</span> <span class="keyword">rows</span> affected (<span class="number">0.04</span> sec)</span><br><span class="line"> </span><br><span class="line">mysql<span class="operator">&gt;</span> <span class="keyword">SELECT</span> OBJECT_NAME,LOCK_TYPE,LOCK_STATUS,OWNER_THREAD_ID </span><br><span class="line">       <span class="keyword">FROM</span> performance_schema.metadata_locks </span><br><span class="line">       <span class="keyword">WHERE</span> OBJECT_SCHEMA<span class="operator">=</span><span class="string">&#x27;test&#x27;</span> <span class="keyword">AND</span> OBJECT_TYPE<span class="operator">=</span>&quot;TABLE&quot;;</span><br><span class="line"><span class="operator">+</span><span class="comment">-------------+----------------------+-------------+-----------------+</span></span><br><span class="line"><span class="operator">|</span> OBJECT_NAME <span class="operator">|</span> LOCK_TYPE            <span class="operator">|</span> LOCK_STATUS <span class="operator">|</span> OWNER_THREAD_ID <span class="operator">|</span></span><br><span class="line"><span class="operator">+</span><span class="comment">-------------+----------------------+-------------+-----------------+</span></span><br><span class="line"><span class="operator">|</span> t           <span class="operator">|</span> SHARED_READ_ONLY     <span class="operator">|</span> GRANTED     <span class="operator">|</span>              <span class="number">49</span> <span class="operator">|</span></span><br><span class="line"><span class="operator">|</span> t1          <span class="operator">|</span> SHARED_NO_READ_WRITE <span class="operator">|</span> GRANTED     <span class="operator">|</span>              <span class="number">49</span> <span class="operator">|</span></span><br><span class="line"><span class="operator">+</span><span class="comment">-------------+----------------------+-------------+-----------------+</span></span><br><span class="line"><span class="number">2</span> <span class="keyword">rows</span> <span class="keyword">in</span> <span class="keyword">set</span> (<span class="number">0.00</span> sec)</span><br><span class="line"> </span><br><span class="line">mysql<span class="operator">&gt;</span> <span class="keyword">SELECT</span> thread_id,processlist_id </span><br><span class="line">       <span class="keyword">FROM</span> performance_schema.threads </span><br><span class="line">       <span class="keyword">WHERE</span> thread_id<span class="operator">=</span><span class="number">49</span>;</span><br><span class="line"><span class="operator">+</span><span class="comment">-----------+----------------+</span></span><br><span class="line"><span class="operator">|</span> thread_id <span class="operator">|</span> processlist_id <span class="operator">|</span></span><br><span class="line"><span class="operator">+</span><span class="comment">-----------+----------------+</span></span><br><span class="line"><span class="operator">|</span>        <span class="number">49</span> <span class="operator">|</span>              <span class="number">8</span> <span class="operator">|</span></span><br><span class="line"><span class="operator">+</span><span class="comment">-----------+----------------+</span></span><br><span class="line"><span class="number">1</span> <span class="type">row</span> <span class="keyword">in</span> <span class="keyword">set</span> (<span class="number">0.00</span> sec)</span><br><span class="line"> </span><br><span class="line">mysql<span class="operator">&gt;</span> <span class="keyword">SELECT</span> trx_id <span class="keyword">FROM</span> information_schema.innodb_trx </span><br><span class="line">       <span class="keyword">WHERE</span> trx_mysql_thread_id<span class="operator">=</span><span class="number">8</span>;</span><br><span class="line"><span class="operator">+</span><span class="comment">--------+</span></span><br><span class="line"><span class="operator">|</span> trx_id <span class="operator">|</span></span><br><span class="line"><span class="operator">+</span><span class="comment">--------+</span></span><br><span class="line"><span class="operator">|</span>   <span class="number">3851</span> <span class="operator">|</span></span><br><span class="line"><span class="operator">+</span><span class="comment">--------+</span></span><br><span class="line"> </span><br><span class="line">mysql<span class="operator">&gt;</span> <span class="keyword">SELECT</span> </span><br><span class="line">         ENGINE_TRANSACTION_ID <span class="keyword">as</span> trx_id,</span><br><span class="line">         OBJECT_NAME <span class="keyword">as</span> `<span class="keyword">table</span>`,</span><br><span class="line">         INDEX_NAME,</span><br><span class="line">         LOCK_DATA,</span><br><span class="line">         LOCK_MODE,</span><br><span class="line">         LOCK_STATUS </span><br><span class="line">       <span class="keyword">FROM</span> performance_schema.data_locks;</span><br><span class="line"><span class="operator">+</span><span class="comment">--------+-------+------------+-----------+-----------+-------------+</span></span><br><span class="line"><span class="operator">|</span> trx_id <span class="operator">|</span> <span class="keyword">table</span> <span class="operator">|</span> INDEX_NAME <span class="operator">|</span> LOCK_DATA <span class="operator">|</span> LOCK_MODE <span class="operator">|</span> LOCK_STATUS <span class="operator">|</span></span><br><span class="line"><span class="operator">+</span><span class="comment">--------+-------+------------+-----------+-----------+-------------+</span></span><br><span class="line"><span class="operator">|</span>   <span class="number">3851</span> <span class="operator">|</span> t     <span class="operator">|</span> <span class="keyword">NULL</span>       <span class="operator">|</span> <span class="keyword">NULL</span>      <span class="operator">|</span> S         <span class="operator">|</span> GRANTED     <span class="operator">|</span></span><br><span class="line"><span class="operator">|</span>   <span class="number">3851</span> <span class="operator">|</span> t1    <span class="operator">|</span> <span class="keyword">NULL</span>       <span class="operator">|</span> <span class="keyword">NULL</span>      <span class="operator">|</span> X         <span class="operator">|</span> GRANTED     <span class="operator">|</span></span><br><span class="line"><span class="operator">+</span><span class="comment">--------+-------+------------+-----------+-----------+-------------+</span></span><br><span class="line"><span class="number">2</span> <span class="keyword">rows</span> <span class="keyword">in</span> <span class="keyword">set</span> (<span class="number">0.00</span> sec)</span><br></pre></td></tr></table></figure>
+<p>这里观察到了 <code>metadata_lock</code> 的锁和 <code>data_locks</code> 的映射关系。</p>
+<p>回忆一下在数据库中 Intention Lock 都是为了满足不同层次的锁定。可以想象，写事务会拿到 <code>IX</code> 锁，然后写；读事务会拿到 IS 锁，然后读。这个时候如果有全局的表锁，会走 InnoDB Lock 的流程，等待拿到锁然后进行操作。（不知道有没有什么特定的优化，应该有吧）</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br></pre></td><td class="code"><pre><span class="line">mysql<span class="operator">&gt;</span> <span class="keyword">BEGIN</span>;</span><br><span class="line">Query OK, <span class="number">0</span> <span class="keyword">rows</span> affected (<span class="number">0.00</span> sec)</span><br><span class="line"> </span><br><span class="line">mysql<span class="operator">&gt;</span> <span class="keyword">INSERT</span> <span class="keyword">INTO</span> t <span class="keyword">VALUES</span> (<span class="number">200</span>);</span><br><span class="line">Query OK, <span class="number">1</span> <span class="type">row</span> affected (<span class="number">0.00</span> sec)</span><br><span class="line"></span><br><span class="line">mysql<span class="operator">&gt;</span> <span class="keyword">SELECT</span> </span><br><span class="line">         ENGINE_TRANSACTION_ID <span class="keyword">as</span> trx_id,</span><br><span class="line">         OBJECT_NAME <span class="keyword">as</span> `<span class="keyword">table</span>`,</span><br><span class="line">         INDEX_NAME,</span><br><span class="line">         LOCK_DATA,</span><br><span class="line">         LOCK_MODE,</span><br><span class="line">         LOCK_STATUS </span><br><span class="line">       <span class="keyword">FROM</span> performance_schema.data_locks;</span><br><span class="line"><span class="operator">+</span><span class="comment">--------+-------+------------+-----------+-----------+-------------+</span></span><br><span class="line"><span class="operator">|</span> trx_id <span class="operator">|</span> <span class="keyword">table</span> <span class="operator">|</span> INDEX_NAME <span class="operator">|</span> LOCK_DATA <span class="operator">|</span> LOCK_MODE <span class="operator">|</span> LOCK_STATUS <span class="operator">|</span></span><br><span class="line"><span class="operator">+</span><span class="comment">--------+-------+------------+-----------+-----------+-------------+</span></span><br><span class="line"><span class="operator">|</span>   <span class="number">3852</span> <span class="operator">|</span> t     <span class="operator">|</span> <span class="keyword">NULL</span>       <span class="operator">|</span> <span class="keyword">NULL</span>      <span class="operator">|</span> IX        <span class="operator">|</span> GRANTED     <span class="operator">|</span></span><br><span class="line"><span class="operator">+</span><span class="comment">--------+-------+------------+-----------+-----------+-------------+</span></span><br><span class="line"><span class="number">1</span> <span class="type">row</span> <span class="keyword">in</span> <span class="keyword">set</span> (<span class="number">0.00</span> sec)</span><br><span class="line"></span><br><span class="line">mysql<span class="operator">&gt;</span> <span class="keyword">SELECT</span> <span class="operator">*</span> <span class="keyword">FROM</span> t1 <span class="keyword">FOR</span> SHARE;</span><br><span class="line"><span class="operator">+</span><span class="comment">-----+</span></span><br><span class="line"><span class="operator">|</span> id  <span class="operator">|</span></span><br><span class="line"><span class="operator">+</span><span class="comment">-----+</span></span><br><span class="line"><span class="operator">|</span> <span class="number">123</span> <span class="operator">|</span></span><br><span class="line"><span class="operator">+</span><span class="comment">-----+</span></span><br><span class="line"><span class="number">1</span> <span class="type">row</span> <span class="keyword">in</span> <span class="keyword">set</span> (<span class="number">0.00</span> sec)</span><br><span class="line"> </span><br><span class="line">mysql<span class="operator">&gt;</span> <span class="keyword">SELECT</span> </span><br><span class="line">         ENGINE_TRANSACTION_ID <span class="keyword">as</span> trx_id,</span><br><span class="line">         OBJECT_NAME <span class="keyword">as</span> `<span class="keyword">table</span>`,</span><br><span class="line">         INDEX_NAME,</span><br><span class="line">         LOCK_DATA,</span><br><span class="line">         LOCK_MODE,</span><br><span class="line">         LOCK_STATUS </span><br><span class="line">       <span class="keyword">FROM</span> performance_schema.data_locks <span class="keyword">AND</span> LOCK_TYPE<span class="operator">=</span>&quot;TABLE&quot;;</span><br><span class="line"><span class="operator">+</span><span class="comment">--------+-------+------------+------------------------+-----------+-------------+</span></span><br><span class="line"><span class="operator">|</span> trx_id <span class="operator">|</span> <span class="keyword">table</span> <span class="operator">|</span> INDEX_NAME <span class="operator">|</span> LOCK_DATA              <span class="operator">|</span> LOCK_MODE <span class="operator">|</span> LOCK_STATUS <span class="operator">|</span></span><br><span class="line"><span class="operator">+</span><span class="comment">--------+-------+------------+------------------------+-----------+-------------+</span></span><br><span class="line"><span class="operator">|</span>   <span class="number">3852</span> <span class="operator">|</span> t     <span class="operator">|</span> <span class="keyword">NULL</span>       <span class="operator">|</span> <span class="keyword">NULL</span>                   <span class="operator">|</span> IX        <span class="operator">|</span> GRANTED     <span class="operator">|</span></span><br><span class="line"><span class="operator">|</span>   <span class="number">3852</span> <span class="operator">|</span> t1    <span class="operator">|</span> <span class="keyword">NULL</span>       <span class="operator">|</span> <span class="keyword">NULL</span>                   <span class="operator">|</span> <span class="keyword">IS</span>        <span class="operator">|</span> GRANTED     <span class="operator">|</span></span><br><span class="line"><span class="operator">+</span><span class="comment">--------+-------+------------+------------------------+-----------+-------------+</span></span><br><span class="line"><span class="number">4</span> <span class="keyword">rows</span> <span class="keyword">in</span> <span class="keyword">set</span> (<span class="number">0.00</span> sec)</span><br></pre></td></tr></table></figure>
+<p>关于锁定，这里希望下表没有超过你的常识（误）：</p>
+<p><img src="https://image.mwish.me/blog-image/innodb-lock-01.png" alt="innodb-lock-01"></p>
+<p>（AUTO_INC 也是一种表锁，两个 AUTO_INC 之间的访问是互斥的）</p>
+<h3 id="Record-Lock-amp-Gap"><a href="#Record-Lock-amp-Gap" class="headerlink" title="Record Lock &amp; Gap"></a>Record Lock &amp; Gap</h3><p>这个部分应该是非常恶心的一部分了，因为 InnoDB 切的非常细，直接导致这块细节处理非常恶心而且 bug-prune。</p>
+<p>官方博客举了个非常好的例子，再次允许我原封不动的贴上来：</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><span class="line">mysql&gt; SELECT * FROM t;</span><br><span class="line">+----+</span><br><span class="line">| id |</span><br><span class="line">+----+</span><br><span class="line">|  <span class="number">5</span> |</span><br><span class="line">| <span class="number">10</span> |</span><br><span class="line">| <span class="number">42</span> |</span><br><span class="line">+----+</span><br><span class="line"><span class="number">3</span> rows in set (<span class="number">0.00</span> sec)</span><br><span class="line"></span><br><span class="line"># Could be conceptualized as<span class="punctuation">:</span></span><br><span class="line">--(<span class="number">5</span>)---(<span class="number">10</span>)-----(<span class="number">42</span>)---&gt; id</span><br><span class="line"></span><br><span class="line"># Our mental image should consist of points and gaps between them<span class="punctuation">:</span></span><br><span class="line"></span><br><span class="line">--(                        the gap before the row #<span class="number">5</span></span><br><span class="line"> </span><br><span class="line">   <span class="number">5</span>                       the row #<span class="number">5</span> itself</span><br><span class="line"> </span><br><span class="line">    )---(                  the gap before the row #<span class="number">10</span></span><br><span class="line"> </span><br><span class="line">         <span class="number">10</span>                the row #<span class="number">10</span> itself</span><br><span class="line"> </span><br><span class="line">           )-----(         the gap before the row #<span class="number">42</span></span><br><span class="line"> </span><br><span class="line">                  <span class="number">42</span>       the row #<span class="number">42</span> itself</span><br><span class="line"> </span><br><span class="line">                    )---&gt;  the gap before infinity</span><br></pre></td></tr></table></figure>
+<p>GAP_LOCK，据伟大的 Graefe Goetz 所说，是一种把 Predicate Lock 转化为记录锁的好方案，InnoDB 的锁有如下类型：</p>
+<blockquote>
+<ul>
+<li><strong>S,REC_NOT_GAP</strong> → shared access to the record itself</li>
+<li><strong>X,REC_NOT_GAP</strong> → exclusive access to the record itself</li>
+<li><strong>S,GAP</strong> → right to prevent anyone from inserting anything into the gap before the row</li>
+<li><strong>X,GAP</strong> → same as above. Yes, “S” and “X” are short for “shared” and “exclusive”, but given that the semantic of this access right is to “prevent insert from happening” several threads can all agree to prevent the same thing without any conflict, thus currently InnoDB treats <strong>S,GAP</strong> and <strong>X,GAP</strong> (or <strong>*,GAP</strong> locks, for short) the same way: as conflicting just with <strong>*,INSERT_INTENTION</strong></li>
+<li><strong>S</strong> → is like a combination of <strong>S,REC_NOT_GAP</strong> and <strong>S,GAP</strong> at the same time. So it is a shared access right to the row, and prevents insert before it.</li>
+<li><strong>X</strong> → is like a combination of <strong>X,REC_NOT_GAP</strong> and <strong>X,GAP</strong> at the same time. So it is an exclusive access right to the row, and prevents insert before it.</li>
+<li><strong>X,GAP,INSERT_INTENTION</strong> → right to insert a new row into the gap before this row. Despite “X” in its name it is actually compatible with others threads trying to insert at the same time.</li>
+<li><strong>X,INSERT_INTENTION</strong> → conceptually same as above, but only happens for the “supremum pseudo-record” which is imaginary record “larger than any other record on the page” so that the gap “before” “it” is actually “gap after the last record”.</li>
+</ul>
+</blockquote>
+<p><code>INSERT_INTENTION</code> 是个很坑爹的东西，我们先理解 GAP:</p>
+<ol>
+<li>锁的类型是个 flag，S 和 REC_NOT_GAP 直接按位 <code>|</code> 就行</li>
+<li>InnoDB 的锁和叶子结构是（半）绑定的，之后我们看 Lock 分裂/继承的时候也会看到。在 InnoDB 的 Page 上，会有 Infimum record（下确界）/ supremum record（上确界）</li>
+<li>GAP 锁定的是记录之前的 GAP</li>
+<li>InnoDB 的实现中，资源只有一个点（物理的 record），但是有不同种类的权限，<code>GAP</code>, <code>REC_NOT_GAP</code>, 和都有</li>
+</ol>
+<p>这里的互斥关系如下图：</p>
+<p><img src="https://image.mwish.me/blog-image/innodb-02.png" alt="innodb-02"></p>
+<p>INTENTION_LOCK 是一个很恶心的事情，考虑一个事实，在 InnoDB 申请锁可能会在 Page 相关的结构上做一些标记，然后物理上插入这行记录。在插入的时候，实际上的流程如下：</p>
+<ol>
+<li>Latching the page</li>
+<li>找到数据对应的位置（innodb page 对应的稀疏链表）</li>
+<li>检查锁（但不上锁）：then latching the Lock System queue for the point to the right of insertion point and checking if there is any <strong>*,GAP</strong>, <strong>S</strong> or <strong>X</strong> lock.<ol>
+<li>如果没有冲突的锁，直接插入这条记录，然后不上锁。依靠记录的 txn 标记来识别</li>
+<li>有冲突的锁，就发起一条 <code>INSERT_INTENTION</code> 提交到锁队列中</li>
+</ol>
+</li>
+<li>如果是有锁的情况（包括自己的锁）这里会需要做一些锁继承相关的操作。具体的继承细节在后面讲，这里简单说就是比如原先是自己的 S 锁，然后插入之后，区间从一个 gap 被拆成新的一条记录 + 一个新的 gap。这个地方要注意锁保留权限</li>
+</ol>
+<p>举官方博客的例子：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br></pre></td><td class="code"><pre><span class="line">mysql<span class="operator">&gt;</span> <span class="keyword">BEGIN</span>;</span><br><span class="line">Query OK, <span class="number">0</span> <span class="keyword">rows</span> affected (<span class="number">0.00</span> sec)</span><br><span class="line"> </span><br><span class="line">mysql<span class="operator">&gt;</span> <span class="keyword">SELECT</span> <span class="operator">*</span> <span class="keyword">FROM</span> t <span class="keyword">FOR</span> SHARE;</span><br><span class="line"><span class="operator">+</span><span class="comment">----+</span></span><br><span class="line"><span class="operator">|</span> id <span class="operator">|</span></span><br><span class="line"><span class="operator">+</span><span class="comment">----+</span></span><br><span class="line"><span class="operator">|</span>  <span class="number">5</span> <span class="operator">|</span></span><br><span class="line"><span class="operator">|</span> <span class="number">10</span> <span class="operator">|</span></span><br><span class="line"><span class="operator">|</span> <span class="number">42</span> <span class="operator">|</span></span><br><span class="line"><span class="operator">+</span><span class="comment">----+</span></span><br><span class="line"><span class="number">3</span> <span class="keyword">rows</span> <span class="keyword">in</span> <span class="keyword">set</span> (<span class="number">0.00</span> sec)</span><br><span class="line"> </span><br><span class="line">mysql<span class="operator">&gt;</span> <span class="keyword">DELETE</span> <span class="keyword">FROM</span> t <span class="keyword">WHERE</span> id<span class="operator">=</span><span class="number">10</span>;</span><br><span class="line">Query OK, <span class="number">1</span> <span class="type">row</span> affected (<span class="number">0.00</span> sec)</span><br><span class="line"> </span><br><span class="line">mysql<span class="operator">&gt;</span> <span class="keyword">INSERT</span> <span class="keyword">INTO</span> t <span class="keyword">VALUES</span> (<span class="number">4</span>);</span><br><span class="line">Query OK, <span class="number">1</span> <span class="type">row</span> affected (<span class="number">0.00</span> sec)</span><br><span class="line"> </span><br><span class="line">mysql<span class="operator">&gt;</span> <span class="keyword">SELECT</span> INDEX_NAME,LOCK_TYPE,LOCK_DATA,LOCK_MODE</span><br><span class="line">       <span class="keyword">FROM</span> performance_schema.data_locks <span class="keyword">WHERE</span> OBJECT_NAME<span class="operator">=</span><span class="string">&#x27;t&#x27;</span>;</span><br><span class="line"><span class="operator">+</span><span class="comment">------------+-----------+------------------------+---------------+</span></span><br><span class="line"><span class="operator">|</span> INDEX_NAME <span class="operator">|</span> LOCK_TYPE <span class="operator">|</span> LOCK_DATA              <span class="operator">|</span> LOCK_MODE     <span class="operator">|</span></span><br><span class="line"><span class="operator">+</span><span class="comment">------------+-----------+------------------------+---------------+</span></span><br><span class="line"><span class="operator">|</span> <span class="keyword">NULL</span>       <span class="operator">|</span> <span class="keyword">TABLE</span>     <span class="operator">|</span> <span class="keyword">NULL</span>                   <span class="operator">|</span> <span class="keyword">IS</span>            <span class="operator">|</span></span><br><span class="line"><span class="operator">|</span> <span class="keyword">PRIMARY</span>    <span class="operator">|</span> RECORD    <span class="operator">|</span> supremum pseudo<span class="operator">-</span>record <span class="operator">|</span> S             <span class="operator">|</span></span><br><span class="line"><span class="operator">|</span> <span class="keyword">PRIMARY</span>    <span class="operator">|</span> RECORD    <span class="operator">|</span> <span class="number">5</span>                      <span class="operator">|</span> S             <span class="operator">|</span></span><br><span class="line"><span class="operator">|</span> <span class="keyword">PRIMARY</span>    <span class="operator">|</span> RECORD    <span class="operator">|</span> <span class="number">10</span>                     <span class="operator">|</span> S             <span class="operator">|</span></span><br><span class="line"><span class="operator">|</span> <span class="keyword">PRIMARY</span>    <span class="operator">|</span> RECORD    <span class="operator">|</span> <span class="number">42</span>                     <span class="operator">|</span> S             <span class="operator">|</span></span><br><span class="line"><span class="operator">|</span> <span class="keyword">NULL</span>       <span class="operator">|</span> <span class="keyword">TABLE</span>     <span class="operator">|</span> <span class="keyword">NULL</span>                   <span class="operator">|</span> IX            <span class="operator">|</span></span><br><span class="line"><span class="operator">|</span> <span class="keyword">PRIMARY</span>    <span class="operator">|</span> RECORD    <span class="operator">|</span> <span class="number">10</span>                     <span class="operator">|</span> X,REC_NOT_GAP <span class="operator">|</span></span><br><span class="line"><span class="operator">|</span> <span class="keyword">PRIMARY</span>    <span class="operator">|</span> RECORD    <span class="operator">|</span> <span class="number">4</span>                      <span class="operator">|</span> S,GAP         <span class="operator">|</span></span><br><span class="line"><span class="operator">+</span><span class="comment">------------+-----------+------------------------+---------------+</span></span><br><span class="line"><span class="number">8</span> <span class="keyword">rows</span> <span class="keyword">in</span> <span class="keyword">set</span> (<span class="number">0.00</span> sec)</span><br></pre></td></tr></table></figure>
+<ol>
+<li>SELECT 的时候，全部带上 S 锁. 这个地方注意 supremum 的锁。这里也申请了一个 IS 的表锁</li>
+<li>DELETE 的时候，生成一条 X 的删除锁</li>
+<li>INSERT 的时候，没有生成锁，因为没有冲突</li>
+</ol>
+<h3 id="Lock-Compression"><a href="#Lock-Compression" class="headerlink" title="Lock Compression"></a>Lock Compression</h3><p><code>performance_schema.data_locks</code> 并不是一张具体的表，而是从 <code>&lt;space id, page no, heap no&gt;</code> 恢复出来的。锁只是一个内存结构。</p>
+<p>InnoDB 在内存中会有一个压缩位图，Hedengcheng Slide 有一张很好的图：</p>
+<p><img src="https://image.mwish.me/blog-image/1cfad4ec-a6fa-47e8-aab8-f5e8581f8ad3.png" alt="1cfad4ec-a6fa-47e8-aab8-f5e8581f8ad3"></p>
+<p>这里我们注意到几个事实：</p>
+<ol>
+<li>依赖 <code>heap_no</code> 来维护 bitmap 的大小和对应的顺序</li>
+<li>可能第一次上锁的时候会申请一个比较大的 bitmap，后面上锁开开销就会减小。</li>
+</ol>
+<h3 id="Implicit-Lock"><a href="#Implicit-Lock" class="headerlink" title="Implicit Lock"></a>Implicit Lock</h3><p>这坨东西和 implicit lock 有什么关系呢？有，implicit lock 就是在这种王八蛋时间突然冒出来的。还记得我们的插入的时候，其实一开始没有 INSERT_INTENTION 锁吗，我举个让这个锁飘出来的例子：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">(client1) mysql<span class="operator">&gt;</span> <span class="keyword">INSERT</span> <span class="keyword">INTO</span> t <span class="keyword">VALUES</span> (<span class="number">4</span>);</span><br><span class="line">Query OK, <span class="number">1</span> <span class="type">row</span> affected (<span class="number">0.00</span> sec)</span><br><span class="line"></span><br><span class="line">(client2) mysql<span class="operator">&gt;</span> <span class="keyword">INSERT</span> <span class="keyword">INTO</span> t <span class="keyword">VALUES</span> (<span class="number">4</span>);</span><br><span class="line">Query OK, <span class="number">1</span> <span class="type">row</span> affected (<span class="number">0.00</span> sec)</span><br></pre></td></tr></table></figure>
+<p>这个地方可能本来的优化中， client1 插入后是没有一把锁，在 Delete 之后锁就出现了. 这种<strong>因为优化导致暂时不出现，但是你发现问题的时候要查它找冲突的锁</strong>叫做 implicit lock。后面在 Secondary Index 一节，会有比较多内容介绍这个。</p>
+<h3 id="Lock-Spliting"><a href="#Lock-Spliting" class="headerlink" title="Lock Spliting"></a>Lock Spliting</h3><p>在申请锁的时候，我们常见的有锁的升级（Upgrade），同时，在 InnoDB 的结构下，也会有从 A 类型的锁切到 B 类型锁的 Pattern。</p>
+<p>考虑到几种 Pattern:</p>
+<ol>
+<li>读锁升级到写锁</li>
+<li>从 S|REC_NOT_GAP 升级到 S</li>
+</ol>
+<p>对于 (2) InnoDB 在申请资源的时候，会按照集合做减法，尝试只 acquire <code>S - S|REC_NOT_GAP = S|GAP</code> 的锁</p>
+<h3 id="Btree-分裂和锁继承"><a href="#Btree-分裂和锁继承" class="headerlink" title="Btree 分裂和锁继承"></a>Btree 分裂和锁继承</h3><p>这部分知识在这篇文章中很详细：<a target="_blank" rel="noopener" href="http://mysql.taobao.org/monthly/2016/06/01/">http://mysql.taobao.org/monthly/2016/06/01/</a></p>
+<p>为什么合并不需要呢？答案是 next-key locking 是真的会找到下一个 key, 但是这个 Page 内部也需要表示 「Page 内最大已经被锁定」。</p>
+<p>这里在 Page 分裂的时候，也要处理对应的 GAP 和 Locking。</p>
+<h3 id="Secondary-Index-amp-Implicit-Lock"><a href="#Secondary-Index-amp-Implicit-Lock" class="headerlink" title="Secondary Index &amp; Implicit Lock"></a>Secondary Index &amp; Implicit Lock</h3><p>Secondary Index 和 Lock 结合起来…非常复杂。首先要知道：</p>
+<ol>
+<li>Secondary Index Page 上也是有锁定的</li>
+<li>MVCC 中，Secondary Index 会保有最新的数据，这里可能会影响 ICP</li>
+</ol>
+<p>这里官方博客举了个非常好的例子：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">CREATE</span> <span class="keyword">TABLE</span> point2D(</span><br><span class="line">  x <span class="type">INT</span> <span class="keyword">NOT</span> <span class="keyword">NULL</span> <span class="keyword">PRIMARY</span> KEY,</span><br><span class="line">  y <span class="type">INT</span> <span class="keyword">NOT</span> <span class="keyword">NULL</span> <span class="keyword">UNIQUE</span> </span><br><span class="line">);</span><br><span class="line"><span class="keyword">INSERT</span> <span class="keyword">INTO</span> point2D (x,y) <span class="keyword">VALUES</span></span><br><span class="line">  (<span class="number">0</span>,<span class="number">3</span>),      </span><br><span class="line">        (<span class="number">1</span>,<span class="number">2</span>), </span><br><span class="line">                    (<span class="number">3</span>,<span class="number">1</span>),</span><br><span class="line">             (<span class="number">2</span>,<span class="number">0</span>);</span><br></pre></td></tr></table></figure>
+<p>然后查询：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">con1<span class="operator">&gt;</span> <span class="keyword">BEGIN</span>;</span><br><span class="line">con1<span class="operator">&gt;</span> <span class="keyword">SELECT</span> <span class="built_in">COUNT</span>(<span class="operator">*</span>) <span class="keyword">FROM</span> point2D <span class="keyword">WHERE</span> y<span class="operator">=</span><span class="number">2</span> <span class="keyword">FOR</span> SHARE;</span><br><span class="line">con1<span class="operator">&gt;</span> <span class="keyword">SELECT</span> INDEX_NAME,LOCK_TYPE,LOCK_DATA,LOCK_MODE </span><br><span class="line">      <span class="keyword">FROM</span> performance_schema.data_locks <span class="keyword">WHERE</span> OBJECT_NAME<span class="operator">=</span><span class="string">&#x27;point2D&#x27;</span>;</span><br><span class="line"><span class="operator">+</span><span class="comment">------------+-----------+-----------+---------------+</span></span><br><span class="line"><span class="operator">|</span> INDEX_NAME <span class="operator">|</span> LOCK_TYPE <span class="operator">|</span> LOCK_DATA <span class="operator">|</span> LOCK_MODE     <span class="operator">|</span></span><br><span class="line"><span class="operator">+</span><span class="comment">------------+-----------+-----------+---------------+</span></span><br><span class="line"><span class="operator">|</span> <span class="keyword">NULL</span>       <span class="operator">|</span> <span class="keyword">TABLE</span>     <span class="operator">|</span> <span class="keyword">NULL</span>      <span class="operator">|</span> <span class="keyword">IS</span>            <span class="operator">|</span></span><br><span class="line"><span class="operator">|</span> y          <span class="operator">|</span> RECORD    <span class="operator">|</span> <span class="number">2</span>, <span class="number">1</span>      <span class="operator">|</span> S,REC_NOT_GAP <span class="operator">|</span></span><br><span class="line"><span class="operator">+</span><span class="comment">------------+-----------+-----------+---------------+</span></span><br></pre></td></tr></table></figure>
+<p>这个锁 <strong>非常符合预期。</strong>回滚这个事务，删除 x :</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">con1<span class="operator">&gt;</span> <span class="keyword">COMMIT</span>;</span><br><span class="line">con1<span class="operator">&gt;</span> <span class="keyword">BEGIN</span>;</span><br><span class="line">con1<span class="operator">&gt;</span> <span class="keyword">DELETE</span> <span class="keyword">FROM</span> point2D <span class="keyword">WHERE</span> x<span class="operator">=</span><span class="number">1</span>;</span><br><span class="line">con1<span class="operator">&gt;</span> <span class="keyword">SELECT</span> INDEX_NAME,LOCK_TYPE,LOCK_DATA,LOCK_MODE <span class="keyword">FROM</span> performance_schema.data_locks <span class="keyword">WHERE</span> OBJECT_NAME<span class="operator">=</span><span class="string">&#x27;point2D&#x27;</span>;</span><br><span class="line"><span class="operator">+</span><span class="comment">------------+-----------+-----------+---------------+</span></span><br><span class="line"><span class="operator">|</span> INDEX_NAME <span class="operator">|</span> LOCK_TYPE <span class="operator">|</span> LOCK_DATA <span class="operator">|</span> LOCK_MODE     <span class="operator">|</span></span><br><span class="line"><span class="operator">+</span><span class="comment">------------+-----------+-----------+---------------+</span></span><br><span class="line"><span class="operator">|</span> <span class="keyword">NULL</span>       <span class="operator">|</span> <span class="keyword">TABLE</span>     <span class="operator">|</span> <span class="keyword">NULL</span>      <span class="operator">|</span> IX            <span class="operator">|</span></span><br><span class="line"><span class="operator">|</span> <span class="keyword">PRIMARY</span>    <span class="operator">|</span> RECORD    <span class="operator">|</span> <span class="number">1</span>         <span class="operator">|</span> X,REC_NOT_GAP <span class="operator">|</span></span><br><span class="line"><span class="operator">+</span><span class="comment">------------+-----------+-----------+---------------+</span></span><br></pre></td></tr></table></figure>
+<p>这个地方表面上也符合预期，但是回顾一下，对应的 x/y 呢？</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">con2<span class="operator">&gt;</span> <span class="keyword">BEGIN</span>;</span><br><span class="line">con2<span class="operator">&gt;</span> <span class="keyword">SELECT</span> <span class="built_in">COUNT</span>(<span class="operator">*</span>) <span class="keyword">FROM</span> point2D <span class="keyword">WHERE</span> y<span class="operator">=</span><span class="number">2</span> <span class="keyword">FOR</span> SHARE;</span><br></pre></td></tr></table></figure>
+<p>这里 con2 就 hang 住了，再去 con1:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">con1<span class="operator">&gt;</span> <span class="keyword">SELECT</span> ENGINE_TRANSACTION_ID trx_id,INDEX_NAME,LOCK_TYPE,LOCK_DATA,LOCK_MODE,LOCK_STATUS </span><br><span class="line">      <span class="keyword">FROM</span> performance_schema.data_locks <span class="keyword">WHERE</span> OBJECT_NAME<span class="operator">=</span><span class="string">&#x27;point2D&#x27;</span>;</span><br><span class="line"><span class="operator">+</span><span class="comment">-----------------+------------+-----------+-----------+---------------+-------------+</span></span><br><span class="line"><span class="operator">|</span>          trx_id <span class="operator">|</span> INDEX_NAME <span class="operator">|</span> LOCK_TYPE <span class="operator">|</span> LOCK_DATA <span class="operator">|</span> LOCK_MODE     <span class="operator">|</span> LOCK_STATUS <span class="operator">|</span></span><br><span class="line"><span class="operator">+</span><span class="comment">-----------------+------------+-----------+-----------+---------------+-------------+</span></span><br><span class="line"><span class="operator">|</span> <span class="number">283410363307272</span> <span class="operator">|</span> <span class="keyword">NULL</span>       <span class="operator">|</span> <span class="keyword">TABLE</span>     <span class="operator">|</span> <span class="keyword">NULL</span>      <span class="operator">|</span> <span class="keyword">IS</span>            <span class="operator">|</span> GRANTED     <span class="operator">|</span></span><br><span class="line"><span class="operator">|</span> <span class="number">283410363307272</span> <span class="operator">|</span> y          <span class="operator">|</span> RECORD    <span class="operator">|</span> <span class="number">2</span>, <span class="number">1</span>      <span class="operator">|</span> S             <span class="operator">|</span> WAITING     <span class="operator">|</span></span><br><span class="line"><span class="operator">|</span>            <span class="number">1560</span> <span class="operator">|</span> <span class="keyword">NULL</span>       <span class="operator">|</span> <span class="keyword">TABLE</span>     <span class="operator">|</span> <span class="keyword">NULL</span>      <span class="operator">|</span> IX            <span class="operator">|</span> GRANTED     <span class="operator">|</span></span><br><span class="line"><span class="operator">|</span>            <span class="number">1560</span> <span class="operator">|</span> <span class="keyword">PRIMARY</span>    <span class="operator">|</span> RECORD    <span class="operator">|</span> <span class="number">1</span>         <span class="operator">|</span> X,REC_NOT_GAP <span class="operator">|</span> GRANTED     <span class="operator">|</span></span><br><span class="line"><span class="operator">|</span>            <span class="number">1560</span> <span class="operator">|</span> y          <span class="operator">|</span> RECORD    <span class="operator">|</span> <span class="number">2</span>, <span class="number">1</span>      <span class="operator">|</span> X,REC_NOT_GAP <span class="operator">|</span> GRANTED     <span class="operator">|</span></span><br><span class="line"><span class="operator">+</span><span class="comment">-----------------+------------+-----------+-----------+---------------+-------------+</span></span><br></pre></td></tr></table></figure>
+<p>多出来了 implicit lock，邪恶吧！这里逻辑流程如下：</p>
+<ol>
+<li>InnoDB 删除会推高 Page 的最大 trx id</li>
+<li>Secondary Index 查找的时候有一个 read_view，发现 Page 上修改的 trx 大（ <code>page_get_max_trx_id(page)</code>），就要走逻辑去查这个 trx 是不是还持有锁：<a target="_blank" rel="noopener" href="https://github.com/mysql/mysql-server/blob/a2f0879/storage/innobase/row/row0vers.cc#L536">row_vers_impl_x_locked</a></li>
+<li>查看是否冲突，上 implicit lock</li>
+</ol>
+<p>这段逻辑是很清晰的，现在让我们调个个，看看如果 先读 Secondary Index，再删：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">con2<span class="operator">&gt;</span> <span class="keyword">BEGIN</span>;</span><br><span class="line">con2<span class="operator">&gt;</span> <span class="keyword">SELECT</span> <span class="built_in">COUNT</span>(<span class="operator">*</span>) <span class="keyword">FROM</span> point2D <span class="keyword">WHERE</span> y<span class="operator">=</span><span class="number">2</span> <span class="keyword">FOR</span> SHARE;</span><br><span class="line"><span class="operator">+</span><span class="comment">----------+</span></span><br><span class="line"><span class="operator">|</span> <span class="built_in">COUNT</span>(<span class="operator">*</span>) <span class="operator">|</span></span><br><span class="line"><span class="operator">+</span><span class="comment">----------+</span></span><br><span class="line"><span class="operator">|</span>        <span class="number">1</span> <span class="operator">|</span></span><br><span class="line"><span class="operator">+</span><span class="comment">----------+</span></span><br><span class="line"></span><br><span class="line">con1<span class="operator">&gt;</span> <span class="keyword">BEGIN</span>;</span><br><span class="line">con1<span class="operator">&gt;</span> <span class="keyword">DELETE</span> <span class="keyword">FROM</span> point2D <span class="keyword">WHERE</span> x<span class="operator">=</span><span class="number">1</span>;</span><br><span class="line">⌛</span><br></pre></td></tr></table></figure>
+<p>con1 hang 死了，这个时候 con2 查锁：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="operator">&gt;</span> <span class="keyword">SELECT</span> ENGINE_TRANSACTION_ID trx_id,INDEX_NAME,LOCK_TYPE,LOCK_DATA,LOCK_MODE,LOCK_STATUS </span><br><span class="line">  <span class="keyword">FROM</span> performance_schema.data_locks <span class="keyword">WHERE</span> OBJECT_NAME<span class="operator">=</span><span class="string">&#x27;point2D&#x27;</span>;</span><br><span class="line"><span class="operator">+</span><span class="comment">-----------------+------------+-----------+-----------+---------------+-------------+</span></span><br><span class="line"><span class="operator">|</span> trx_id          <span class="operator">|</span> INDEX_NAME <span class="operator">|</span> LOCK_TYPE <span class="operator">|</span> LOCK_DATA <span class="operator">|</span> LOCK_MODE     <span class="operator">|</span> LOCK_STATUS <span class="operator">|</span></span><br><span class="line"><span class="operator">+</span><span class="comment">-----------------+------------+-----------+-----------+---------------+-------------+</span></span><br><span class="line"><span class="operator">|</span>            <span class="number">2077</span> <span class="operator">|</span> <span class="keyword">NULL</span>       <span class="operator">|</span> <span class="keyword">TABLE</span>     <span class="operator">|</span> <span class="keyword">NULL</span>      <span class="operator">|</span> IX            <span class="operator">|</span> GRANTED     <span class="operator">|</span></span><br><span class="line"><span class="operator">|</span>            <span class="number">2077</span> <span class="operator">|</span> <span class="keyword">PRIMARY</span>    <span class="operator">|</span> RECORD    <span class="operator">|</span> <span class="number">1</span>         <span class="operator">|</span> X,REC_NOT_GAP <span class="operator">|</span> GRANTED     <span class="operator">|</span></span><br><span class="line"><span class="operator">|</span>            <span class="number">2077</span> <span class="operator">|</span> y          <span class="operator">|</span> RECORD    <span class="operator">|</span> <span class="number">2</span>, <span class="number">1</span>      <span class="operator">|</span> X,REC_NOT_GAP <span class="operator">|</span> WAITING     <span class="operator">|</span></span><br><span class="line"><span class="operator">|</span> <span class="number">283410363307272</span> <span class="operator">|</span> <span class="keyword">NULL</span>       <span class="operator">|</span> <span class="keyword">TABLE</span>     <span class="operator">|</span> <span class="keyword">NULL</span>      <span class="operator">|</span> <span class="keyword">IS</span>            <span class="operator">|</span> GRANTED     <span class="operator">|</span></span><br><span class="line"><span class="operator">|</span> <span class="number">283410363307272</span> <span class="operator">|</span> y          <span class="operator">|</span> RECORD    <span class="operator">|</span> <span class="number">2</span>, <span class="number">1</span>      <span class="operator">|</span> S,REC_NOT_GAP <span class="operator">|</span> GRANTED     <span class="operator">|</span></span><br><span class="line"><span class="operator">+</span><span class="comment">-----------------+------------+-----------+-----------+---------------+-------------+</span></span><br></pre></td></tr></table></figure>
+<p>这个地方，我们之前 Delete x 没有在 y 加锁，怎么会是呢？答案是这里会尝试在 y 上加锁，没有的话就 implicit lock 那种模式了 （ <code>lock_sec_rec_modify_check_and_lock</code> ）</p>
+<h3 id="关于-MVCC-read-view-和锁"><a href="#关于-MVCC-read-view-和锁" class="headerlink" title="关于 MVCC, read_view 和锁"></a>关于 MVCC, read_view 和锁</h3><p>实际上，之前演示的部分都上锁了。read_view 读取其实看隔离级别不一定会一直持有锁。</p>
+<p>比如 InnoDB 的 semi-consistent read （ <a target="_blank" rel="noopener" href="http://mysql.taobao.org/monthly/2018/11/04/">http://mysql.taobao.org/monthly/2018/11/04/</a> ) 。会尝试第一次不上锁，直接读 Undo Chain。</p>
+<h3 id="插入和已经存在的记录"><a href="#插入和已经存在的记录" class="headerlink" title="插入和已经存在的记录"></a>插入和已经存在的记录</h3><p>如果发现已经存在的记录：</p>
+<blockquote>
+<p>通常INSERT操作是不加锁的，但如果在插入或更新记录时，检查到 duplicate key（或者有一个被标记删除的duplicate key），对于普通的INSERT/UPDATE，会加LOCK_S锁，而对于类似REPLACE INTO或者INSERT … ON DUPLICATE这样的SQL加的是X锁。而针对不同的索引类型也有所不同：</p>
+<ul>
+<li>对于聚集索引（参阅函数<code>row_ins_duplicate_error_in_clust</code>），隔离级别小于等于RC时，加的是<code>LOCK_REC_NOT_GAP</code>类似的S或者X记录锁。否则加<code>LOCK_ORDINARY</code>类型的记录锁（NEXT-KEY LOCK）；</li>
+<li>对于二级唯一索引，若检查到重复键，当前版本总是加 LOCK_ORDINARY 类型的记录锁(函数 <code>row_ins_scan_sec_index_for_duplicate</code>)。实际上按照RC的设计理念，不应该加GAP锁（<a target="_blank" rel="noopener" href="http://bugs.mysql.com/bug.php?id=68021">bug#68021</a>），官方也事实上尝试修复过一次，即对于RC隔离级别加上<code>LOCK_REC_NOT_GAP</code>，但却引入了另外一个问题，导致二级索引的唯一约束失效(<a target="_blank" rel="noopener" href="http://bugs.mysql.com/bug.php?id=73170">bug#73170</a>)，感兴趣的可以参阅我写的<a target="_blank" rel="noopener" href="http://mysqllover.com/?p=1041">这篇博客</a>，由于这个严重bug，官方很快又把这个fix给revert掉了。</li>
+</ul>
+</blockquote>
+<p>摘自：<a target="_blank" rel="noopener" href="http://mysql.taobao.org/monthly/2016/01/01/">http://mysql.taobao.org/monthly/2016/01/01/</a> . 你或许会发现，这里上的是<strong>数据锁</strong>，而不是意向锁。这里原因代码说的比较清晰。</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><span class="line">lock_type = ((trx-&gt;isolation_level &lt;= TRX_ISO_READ_COMMITTED) ||</span><br><span class="line">             (cursor-&gt;index-&gt;table-&gt;<span class="built_in">skip_gap_locks</span>()))</span><br><span class="line">                ? LOCK_REC_NOT_GAP</span><br><span class="line">                : LOCK_ORDINARY;</span><br><span class="line"></span><br><span class="line"><span class="comment">/* We set a lock on the possible duplicate: this</span></span><br><span class="line"><span class="comment">is needed in logical logging of MySQL to make</span></span><br><span class="line"><span class="comment">sure that in roll-forward we get the same duplicate</span></span><br><span class="line"><span class="comment">errors as in original execution */</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> (flags &amp; BTR_NO_LOCKING_FLAG) &#123;</span><br><span class="line">  <span class="comment">/* Do nothing if no-locking is set */</span></span><br><span class="line">  err = DB_SUCCESS;</span><br><span class="line">&#125; <span class="keyword">else</span> <span class="keyword">if</span> (trx-&gt;duplicates) &#123;</span><br><span class="line">  <span class="comment">/* If the SQL-query will update or replace</span></span><br><span class="line"><span class="comment">  duplicate key we will take X-lock for</span></span><br><span class="line"><span class="comment">  duplicates ( REPLACE, LOAD DATAFILE REPLACE,</span></span><br><span class="line"><span class="comment">  INSERT ON DUPLICATE KEY UPDATE). */</span></span><br><span class="line"></span><br><span class="line">  err =</span><br><span class="line">      <span class="built_in">row_ins_set_exclusive_rec_lock</span>(lock_type, <span class="built_in">btr_cur_get_block</span>(cursor),</span><br><span class="line">                                     rec, cursor-&gt;index, offsets, thr);</span><br><span class="line">&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">  err = <span class="built_in">row_ins_set_shared_rec_lock</span>(lock_type, <span class="built_in">btr_cur_get_block</span>(cursor),</span><br><span class="line">                                    rec, cursor-&gt;index, offsets, thr);</span><br><span class="line">&#125;</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+<p>感觉和谓词锁有关，属于读写联合机制。</p>
+<h2 id="Not-in-this-article"><a href="#Not-in-this-article" class="headerlink" title="Not in this article"></a>Not in this article</h2><p>下篇文章这里需要介绍 InnoDB 的 8.0.18 新的死锁检测算法、调度，还有 8.0.21 的并发队列和锁拆分.</p>
+<h2 id="References"><a href="#References" class="headerlink" title="References"></a>References</h2><ul>
+<li><a target="_blank" rel="noopener" href="https://dev.mysql.com/doc/refman/8.0/en/internal-locking.html">https://dev.mysql.com/doc/refman/8.0/en/internal-locking.html</a></li>
+<li><a target="_blank" rel="noopener" href="https://dev.mysql.com/blog-archive/innodb-data-locking-part-2-locks/">https://dev.mysql.com/blog-archive/innodb-data-locking-part-2-locks/</a> 这一系列的文章</li>
+<li>InnoDB 事务锁源码分析 - 宋昭的文章 - 知乎 <a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/412358771">https://zhuanlan.zhihu.com/p/412358771</a></li>
+<li>MySQL 引擎特性-死锁检测 <a target="_blank" rel="noopener" href="http://mysql.taobao.org/monthly/2021/05/02/">http://mysql.taobao.org/monthly/2021/05/02/</a></li>
+<li>MySQL · 引擎特性 · InnoDB 事务锁系统简介 <a target="_blank" rel="noopener" href="http://mysql.taobao.org/monthly/2016/01/01/">http://mysql.taobao.org/monthly/2016/01/01/</a></li>
+</ul>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%A1%A8%E5%92%8C%E6%95%B0%E6%8D%AE%E9%94%81%E5%AE%9A"><span class="toc-number">1.</span> <span class="toc-text">表和数据锁定</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Record-Lock-amp-Gap"><span class="toc-number">1.1.</span> <span class="toc-text">Record Lock &amp; Gap</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Lock-Compression"><span class="toc-number">1.2.</span> <span class="toc-text">Lock Compression</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Implicit-Lock"><span class="toc-number">1.3.</span> <span class="toc-text">Implicit Lock</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Lock-Spliting"><span class="toc-number">1.4.</span> <span class="toc-text">Lock Spliting</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Btree-%E5%88%86%E8%A3%82%E5%92%8C%E9%94%81%E7%BB%A7%E6%89%BF"><span class="toc-number">1.5.</span> <span class="toc-text">Btree 分裂和锁继承</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Secondary-Index-amp-Implicit-Lock"><span class="toc-number">1.6.</span> <span class="toc-text">Secondary Index &amp; Implicit Lock</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%85%B3%E4%BA%8E-MVCC-read-view-%E5%92%8C%E9%94%81"><span class="toc-number">1.7.</span> <span class="toc-text">关于 MVCC, read_view 和锁</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%8F%92%E5%85%A5%E5%92%8C%E5%B7%B2%E7%BB%8F%E5%AD%98%E5%9C%A8%E7%9A%84%E8%AE%B0%E5%BD%95"><span class="toc-number">1.8.</span> <span class="toc-text">插入和已经存在的记录</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Not-in-this-article"><span class="toc-number">2.</span> <span class="toc-text">Not in this article</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#References"><span class="toc-number">3.</span> <span class="toc-text">References</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2023/03/25/InnoDB-Data-Locking/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2023/03/25/InnoDB-Data-Locking/&text=InnoDB Data Locking: Part 1"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2023/03/25/InnoDB-Data-Locking/&title=InnoDB Data Locking: Part 1"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2023/03/25/InnoDB-Data-Locking/&is_video=false&description=InnoDB Data Locking: Part 1"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=InnoDB Data Locking: Part 1&body=Check out this article: http://blog.mwish.me/2023/03/25/InnoDB-Data-Locking/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2023/03/25/InnoDB-Data-Locking/&title=InnoDB Data Locking: Part 1"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2023/03/25/InnoDB-Data-Locking/&title=InnoDB Data Locking: Part 1"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2023/03/25/InnoDB-Data-Locking/&title=InnoDB Data Locking: Part 1"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2023/03/25/InnoDB-Data-Locking/&title=InnoDB Data Locking: Part 1"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2023/03/25/InnoDB-Data-Locking/&name=InnoDB Data Locking: Part 1&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2023/03/25/InnoDB-Data-Locking/&t=InnoDB Data Locking: Part 1"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

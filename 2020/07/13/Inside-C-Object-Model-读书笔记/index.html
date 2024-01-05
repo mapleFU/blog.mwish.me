@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="Inside the C++ Object Model 读书笔记Object LessonsC++ 被称为 zero cost abstraction, 某种程度上，这代表着： 12345struct Point3D &amp;#123;	float x;	float y;	float z;&amp;#125; 和你傻傻的在程序里单独维护 x y z，空间等开销是没有额外增加的。当然 Point3D 是一个很 P">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Inside C++ Object Model 读书笔记">
+<meta property="og:url" content="http://blog.mwish.me/2020/07/13/Inside-C-Object-Model-%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="Inside the C++ Object Model 读书笔记Object LessonsC++ 被称为 zero cost abstraction, 某种程度上，这代表着： 12345struct Point3D &amp;#123;	float x;	float y;	float z;&amp;#125; 和你傻傻的在程序里单独维护 x y z，空间等开销是没有额外增加的。当然 Point3D 是一个很 P">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/418F4DC7-51DC-4C7F-8F26-A3FA24ABFDE5.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/4DD61565-8EBE-4F05-A11F-165A71DE0AFF.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/C4C279FD-5CD9-420C-896E-9B8E64E975A4.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/38D54D51-BC06-4ABA-82A7-AE7A677EC9F3.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/the-rule-of-five.png">
+<meta property="article:published_time" content="2020-07-12T17:09:39.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.569Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/418F4DC7-51DC-4C7F-8F26-A3FA24ABFDE5.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>Inside C++ Object Model 读书笔记</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2020/07/15/Inside-C-Object-Model-%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0-Part2/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2020/06/17/OS-%E5%92%8C-Virtual-Memory-RISC-V-%E8%A7%86%E8%A7%92/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/07/13/Inside-C-Object-Model-%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/07/13/Inside-C-Object-Model-%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0/&text=Inside C++ Object Model 读书笔记"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/07/13/Inside-C-Object-Model-%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0/&title=Inside C++ Object Model 读书笔记"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/07/13/Inside-C-Object-Model-%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0/&is_video=false&description=Inside C++ Object Model 读书笔记"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Inside C++ Object Model 读书笔记&body=Check out this article: http://blog.mwish.me/2020/07/13/Inside-C-Object-Model-%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/07/13/Inside-C-Object-Model-%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0/&title=Inside C++ Object Model 读书笔记"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/07/13/Inside-C-Object-Model-%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0/&title=Inside C++ Object Model 读书笔记"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/07/13/Inside-C-Object-Model-%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0/&title=Inside C++ Object Model 读书笔记"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/07/13/Inside-C-Object-Model-%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0/&title=Inside C++ Object Model 读书笔记"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/07/13/Inside-C-Object-Model-%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0/&name=Inside C++ Object Model 读书笔记&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/07/13/Inside-C-Object-Model-%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0/&t=Inside C++ Object Model 读书笔记"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#Inside-the-C-Object-Model-%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0"><span class="toc-number">1.</span> <span class="toc-text">Inside the C++ Object Model 读书笔记</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#Object-Lessons"><span class="toc-number">1.1.</span> <span class="toc-text">Object Lessons</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#C-Object-Model"><span class="toc-number">1.1.1.</span> <span class="toc-text">C++ Object Model</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AF%B9%E8%B1%A1%E6%A8%A1%E5%9E%8B%E5%AF%B9%E7%A8%8B%E5%BA%8F%E7%9A%84%E5%BD%B1%E5%93%8D"><span class="toc-number">1.1.2.</span> <span class="toc-text">对象模型对程序的影响</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%8C%87%E9%92%88%E7%9A%84%E7%B1%BB%E5%9E%8B"><span class="toc-number">1.1.3.</span> <span class="toc-text">指针的类型</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#The-Semantics-of-Constructors"><span class="toc-number">1.2.</span> <span class="toc-text">The Semantics of Constructors</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Default-Constructor"><span class="toc-number">1.2.1.</span> <span class="toc-text">Default Constructor</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%B8%A6-virtual-function-%E7%9A%84-class"><span class="toc-number">1.2.1.1.</span> <span class="toc-text">带 virtual function 的 class</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Copy-Constructor"><span class="toc-number">1.2.2.</span> <span class="toc-text">Copy Constructor</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%B9%B3%E5%87%A1%E5%A4%8D%E5%88%B6%E6%9E%84%E9%80%A0%E5%87%BD%E6%95%B0"><span class="toc-number">1.2.3.</span> <span class="toc-text">平凡复制构造函数</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#vptr-%E4%B8%8E%E8%A1%8C%E4%B8%BA"><span class="toc-number">1.2.3.1.</span> <span class="toc-text">vptr 与行为</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%A8%8B%E5%BA%8F%E8%AF%AD%E4%B9%89%E8%BD%AC%E6%8D%A2"><span class="toc-number">1.2.4.</span> <span class="toc-text">程序语义转换</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#member-initialization-list"><span class="toc-number">1.2.5.</span> <span class="toc-text">member initialization list</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Data-%E7%9A%84%E8%AF%AD%E4%B9%89"><span class="toc-number">1.3.</span> <span class="toc-text">Data 的语义</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Data-Member-Layout"><span class="toc-number">1.3.1.</span> <span class="toc-text">Data Member Layout</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#static-member-and-name-mangling"><span class="toc-number">1.3.2.</span> <span class="toc-text">static member and name-mangling</span></a></li></ol></li></ol></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Inside C++ Object Model 读书笔记
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2020-07-12T17:09:39.000Z" itemprop="datePublished">2020-07-13</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <h1 id="Inside-the-C-Object-Model-读书笔记"><a href="#Inside-the-C-Object-Model-读书笔记" class="headerlink" title="Inside the C++ Object Model 读书笔记"></a>Inside the C++ Object Model 读书笔记</h1><h2 id="Object-Lessons"><a href="#Object-Lessons" class="headerlink" title="Object Lessons"></a>Object Lessons</h2><p>C++ 被称为 <code>zero cost abstraction</code>, 某种程度上，这代表着：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">struct</span> <span class="title class_">Point3D</span> &#123;</span><br><span class="line">	<span class="type">float</span> x;</span><br><span class="line">	<span class="type">float</span> y;</span><br><span class="line">	<span class="type">float</span> z;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>和你傻傻的在程序里单独维护 <code>x y z</code>，空间等开销是没有额外增加的。当然 <code>Point3D</code> 是一个很 Plain 的类。实现的时候，可能会有：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">struct</span> <span class="title class_">Point3D</span> &#123;</span><br><span class="line">	<span class="built_in">Point3D</span>(<span class="type">float</span> x, <span class="type">float</span> y, <span class="type">float</span> z): <span class="built_in">x_</span>(x) </span><br><span class="line">	...</span><br><span class="line"><span class="keyword">private</span>:</span><br><span class="line">	<span class="type">float</span> x_;</span><br><span class="line">	<span class="type">float</span> y_;</span><br><span class="line">	<span class="type">float</span> z_;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>或者：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">class</span> <span class="title class_">Point3D</span>: Point2D &#123;</span><br><span class="line"><span class="keyword">private</span>:</span><br><span class="line">	<span class="type">float</span> z_;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>甚至带上泛型</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">template</span>&lt;<span class="keyword">typename</span> <span class="type">edge_t</span>&gt;</span><br><span class="line"><span class="keyword">class</span> <span class="title class_">Point3D</span> &#123;</span><br><span class="line">	<span class="type">edge_t</span> x, y, z;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">template</span>&lt;<span class="keyword">typename</span> <span class="type">edge_t</span>, <span class="type">int</span> dim&gt;</span><br><span class="line"><span class="keyword">class</span> <span class="title class_">Point3D</span> &#123;</span><br><span class="line">	<span class="type">edge_t</span>[dim] edges_;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>下意识我们会觉得，运行时这些类的布局成本都是一样的。实际上，C++ 在 layout（空间）和 load/store （时间等）伤的成本是 <code>virtual</code> 引起的：</p>
+<ul>
+<li>Virtual function: 支持高效的运行期多态</li>
+<li>virtual base class (这个笔者之前用的很少，可能不太了解)：被棱型等方式继承的 base class.</li>
+</ul>
+<h3 id="C-Object-Model"><a href="#C-Object-Model" class="headerlink" title="C++ Object Model"></a>C++ Object Model</h3><p>这本书的内容比较老，无法保证和最新的 clang/gcc/msvc 实现一样，不过它介绍的一些模型还是值得看的，姑且把它这个推导过程 copy 一下。</p>
+<p>第一个介绍的模型是：</p>
+<p><img src="https://image.mwish.me/blog-image/418F4DC7-51DC-4C7F-8F26-A3FA24ABFDE5.png" alt="418F4DC7-51DC-4C7F-8F26-A3FA24ABFDE5"></p>
+<p>这个针对每个函数和成员都生成了对应的 Pointer/ 对应内存位置。所有的指向都是间接的，函数也有对应的指针。</p>
+<p>书上写的第二个对象模型分为了函数的 table 和成员的 table，布局如下：</p>
+<p><img src="https://image.mwish.me/blog-image/4DD61565-8EBE-4F05-A11F-165A71DE0AFF.png" alt="4DD61565-8EBE-4F05-A11F-165A71DE0AFF"></p>
+<p>这本书上最后介绍了当时 C++ 的 object model：</p>
+<ol>
+<li>如图 <code>1.2</code>. 产生指向虚函数的指针，成为 virtual table (vtbl). <code>vtbl</code> 是以类为单位生成的。同时，一个动态的 <code>type_info</code> 也被生成，可以用于动态的 RTTI。</li>
+<li>每个有 <code>virtual</code> 的类的<em>对象</em> 生成指向类的 <code>vtbl</code> 的指针 <code>vptr</code>.</li>
+</ol>
+<p>对于 virtual 继承，本书提供了两种方案：</p>
+<ul>
+<li>子类的对象留出一定的内存位置，指向 base class 的地址</li>
+<li>生成一个 base class table</li>
+</ul>
+<p>下图是逻辑上的模型。</p>
+<p><img src="https://image.mwish.me/blog-image/C4C279FD-5CD9-420C-896E-9B8E64E975A4.png" alt="C4C279FD-5CD9-420C-896E-9B8E64E975A4"></p>
+<p>这样引入了一定的间接性质（有点像 Python MRO 那套？）</p>
+<h3 id="对象模型对程序的影响"><a href="#对象模型对程序的影响" class="headerlink" title="对象模型对程序的影响"></a>对象模型对程序的影响</h3><p>首先，对象模型会影响你需要重新编译、链接的东西，决定编译器会怎么生成对 vtbl 等操作。</p>
+<p>此外，这本书里提到了<code>The Politically Correct Struct</code>:</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">struct</span> <span class="title class_">BPlusTree</span> &#123;</span><br><span class="line">	<span class="comment">// ... 成员信息</span></span><br><span class="line">	BTreeIndex index[];</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">mumble</span> &#123;</span><br><span class="line">  <span class="type">char</span> index[<span class="number">1</span>];</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>C 这样让 <code>Index</code> 和 <code>BPlusTree</code> 一起布局。在 C++ 中，你要注意：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">struct</span> <span class="title class_">BPlusTree</span> &#123;</span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line"></span><br><span class="line"><span class="keyword">private</span>:</span><br><span class="line">...</span><br><span class="line">	BTreeIndex index[];</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">stumble</span> &#123;</span><br><span class="line">  <span class="comment">//...</span></span><br><span class="line">    <span class="type">char</span> index[<span class="number">1</span>];</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这种情况下是否 不同<code>section</code> 中，<code>index</code> 还会出现在结构的尾部。</p>
+<p>同时，你注意到了可能存在的不同布局和 ABI，为了 C/C++ 兼容（这是个很常见的需求），你可能要：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">extern &quot;C&quot; &#123;</span><br><span class="line">	// ... 写你封装的东西</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>考此来提供一定的保证（组合/继承？）</p>
+<h3 id="指针的类型"><a href="#指针的类型" class="headerlink" title="指针的类型"></a>指针的类型</h3><p>一些语言中会有 fat pointer 的存在，比如 Rust 的 <code>Box&lt;dyn Trait&gt;</code>, 这让这些指针有更多的信息。</p>
+<p>C++ 只靠指针类型编译时的信息来决定，指针都是一个 <code>word</code> 的大小，具体可以参考这个回答：</p>
+<blockquote>
+<p> Golang和Rust的胖指针与C++的指针指向虚表哪种设计更好? - F001的回答 - 知乎 <a target="_blank" rel="noopener" href="https://www.zhihu.com/question/340855881/answer/791076420">https://www.zhihu.com/question/340855881/answer/791076420</a></p>
+</blockquote>
+<p><img src="https://image.mwish.me/blog-image/38D54D51-BC06-4ABA-82A7-AE7A677EC9F3.png" alt="38D54D51-BC06-4ABA-82A7-AE7A677EC9F3"></p>
+<h2 id="The-Semantics-of-Constructors"><a href="#The-Semantics-of-Constructors" class="headerlink" title="The Semantics of Constructors"></a>The Semantics of Constructors</h2><p>我不怎么会写 C++，但是我心目中，C++ 最重要的概念绝对包含 RAII。</p>
+<p><img src="https://image.mwish.me/blog-image/the-rule-of-five.png" alt="the rule of five"></p>
+<p>同时，这里会涉及一些 RVO/NRVO 之类的优化：</p>
+<p><a href="[https://github.com/mapleFU/CppCoreGuidelines-zh-CN/blob/master/CppCoreGuidelines-zh-CN.md#p9-%E4%B8%8D%E8%A6%81%E6%B5%AA%E8%B4%B9%E6%97%B6%E9%97%B4%E6%88%96%E7%A9%BA%E9%97%B4](https://github.com/mapleFU/CppCoreGuidelines-zh-CN/blob/master/CppCoreGuidelines-zh-CN.md#p9-不要浪费时间或空间">一个不保证 NRVO 的例子</a>)</p>
+<h3 id="Default-Constructor"><a href="#Default-Constructor" class="headerlink" title="Default Constructor"></a>Default Constructor</h3><p><a target="_blank" rel="noopener" href="https://zh.cppreference.com/w/cpp/language/default_constructor">cppreference</a> 介绍了它生成的条件。</p>
+<p>default constructor 在默认的时候生成. 但它不会做多余的事：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">class</span> <span class="title class_">ListNode</span> &#123;</span><br><span class="line">	ListNode* prev;</span><br><span class="line">	<span class="type">int</span> value;</span><br><span class="line">&#125;</span><br><span class="line"><span class="comment">// ...</span></span><br><span class="line">ListNode v;</span><br></pre></td></tr></table></figure>
+<p>创建 <code>v</code> 的时候，<code>prev</code> <code>value</code> 不会在 default constructor 被初始化。这点是为了效率。</p>
+<p>这里可以联系上述 cppreference 中的概念：</p>
+<blockquote>
+<p>平凡默认构造函数是不进行任何动作的构造函数。所有与 C 语言兼容的数据类型（POD 类型）都是可平凡默认构造的。</p>
+</blockquote>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">class</span> <span class="title class_">ListNode</span> &#123;</span><br><span class="line">	ListNode* prev;</span><br><span class="line">	<span class="type">int</span> value;</span><br><span class="line">	<span class="type">another1_t</span> another1;</span><br><span class="line">  <span class="type">another2_t</span> another2;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>假设 <code>another1_t</code> <code>another2_t</code> 有自己的 default constructor, 那么 <code>ListNode</code> 构造的时候会<strong>按顺序</strong>调用这些必要的信息，可能会生成：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">ListNode::<span class="built_in">ListNode</span>() &#123;</span><br><span class="line">	<span class="type">another1_t</span>::<span class="built_in">another1_t</span>();</span><br><span class="line">	<span class="type">another2_t</span>::<span class="built_in">another2_t</span>();</span><br><span class="line">	</span><br><span class="line">	<span class="comment">// ... your default code...</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>类似上面的<em>顺序</em>。</p>
+<h4 id="带-virtual-function-的-class"><a href="#带-virtual-function-的-class" class="headerlink" title="带 virtual function 的 class"></a>带 virtual function 的 class</h4><p>编译器需要生成一个 <code>vptr</code> ，同时指向这个 class 的 <code>vtbl</code>.</p>
+<h3 id="Copy-Constructor"><a href="#Copy-Constructor" class="headerlink" title="Copy Constructor"></a>Copy Constructor</h3><p>传送门：<a target="_blank" rel="noopener" href="https://zh.cppreference.com/w/cpp/language/copy_constructor">https://zh.cppreference.com/w/cpp/language/copy_constructor</a></p>
+<p>小传送门：<a target="_blank" rel="noopener" href="https://zh.cppreference.com/w/cpp/language/copy_elision">https://zh.cppreference.com/w/cpp/language/copy_elision</a></p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">class</span> <span class="title class_">X</span> &#123;</span><br><span class="line">	<span class="built_in">X</span>(std::string name, ...): <span class="built_in">name_</span>(std::<span class="built_in">move</span>(name)) &#123;</span><br><span class="line">		<span class="comment">// ...</span></span><br><span class="line">	&#125;</span><br><span class="line"><span class="keyword">private</span>:</span><br><span class="line">	std::string name_;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>（不考虑这个愚蠢的类怎么改）显然这里如果传参的话，一定会走 <code>std::string</code> 的拷贝构造函数。</p>
+<p>在最原始的情况下，编译器会考虑 <code>bitwise copy semantics</code>，类似：</p>
+<blockquote>
+<h3 id="平凡复制构造函数"><a href="#平凡复制构造函数" class="headerlink" title="平凡复制构造函数"></a>平凡复制构造函数</h3><p>当下列各项全部为真时，类 <code>T</code> 的复制构造函数为平凡的：</p>
+<ul>
+<li>它不是用户提供的（即它是隐式定义或预置的），且若它被预置，则其签名与隐式定义的相同 (C++14 前)；</li>
+<li><code>T</code> 没有虚成员函数；</li>
+<li><code>T</code> 没有虚基类；</li>
+<li>为 <code>T</code> 的每个直接基类选择的复制构造函数都是平凡的；</li>
+<li>为 <code>T</code> 的每个类类型（或类类型数组）的非静态成员选择的复制构造函数都是平凡的；</li>
+</ul>
+<p>非联合类的平凡复制构造函数，效果为复制实参的每个标量子对象（递归地包含子对象的子对象，以此类推），且不进行其他动作。不过不需要复制填充字节，甚至只要其值相同，每个复制的子对象的对象表示也不必相同。</p>
+<p><a target="_blank" rel="noopener" href="https://zh.cppreference.com/w/cpp/named_req/TriviallyCopyable"><em>可平凡复制</em> <em>(TriviallyCopyable)</em> </a>对象，可以通过手动复制其对象表示来进行复制，例如用 <a target="_blank" rel="noopener" href="https://zh.cppreference.com/w/cpp/string/byte/memmove">std::memmove</a>。所有与 C 语言兼容的数据类型（POD 类型）均为可平凡复制的。</p>
+</blockquote>
+<p>当然，这不一定是用户需要的。讲一个最简单的例子：浅拷贝。下面这个例子你当然会考虑用 <code>unique_ptr</code> 之类的东西包住，但是就这么做示范的话，结果可能会很奇葩。</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">class</span> <span class="title class_">x</span> &#123;</span><br><span class="line"><span class="keyword">private</span>:</span><br><span class="line">	<span class="type">resource_t</span>* ptr_;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>不平凡的时候，调用也是逐个按顺序进行的。</p>
+<h4 id="vptr-与行为"><a href="#vptr-与行为" class="headerlink" title="vptr 与行为"></a>vptr 与行为</h4><p>假设类型有一个虚成员函数，那么它理应拥有一个 <code>vptr</code>, 根据 cppreference, 它不会拥有平凡复制构造函数，因为它要对 <code>vptr</code> 的复制产生合法的结果：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">class</span> <span class="title class_">ZooAnimal</span> &#123;</span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">	<span class="function"><span class="keyword">virtual</span> <span class="type">void</span> <span class="title">fn</span><span class="params">()</span> </span>&#123; <span class="comment">// ... &#125;</span></span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">class</span> <span class="title class_">Bear</span>: ZooAnimal &#123;</span><br><span class="line">	<span class="function"><span class="type">void</span> <span class="title">fn</span><span class="params">()</span> <span class="keyword">override</span> </span>&#123; <span class="comment">// ...&#125;</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">Bear b;</span><br><span class="line">ZooAnimal s = b;</span><br></pre></td></tr></table></figure>
+<h3 id="程序语义转换"><a href="#程序语义转换" class="headerlink" title="程序语义转换"></a>程序语义转换</h3><p>(感觉这一节比较像在介绍 RVO/NRVO/Copy Elision)</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://zh.cppreference.com/w/cpp/language/copy_elision">https://zh.cppreference.com/w/cpp/language/copy_elision</a></li>
+</ul>
+<p>上述地址介绍了所有相关的技术。注意 NRVO 不是强制的，所以 CppCoreGuidelines 有下列链接：</p>
+<p><a href="[https://github.com/mapleFU/CppCoreGuidelines-zh-CN/blob/master/CppCoreGuidelines-zh-CN.md#p9-%E4%B8%8D%E8%A6%81%E6%B5%AA%E8%B4%B9%E6%97%B6%E9%97%B4%E6%88%96%E7%A9%BA%E9%97%B4](https://github.com/mapleFU/CppCoreGuidelines-zh-CN/blob/master/CppCoreGuidelines-zh-CN.md#p9-不要浪费时间或空间">一个不保证 NRVO 的例子</a>)</p>
+<p>你可能防止默认的 move constructor 实现的话，如果 NRVO 不进行，优化的能力会减少。</p>
+<h3 id="member-initialization-list"><a href="#member-initialization-list" class="headerlink" title="member initialization list"></a>member initialization list</h3><p>list 中的初始化次序是 class 中的 member 声明顺序决定的。顺序 constructor, 逆序 destructor</p>
+<p>聪明的编译器应该能告诉你出了问题，所以别担心hhh。</p>
+<p>当然，如果你写出下面的代码，任何一本书都会阻止你：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">class</span> <span class="title class_">X</span> &#123;</span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">	<span class="built_in">X</span>(<span class="type">const</span> Y&amp; y) &#123;</span><br><span class="line">		y_ = y;</span><br><span class="line">	&#125;</span><br><span class="line"><span class="keyword">private</span>:</span><br><span class="line">	Y y_;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>编译器会把初始化插入在 explicit 的代码之前。</p>
+<h2 id="Data-的语义"><a href="#Data-的语义" class="headerlink" title="Data 的语义"></a>Data 的语义</h2><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">class</span> <span class="title class_">X</span> &#123;&#125;;</span><br><span class="line"><span class="keyword">class</span> <span class="title class_">Y</span>: <span class="keyword">public</span> <span class="keyword">virtual</span> X &#123;&#125;;</span><br><span class="line"><span class="keyword">class</span> <span class="title class_">Z</span>: <span class="keyword">public</span> <span class="keyword">virtual</span> X &#123;&#125;;</span><br><span class="line"><span class="keyword">class</span> <span class="title class_">A</span>: <span class="keyword">public</span> Y, <span class="keyword">public</span> Z &#123;&#125;;</span><br></pre></td></tr></table></figure>
+<p>哦，还有一个很好玩的：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">class</span> <span class="title class_">H</span> &#123;</span><br><span class="line">	<span class="type">int</span> s[];</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>下面让我们来看看对它们进行 <code>sizeof</code> 的结果。</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//</span></span><br><span class="line"><span class="comment">// Created by mwish on 2020/7/14.</span></span><br><span class="line"><span class="comment">//</span></span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;iostream&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">X</span> &#123;&#125;;</span><br><span class="line"><span class="keyword">class</span> <span class="title class_">DerivedX</span>: <span class="keyword">public</span> X &#123;&#125;;</span><br><span class="line"><span class="keyword">class</span> <span class="title class_">Y</span>: <span class="keyword">public</span> <span class="keyword">virtual</span> X &#123;&#125;;</span><br><span class="line"><span class="keyword">class</span> <span class="title class_">Z</span>: <span class="keyword">public</span> <span class="keyword">virtual</span> X &#123;&#125;;</span><br><span class="line"><span class="keyword">class</span> <span class="title class_">A</span>: <span class="keyword">public</span> Y, <span class="keyword">public</span> Z &#123;&#125;;</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">H</span> &#123;</span><br><span class="line">    <span class="type">int</span> s[];</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T&gt;</span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">print_t_size</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    std::cout &lt;&lt; __PRETTY_FUNCTION__ &lt;&lt; <span class="string">&quot;:&quot;</span> &lt;&lt; <span class="built_in">sizeof</span>(T) &lt;&lt; <span class="string">&#x27;\n&#x27;</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="built_in">print_t_size</span>&lt;X&gt;();</span><br><span class="line">    <span class="built_in">print_t_size</span>&lt;DerivedX&gt;();</span><br><span class="line">    <span class="built_in">print_t_size</span>&lt;Y&gt;();</span><br><span class="line">    <span class="built_in">print_t_size</span>&lt;Z&gt;();</span><br><span class="line">    <span class="built_in">print_t_size</span>&lt;A&gt;();</span><br><span class="line"></span><br><span class="line">    <span class="built_in">print_t_size</span>&lt;H&gt;();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>输出：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">void print_t_size() [T = X]:1</span><br><span class="line">void print_t_size() [T = DerivedX]:1</span><br><span class="line">void print_t_size() [T = Y]:8</span><br><span class="line">void print_t_size() [T = Z]:8</span><br><span class="line">void print_t_size() [T = A]:16</span><br><span class="line">void print_t_size() [T = H]:0</span><br></pre></td></tr></table></figure>
+<p>实际上，可以考虑看看 ebo: <a target="_blank" rel="noopener" href="https://zh.cppreference.com/w/cpp/language/ebo">https://zh.cppreference.com/w/cpp/language/ebo</a></p>
+<blockquote>
+<p>为保证同一类型的不同对象地址始终有别，要求任何<a target="_blank" rel="noopener" href="https://zh.cppreference.com/w/cpp/language/object">对象</a>或成员子对象（除非为 [[no_unique_address]] ——见下文） (C++20 起)的大小至少为 1，即使该类型是空的<a target="_blank" rel="noopener" href="https://zh.cppreference.com/w/cpp/language/class">类类型</a>（即没有非静态数据成员的 class 或 struct）也是如此。</p>
+</blockquote>
+<p>（也可以看看这个 FAQ: <a target="_blank" rel="noopener" href="https://isocpp.org/wiki/faq/classes-and-objects#sizeof-empty）">https://isocpp.org/wiki/faq/classes-and-objects#sizeof-empty）</a></p>
+<p>所以 <code>static_assert(sizeof(X) &gt;= 1)</code> 必定是成立的。</p>
+<p>一个对象的大小额外开销（相对于C语言那样朴素的布局）在于：</p>
+<ul>
+<li>语言 <code>virtual base class</code> 和 <code>virtual</code> 的额外负担。关于这个还可以阅读：<a target="_blank" rel="noopener" href="https://zh.cppreference.com/w/cpp/named_req/StandardLayoutType">https://zh.cppreference.com/w/cpp/named_req/StandardLayoutType</a></li>
+<li>编译器的一些特殊处理，例如下列提到的<em>空基类优化</em></li>
+<li>Alignment: 这里介绍的比较好的是 wiki 的。</li>
+</ul>
+<p>这里继续说一下 ebo, 定义一下：</p>
+<blockquote>
+<p>若空基类之一亦为首个非静态数据成员的类型或其类型的基类，则禁用空基优化，因为要求两个同类型基类子对象在最终派生类型的对象表示中必须拥有不同地址。</p>
+</blockquote>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">class</span> <span class="title class_">Compond2X</span> &#123;</span><br><span class="line">    X x_;</span><br><span class="line">    <span class="type">uint32_t</span> value;</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span>  <span class="title class_">Derived3X</span>: <span class="keyword">public</span> X &#123;</span><br><span class="line">    X x_;</span><br><span class="line">    <span class="type">uint32_t</span> value;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>输出：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// void print_t_size() [T = Derived2X]:4</span></span><br><span class="line"><span class="comment">// 应用了空基类优化</span></span><br><span class="line"><span class="built_in">print_t_size</span>&lt;Derived2X&gt;();</span><br><span class="line"><span class="comment">// 8</span></span><br><span class="line"><span class="built_in">print_t_size</span>&lt;Compond2X&gt;();</span><br><span class="line"><span class="comment">// 8</span></span><br><span class="line"><span class="built_in">print_t_size</span>&lt;Derived3X&gt;();</span><br></pre></td></tr></table></figure>
+<p>书上 3.1 节介绍了类和名称查找相关的信息，感觉书上写的一般，我也没看太懂，就不贴了。</p>
+<h3 id="Data-Member-Layout"><a href="#Data-Member-Layout" class="headerlink" title="Data Member Layout"></a>Data Member Layout</h3><p>当你 <code>repr(C)</code> 的时候，对象都是按顺序布局的，C++ 一定程度上有这个保证——只对同样访问权限的对象而言。</p>
+<p>具体我找到了这个链接：<a target="_blank" rel="noopener" href="https://stackoverflow.com/questions/36149462/does-public-and-private-have-any-influence-on-the-memory-layout-of-an-object">https://stackoverflow.com/questions/36149462/does-public-and-private-have-any-influence-on-the-memory-layout-of-an-object</a></p>
+<p>只能说如果你有依赖这样语义的操作，记得 <code>static_assert</code>.</p>
+<p>而 <code>static member</code> 并不是对象的一部分，不参与对象的布局。</p>
+<h3 id="static-member-and-name-mangling"><a href="#static-member-and-name-mangling" class="headerlink" title="static member and name-mangling"></a>static member and name-mangling</h3><ul>
+<li><a target="_blank" rel="noopener" href="https://en.cppreference.com/w/cpp/language/identifiers">https://en.cppreference.com/w/cpp/language/identifiers</a></li>
+<li><a target="_blank" rel="noopener" href="https://en.cppreference.com/w/cpp/language/language_linkage">https://en.cppreference.com/w/cpp/language/language_linkage</a></li>
+</ul>
+<p>你要是 g++/clang++ 编译过 C++ 代码大概就会知道的…</p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#Inside-the-C-Object-Model-%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0"><span class="toc-number">1.</span> <span class="toc-text">Inside the C++ Object Model 读书笔记</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#Object-Lessons"><span class="toc-number">1.1.</span> <span class="toc-text">Object Lessons</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#C-Object-Model"><span class="toc-number">1.1.1.</span> <span class="toc-text">C++ Object Model</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AF%B9%E8%B1%A1%E6%A8%A1%E5%9E%8B%E5%AF%B9%E7%A8%8B%E5%BA%8F%E7%9A%84%E5%BD%B1%E5%93%8D"><span class="toc-number">1.1.2.</span> <span class="toc-text">对象模型对程序的影响</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%8C%87%E9%92%88%E7%9A%84%E7%B1%BB%E5%9E%8B"><span class="toc-number">1.1.3.</span> <span class="toc-text">指针的类型</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#The-Semantics-of-Constructors"><span class="toc-number">1.2.</span> <span class="toc-text">The Semantics of Constructors</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Default-Constructor"><span class="toc-number">1.2.1.</span> <span class="toc-text">Default Constructor</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%B8%A6-virtual-function-%E7%9A%84-class"><span class="toc-number">1.2.1.1.</span> <span class="toc-text">带 virtual function 的 class</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Copy-Constructor"><span class="toc-number">1.2.2.</span> <span class="toc-text">Copy Constructor</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%B9%B3%E5%87%A1%E5%A4%8D%E5%88%B6%E6%9E%84%E9%80%A0%E5%87%BD%E6%95%B0"><span class="toc-number">1.2.3.</span> <span class="toc-text">平凡复制构造函数</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#vptr-%E4%B8%8E%E8%A1%8C%E4%B8%BA"><span class="toc-number">1.2.3.1.</span> <span class="toc-text">vptr 与行为</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%A8%8B%E5%BA%8F%E8%AF%AD%E4%B9%89%E8%BD%AC%E6%8D%A2"><span class="toc-number">1.2.4.</span> <span class="toc-text">程序语义转换</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#member-initialization-list"><span class="toc-number">1.2.5.</span> <span class="toc-text">member initialization list</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Data-%E7%9A%84%E8%AF%AD%E4%B9%89"><span class="toc-number">1.3.</span> <span class="toc-text">Data 的语义</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Data-Member-Layout"><span class="toc-number">1.3.1.</span> <span class="toc-text">Data Member Layout</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#static-member-and-name-mangling"><span class="toc-number">1.3.2.</span> <span class="toc-text">static member and name-mangling</span></a></li></ol></li></ol></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/07/13/Inside-C-Object-Model-%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/07/13/Inside-C-Object-Model-%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0/&text=Inside C++ Object Model 读书笔记"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/07/13/Inside-C-Object-Model-%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0/&title=Inside C++ Object Model 读书笔记"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/07/13/Inside-C-Object-Model-%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0/&is_video=false&description=Inside C++ Object Model 读书笔记"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Inside C++ Object Model 读书笔记&body=Check out this article: http://blog.mwish.me/2020/07/13/Inside-C-Object-Model-%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/07/13/Inside-C-Object-Model-%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0/&title=Inside C++ Object Model 读书笔记"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/07/13/Inside-C-Object-Model-%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0/&title=Inside C++ Object Model 读书笔记"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/07/13/Inside-C-Object-Model-%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0/&title=Inside C++ Object Model 读书笔记"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/07/13/Inside-C-Object-Model-%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0/&title=Inside C++ Object Model 读书笔记"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/07/13/Inside-C-Object-Model-%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0/&name=Inside C++ Object Model 读书笔记&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/07/13/Inside-C-Object-Model-%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0/&t=Inside C++ Object Model 读书笔记"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

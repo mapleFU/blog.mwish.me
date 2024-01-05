@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="What’s the Difference? Incremental Processing with Change Queries in Snowflake 是发表在 SIGMOD’23 上的论文。描述了 Snowflake 内部的增量计算场景。这个部分有点类似 Streaming 或者说什么，Snowflake 可以在表或者 MV 的对象上开启 STREAM， Stream 内会包含 Snowf">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Snowflake: Streaming and Change in Table">
+<meta property="og:url" content="http://blog.mwish.me/2023/06/22/Snowflake-Streaming-and-Change-in-Table/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="What’s the Difference? Incremental Processing with Change Queries in Snowflake 是发表在 SIGMOD’23 上的论文。描述了 Snowflake 内部的增量计算场景。这个部分有点类似 Streaming 或者说什么，Snowflake 可以在表或者 MV 的对象上开启 STREAM， Stream 内会包含 Snowf">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/2034055683243599966.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/2295336572436247647.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/2778464309866266745.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/1456419358256344730.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/6727086490095305434.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/3745451790993126611.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/1947515212853200859.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/644682537778375200.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/2376649931720618126.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/3032945505873821696.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/8580455075483302732.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/2504297451855509654.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/7468682257460978131.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/1423177542917606780.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/4745081897764211093.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/3412166040666676318.png">
+<meta property="article:published_time" content="2023-06-22T14:30:00.000Z">
+<meta property="article:modified_time" content="2023-06-22T14:23:51.423Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/2034055683243599966.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>Snowflake: Streaming and Change in Table</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2023/07/01/schedule-Mesos-and-Yarn/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2023/06/21/Spark-RDD-design/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2023/06/22/Snowflake-Streaming-and-Change-in-Table/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2023/06/22/Snowflake-Streaming-and-Change-in-Table/&text=Snowflake: Streaming and Change in Table"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2023/06/22/Snowflake-Streaming-and-Change-in-Table/&title=Snowflake: Streaming and Change in Table"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2023/06/22/Snowflake-Streaming-and-Change-in-Table/&is_video=false&description=Snowflake: Streaming and Change in Table"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Snowflake: Streaming and Change in Table&body=Check out this article: http://blog.mwish.me/2023/06/22/Snowflake-Streaming-and-Change-in-Table/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2023/06/22/Snowflake-Streaming-and-Change-in-Table/&title=Snowflake: Streaming and Change in Table"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2023/06/22/Snowflake-Streaming-and-Change-in-Table/&title=Snowflake: Streaming and Change in Table"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2023/06/22/Snowflake-Streaming-and-Change-in-Table/&title=Snowflake: Streaming and Change in Table"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2023/06/22/Snowflake-Streaming-and-Change-in-Table/&title=Snowflake: Streaming and Change in Table"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2023/06/22/Snowflake-Streaming-and-Change-in-Table/&name=Snowflake: Streaming and Change in Table&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2023/06/22/Snowflake-Streaming-and-Change-in-Table/&t=Snowflake: Streaming and Change in Table"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Semantics"><span class="toc-number">1.</span> <span class="toc-text">Semantics</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#CHANGES-quries"><span class="toc-number">1.1.</span> <span class="toc-text">CHANGES quries</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#CHANGES-queries-on-Views"><span class="toc-number">1.2.</span> <span class="toc-text">CHANGES queries on Views</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#STREAM-Objects"><span class="toc-number">1.3.</span> <span class="toc-text">STREAM Objects</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Implementation"><span class="toc-number">2.</span> <span class="toc-text">Implementation</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Table-Metadata"><span class="toc-number">2.1.</span> <span class="toc-text">Table Metadata</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Query-Differentiation"><span class="toc-number">2.2.</span> <span class="toc-text">Query Differentiation</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%9F%A5%E8%AF%A2%E7%9A%84%E6%A8%A1%E5%9E%8B"><span class="toc-number">2.2.1.</span> <span class="toc-text">查询的模型</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Change-Tracking"><span class="toc-number">2.2.2.</span> <span class="toc-text">Change Tracking</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Stream-Transactions"><span class="toc-number">2.3.</span> <span class="toc-text">Stream Transactions</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#USAGE-AND-PERFORMANCE-ANALYSIS"><span class="toc-number">3.</span> <span class="toc-text">USAGE AND PERFORMANCE ANALYSIS</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%89%B9%E8%AF%9D%E7%8E%AF%E8%8A%82"><span class="toc-number">4.</span> <span class="toc-text">批话环节</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Snowflake: Streaming and Change in Table
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2023-06-22T14:30:00.000Z" itemprop="datePublished">2023-06-22</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>What’s the Difference? Incremental Processing with Change Queries in Snowflake 是发表在 SIGMOD’23 上的论文。描述了 Snowflake 内部的增量计算场景。这个部分有点类似 Streaming 或者说什么，Snowflake 可以在表或者 MV 的对象上开启 <code>STREAM</code>， Stream 内会包含 Snowflake 产生的类似 CDC 的数据 <code>CHANGES</code>，然后，Snowflake 本身能够根据 Time Travel 的功能来跑出 <code>STREAM</code> 上的 <code>CHANGES</code>，下游会消费这个 <code>CHANGES</code>，来用增量构建 diff。Snowflake 声称这套代码已经跑三年了，另外，这套论文的第一作者是 MillWheel 的作者。什么刘式家族。</p>
+<p>Streaming System 和 Batch 的大乱斗有悠久的历史了，作者认为这其中的区别在于：</p>
+<ul>
+<li>Batch 需要处理整套输入来产生输出</li>
+<li><p>Streaming 处理的是「增量」</p>
+<p>* 可能会做一个 Partition，单个 key 的处理在 Partition 内是按行操作、序列化的</p>
+</li>
+</ul>
+<p>Snowflake 做了下面的概念区分：</p>
+<ul>
+<li>Tables: 每个时间点内，表的完整状态</li>
+<li>Stream: changes to a dataset over time, 表示 Tables 上发生的「变更」（类似 Redo Log 流？但是是更上层的概念）</li>
+</ul>
+<p>Snowflake 倾向于「用户可以直接查询 CHANGES」的方式，并且认为有这样的 Usecases:</p>
+<ul>
+<li>Event Queuing: 给 SQL 一个 message queue 的语义</li>
+<li>Notifications: 论文认为消费 <code>CHANGES</code> 表，相对来说资源开销会小很多</li>
+<li><strong>Incremental View Maintenance(IVM)</strong>: 给上层实现增量 MV 维护提供比较好的工具</li>
+<li>Flexible Change transformation: 消费 CHANGES 的时候，有的用户只关注一部分，并且这种 CHANGES 走 SQL 的话也算有优势</li>
+</ul>
+<p>Snowflake 提供了下面的语义：</p>
+<ul>
+<li>CHANGES：对表或者增量 mv 的变更</li>
+<li>STREAM: 对表或者增量 mv 的变更流，包含很多 CHANGES 和时间戳，需要消费来推进。</li>
+</ul>
+<h2 id="Semantics"><a href="#Semantics" class="headerlink" title="Semantics"></a>Semantics</h2><p>Snowflake 把表构建为一个 TVR 模型(time-varying relations), 并构建了一个 Table + Redo Log 的模型，<strong>来捕获 SQL 中发生的 INSERT, UPDATE, DELETE 操作</strong>。在这里，Snowflake 先抽象成了 Delete + Insert 的模型。下面是论文中用到的 SQL 和时序，后面会不断回来看这个的：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="number">12</span>:<span class="number">00</span>&gt; SELECT * FROM people;</span><br><span class="line">+----+-------+</span><br><span class="line">| id | name  |</span><br><span class="line">+----+-------+</span><br><span class="line">| <span class="number">1</span>  | Jeff  | </span><br><span class="line">| <span class="number">2</span>  | Donny |</span><br><span class="line">+----+-------+</span><br><span class="line"></span><br><span class="line">(Listing <span class="number">1</span>. Example table with two rows)</span><br></pre></td></tr></table></figure>
+<p>下面是论文中的操作序列：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="number">12</span>:<span class="number">01</span>&gt; INSERT INTO people <span class="title function_ invoke__">VALUES</span> (<span class="number">3</span>, <span class="symbol">&#x27;Walter</span>&#x27;), (<span class="number">4</span>, <span class="symbol">&#x27;Maud</span>&#x27;), (<span class="number">5</span>, <span class="symbol">&#x27;Uli</span>&#x27;);</span><br><span class="line"></span><br><span class="line"><span class="number">12</span>:<span class="number">02</span> &gt; UPDATE people SET name = <span class="symbol">&#x27;Jeffrey</span> &#x27; WHERE id = <span class="number">1</span>; </span><br><span class="line"><span class="number">12</span>:<span class="number">03</span> &gt; UPDATE people SET name = <span class="symbol">&#x27;Maude</span> &#x27; WHERE id = <span class="number">4</span>;</span><br><span class="line"><span class="number">12</span>:<span class="number">04</span> &gt; DELETE FROM people WHERE id <span class="title function_ invoke__">in</span> (<span class="number">2</span>, <span class="number">5</span>); </span><br><span class="line"></span><br><span class="line">(Listing <span class="number">2</span>. Mutations to the table from Listing <span class="number">1</span>)</span><br></pre></td></tr></table></figure>
+<p>查询结果是：</p>
+<p><img src="https://image.mwish.me/blog-image/2034055683243599966.png" alt="img"></p>
+<p>那么，这里逻辑上的 Redo Log 如下所示（这并不代表最终产生的 CHANGES）：</p>
+<p><img src="https://image.mwish.me/blog-image/2295336572436247647.png" alt="img"></p>
+<p>这种抽象对 Table 或者 MV 都有用，还是比较通用的，当然这里可能是说，<strong>需要在删除和插入的时候都带上完整的行记录</strong>，对于宽表来说还是有点大的。不过这年头我还是觉得简单就是好，大力出奇迹就行，优化什么的等客户有需求再说吧。</p>
+<h3 id="CHANGES-quries"><a href="#CHANGES-quries" class="headerlink" title="CHANGES quries"></a>CHANGES quries</h3><p>CHANGES query 是 snowflake 的一种查询 CHANGES 的查询，支持 SQL。Snowflake 早就支持了 Time Travel，用户可以指定 START 和 END 的时间戳，如果不指定 END 就是查询 START 到现在的数据，当然，除了时间戳，用户还可以使用 <code>STREAM</code> 对象来查询。</p>
+<p>如之前 Listing 3 所描述的，在 CHANGES 查询的结果中，有一些 metadata columns：</p>
+<ul>
+<li><code>$ACTION</code>: CHANGES 是 INSERT 还是 DELETE</li>
+<li><code>$ISUPDATE</code>: 对于 UPDATE，它在 CHANGES 中会变成 INSERT + DELETE. 在这种场景下 <code>$ISUPDATE = true</code></li>
+<li><code>$ROW_ID</code>: 这个就非常有意思了。表示 Row 的 Unique Id，后面会介绍这个字段是怎么构成的</li>
+</ul>
+<p>其实 (1) (3) 还比较好理解（但是需要细分一下 ROW_ID 是怎么构成的），此外 Snowflake 还支持查询 <code>INFORMATION</code>，表示 <code>CHANGES</code> 的元信息。下面介绍 Snowflake 的区分处理方式，Snowflake 目前支持两种 CHANGES 格式，这里都可以表示为类似 Redo Log 的形式：</p>
+<ul>
+<li>Append Only: 表示<strong>数据第一次插入表</strong>的日志，可能来自 INSERT, Merge, COPY 或者 Snowpipe(file-based) / Snowpipe Streaming(row-based)。UPDATE/Truncate/Delete 其实在这里都不会被记录。下面展示了在 Snowflake 查询 Listing 2 的 APPEND_ONLY 数据</li>
+</ul>
+<p><img src="https://image.mwish.me/blog-image/2778464309866266745.png" alt="img"></p>
+<ul>
+<li>Minimum-delta: <strong>在指定的时间段或者 STREAM 变更内</strong>的 INSERT/UPDATE/DELETE等写 操作<strong>最小DELETE/INSERT集合</strong>（即合并重复操作）。这种操作相对于物理变化其实好处比较多，比方说用户跑了个 Merge 请求或者内部跑了个 Compaction，你 dedup 一下用户/下游幸福多了。</li>
+</ul>
+<p><img src="https://image.mwish.me/blog-image/1456419358256344730.png" alt="img"></p>
+<p>这里可以对比 Listing 3，可以看到对 id 4 的重复操作都被折叠掉了，对同一个对象( id 5 )的 INSERT - DELETE 也没了（可以拉上去对比一下）。</p>
+<p>在这里，Snowflake 做了个比较有意思的评论：在审计场景中，所有记录都要是可见而不能被折叠，不过目前大部分用户觉得凑合着用就行，之后可能会把所有 CHANGES 都暴露出去。</p>
+<p>这里有个问题是，delta 信息可能比 Insert 全一些，为啥还需要 minimum-delta </p>
+<h3 id="CHANGES-queries-on-Views"><a href="#CHANGES-queries-on-Views" class="headerlink" title="CHANGES queries on Views"></a>CHANGES queries on Views</h3><p>之前例子中的 CHANGES 都是对表的，下面有一个比较恶心的：对 View 的 CHANGES.</p>
+<ul>
+<li>Append-only CHANGES<ul>
+<li>Monotonicity: 这里定义了 Monotonicity, 即插入一条数据是否保证最终的插入，例子是 Anti-Join，可能表 A 插入一条数据，Anti-Join 的 MV 会减少一条数据。这里认为不是很方便的直接计算到 append-only changes，所以这里只允许 append-only changes 提供给 monotonic query(mv)</li>
+<li>Repeated inserts: 有一个例子是同一条边被插入 - 删除 - 插入 ，第二次插入是否要被包含。这里认为不需要包含，它认为这样会让实现更简单一些（哪里更简单了呢）</li>
+</ul>
+</li>
+<li>Minimum-delta CHANGES<ul>
+<li>Excluded Columns: 对于 Filter 条件来说，Base 被 Filter 掉的或者是根本和 mv 没关系的列，MV 不会再出现这样的 CHANGES</li>
+<li>Update coercion: 对于 Excluded -&gt; INLUDED 的请求（比如 UPDATE），这里会将上游的 Update 变成 CHANGES 中的 INSERT</li>
+</ul>
+</li>
+</ul>
+<p>接着举例子：</p>
+<p><img src="https://image.mwish.me/blog-image/6727086490095305434.png" alt="img"></p>
+<p>Oid 是 id 的 foreign key, 下面创建一个 inner join 的 mv:</p>
+<p><img src="https://image.mwish.me/blog-image/3745451790993126611.png" alt="img"></p>
+<p>下面描述了一些变更操作：</p>
+<p><img src="https://image.mwish.me/blog-image/1947515212853200859.png" alt="img"></p>
+<ul>
+<li>这里比较好玩，第一个 SQL 相当于最终 mv 的一个 UPDATE，产生了 DELETE + INSERT</li>
+<li>第二个 UPDATE 在 Base 表是一个 UPDATE，但是它导致 mv Join 变更了，相当于 Delete + Insert</li>
+<li>第三个更新 <code>desc</code> 列归属于 excluded column，所以没一点影响</li>
+<li>第四个 DELETE 会导致 mv 两条 Delete (感觉它的 fk 不是强约束，总觉得在 db 这种数据很难删）</li>
+</ul>
+<h3 id="STREAM-Objects"><a href="#STREAM-Objects" class="headerlink" title="STREAM Objects"></a>STREAM Objects</h3><p>CHANGES 是一个比较好用的工具，而 STREAM 则是 CHANGES 和表的状态维护。能够完成存储状态和容错等功能。我们列举 STREAM 的逻辑：</p>
+<ul>
+<li>表(persistent or view) 级别，对应一个 schema-level catalog object ，绑定于 source view (表或者 mv)</li>
+<li>STREAM 的状态叫 frontier，代表 CHANGES 被消费完的一个时间点（类似 ckpt?）</li>
+<li>Stream 可以被 consume:<ul>
+<li>被查询的时候，STREAM 生成 frontier 到现在的应用</li>
+<li>DML 操作 STREAM 的时候，STREAM 会在 DML 的事务中被处理（原子性），当事务 COMMIT 的时候，推进 STREAM。</li>
+</ul>
+</li>
+<li>一个表可以创建多个 STREAM</li>
+<li>STREAM 支持 show initial rows，在 STREAM 被第一次消费的时候，它的数据包含表的数据（我猜是全部都是 INSERT 的形式）。这个让整个 STREAM 构成一个能恢复整个表的 redo log 流</li>
+</ul>
+<p>下面展示了 Listing 1/2 的 STREAM</p>
+<p><img src="https://image.mwish.me/blog-image/644682537778375200.png" alt="img"></p>
+<p><img src="https://image.mwish.me/blog-image/2376649931720618126.png" alt="img"></p>
+<p>（这里 idea 还是挺明显的）</p>
+<p>作者认为，STREAM 引入的存储开销比较小，相对的只需要存储 frontier，所以作者觉得 STREAM 可以随便开，当然论文也提到了，STREAM 本身和表的 retention policy 有关，这里认为 STREAM 本身也依赖表的 Retention 策略，如果下游某个时间戳的表 GC 了，那么这里会表示文件再也捞不到了，所以 STREAM Stale 了。当然 Snowflake 本身有一定的 Time Travel 机制和 Retention 相关的，它允许维护、延长一段时间的 Retention，直到这个数据真的 Retire 了。</p>
+<h2 id="Implementation"><a href="#Implementation" class="headerlink" title="Implementation"></a>Implementation</h2><p>Snowflake 希望能够尽量复用以前的组建和机制、也减少客户的负担（废话）。这里要求：</p>
+<ul>
+<li>给 Storage Layer 增加 Row-Level Metadata</li>
+<li>Query differentiation framework to Rewrite query</li>
+<li>Integrate STREAM with Transaction system</li>
+</ul>
+<p>这里，论文总结了一下 Snowflake 的架构，然后介绍了一下它们是怎么实现 STREAM 的。</p>
+<h3 id="Table-Metadata"><a href="#Table-Metadata" class="headerlink" title="Table Metadata"></a>Table Metadata</h3><p>Snowflake 的表在数据上由多个 micro-partition 组成，他们是大小不一的数据文件，以 z-ordering 之类的形式来组织，存储在 Blob Storage 上，元数据存储在一个 FoundationDB 集群上（妈的现在 fdb 的贡献者全是 sfc-gh 家族了，迫真占领社区）。Snowflake 有一个 table version，来表示 Table 的状态：</p>
+<ul>
+<li>System Timestamp</li>
+<li>Set of micro-parititons</li>
+<li>Partition-level statistics</li>
+</ul>
+<p>而表的状态也类似连续的 Redo Logs:</p>
+<ul>
+<li>INSERT 等操作插入新的 micro-partitions</li>
+<li>DML 的操作的 Micro-partition 级别，比如 CoW 那种就是 Delete / Insert；或者干脆直接删了<ul>
+<li>上述都走 Transaction 提交操作</li>
+</ul>
+</li>
+<li>如果超过 Retention，去回收数据</li>
+</ul>
+<p>表的版本和查询的版本直接关联，metadata system 首先会拿到时间错对应的 table version, 拿到对应的 micro partitions</p>
+<h3 id="Query-Differentiation"><a href="#Query-Differentiation" class="headerlink" title="Query Differentiation"></a>Query Differentiation</h3><h4 id="查询的模型"><a href="#查询的模型" class="headerlink" title="查询的模型"></a>查询的模型</h4><p>这里的技巧在于，把查询改写为增量 mv 的查询我原封不动贴一下论文的模型：</p>
+<blockquote>
+<p>given that we want the CHANGES of a query 𝑄 over an interval 𝐼, we say we differentiate 𝑄 to obtain the derivative of 𝑄 , Δ 𝐼𝑄 , which varies over 𝐼.</p>
+</blockquote>
+<p>这里会根据上面几部分来改写查询，下面是数学部分，我只能看懂大概（悲），大概是 Join / Filter / Project / Agg 拆分成增量的形式。</p>
+<p><img src="https://image.mwish.me/blog-image/3032945505873821696.png" alt="img"></p>
+<p>当然，等量代换完成之后，就涉及到代价的问题了：</p>
+<ul>
+<li>Inner Join 之类的代换可能性能及户都会有优化</li>
+<li>Agg 之类的，如果大部分 key 被修改了，性能可能会一坨</li>
+</ul>
+<p>所以这里丢给 Cost-based Optimizer 去自己评估了。</p>
+<h4 id="Change-Tracking"><a href="#Change-Tracking" class="headerlink" title="Change Tracking"></a>Change Tracking</h4><p>Snowflake 会在 TableScan Operator 处理增量，它需要在 TableScan 捞出 changes。这里会利用行上的 metadata 来处理，Snowflake 给行上启用了 properties:</p>
+<ul>
+<li>A unique id. Stable across updates (还记得 min-delta 上的嘛）</li>
+<li>Whether the row was inserted into the current micro-partition or was copied in from another.This information makes it trivial to produce append-only changes. （行的来源，但我觉得这个在 Compaction 之后计算很蛋疼啊，包括 insert + compaction，你总不能每一行去 traverse version chain 吧，迫真 MVCC，不过它也处理了这个问题）</li>
+</ul>
+<p>这两块我觉得存储开销肯定还小，因为列存一压很多东西就没了，但是我觉得这套框架和别的合起来还是有问题的。当然，这里肯定会有重复（redundent delta），于是 query rewriter 会在上面区分这个查询是否会产生 delta，如果可能有 delta 就属于 redundant-delta properties，给你嗯加一个 consolidation 去去重。Snowflake 发现大部分 CHANGE QUERY 只有 一堆INSERT 或者 一堆 DELETE，所以它提供了不少 Plan Shapes:</p>
+<ul>
+<li>MINIMIZE</li>
+<li>ADDED_ONLY</li>
+<li>REMOVED_ONLY</li>
+</ul>
+<p>考虑到这个，在 planning 的时候，这里会找到 INSERTED micro-partitions 和 DELETED micro-partitions(这个对 Compaction 也生效），然后进行下面的 Plan，那个 UNION 就很精髓，Minimization 看下面计算的性质。这里还有个 <code>ISUPDATE</code> 计算，我们一会儿讲。</p>
+<p><img src="https://image.mwish.me/blog-image/8580455075483302732.png" alt="img"></p>
+<p>对于 Added 来说，这里会找到：</p>
+<ol>
+<li>所有 Added Partition，包括 Compaction 产生的</li>
+<li>扫描所有记录，只有行来源不来自于别的文件的才会被记入</li>
+</ol>
+<p>这个算法也是比较简洁的</p>
+<p><img src="https://image.mwish.me/blog-image/2504297451855509654.png" alt="img"></p>
+<p>在元信息上，关于 ACTION 的计算是很简单的，ISUPDATE 的计算会是最终合并的（而不是中间的操作），总的说它只看起止。</p>
+<p>比较重要的是 <code>$ROW_ID</code>，这个东西设置了可能就没那么好改了：</p>
+<ol>
+<li>可以是有含义的语义，但是可能会对系统未来的 evaluation 造成兼容性负担（也不那么会把？）</li>
+<li>可以是没有含义的语义，比如 Hashing Columns。因为这里也希望 TableScan 之类的时候，不会对 Shuffle 之类的内容造成太大的负担</li>
+<li>Our row IDs are a cryptographic hash of the change tracking columns, which ensures uniqueness to a very high probability.（比如 geohash 或者类似的？猜测和 row 还有 partition 有关）</li>
+</ol>
+<p>这里还有个问题是，上面作为 base 表的，那么作为传下去或者 mv 的呢？这里的处理方式是：</p>
+<ol>
+<li>Filter / Project 不改变 row-id</li>
+<li>Group By 根据 Group-by Agg Keys 来做 row-id</li>
+<li>UNION ALL 在同一张表的 Filter 的时候，可能相对复杂一些</li>
+</ol>
+<p>Snowflake 说他们没遇到什么 corner case，什么绿皮暴力搞法大力出奇迹。</p>
+<h3 id="Stream-Transactions"><a href="#Stream-Transactions" class="headerlink" title="Stream Transactions"></a>Stream Transactions</h3><p><img src="https://image.mwish.me/blog-image/7468682257460978131.png" alt="img"></p>
+<p>在 STREAM 被查询的时候，这里会尝试消费，消费的时候会满足原子性。</p>
+<ol>
+<li>如果设计单个 Table，那会很简单，但是多个 table，会比较蛋疼，因为 snowflake 好像没有全局时间戳。这里 frontier 会检测多个 base table 的版本，来保证 STREAM 内部不会有冲突</li>
+<li>STREAM 本身代表过去的时间戳，所以它自己要存时间戳，这里也会有个 last updated 的物理时间戳</li>
+<li>在消费 STREAM 可能会有事务，所以一个 STREAM 可能不能被多个客户端消费</li>
+<li>Staleness 会根据 Retention 来维护</li>
+</ol>
+<h2 id="USAGE-AND-PERFORMANCE-ANALYSIS"><a href="#USAGE-AND-PERFORMANCE-ANALYSIS" class="headerlink" title="USAGE AND PERFORMANCE ANALYSIS"></a>USAGE AND PERFORMANCE ANALYSIS</h2><p><img src="https://image.mwish.me/blog-image/1423177542917606780.png" alt="img"></p>
+<p><img src="https://image.mwish.me/blog-image/4745081897764211093.png" alt="img"></p>
+<p><img src="https://image.mwish.me/blog-image/3412166040666676318.png" alt="img"></p>
+<h2 id="批话环节"><a href="#批话环节" class="headerlink" title="批话环节"></a>批话环节</h2><p>这篇文章描述的内容还是很朴素的，我当时以为有啥大招，但是还是硬扫。这块难度应该不在存储上，对查询改写、优化器甚至上游调度开销会比较高。而且很多东西还是 Open Problem。期待厂商还是能把这套机制和 Live Table 之类的结合起来，或者提供一些 Streaming 的算子，抽象出一个更高效的框架。</p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Semantics"><span class="toc-number">1.</span> <span class="toc-text">Semantics</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#CHANGES-quries"><span class="toc-number">1.1.</span> <span class="toc-text">CHANGES quries</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#CHANGES-queries-on-Views"><span class="toc-number">1.2.</span> <span class="toc-text">CHANGES queries on Views</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#STREAM-Objects"><span class="toc-number">1.3.</span> <span class="toc-text">STREAM Objects</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Implementation"><span class="toc-number">2.</span> <span class="toc-text">Implementation</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Table-Metadata"><span class="toc-number">2.1.</span> <span class="toc-text">Table Metadata</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Query-Differentiation"><span class="toc-number">2.2.</span> <span class="toc-text">Query Differentiation</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%9F%A5%E8%AF%A2%E7%9A%84%E6%A8%A1%E5%9E%8B"><span class="toc-number">2.2.1.</span> <span class="toc-text">查询的模型</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Change-Tracking"><span class="toc-number">2.2.2.</span> <span class="toc-text">Change Tracking</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Stream-Transactions"><span class="toc-number">2.3.</span> <span class="toc-text">Stream Transactions</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#USAGE-AND-PERFORMANCE-ANALYSIS"><span class="toc-number">3.</span> <span class="toc-text">USAGE AND PERFORMANCE ANALYSIS</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%89%B9%E8%AF%9D%E7%8E%AF%E8%8A%82"><span class="toc-number">4.</span> <span class="toc-text">批话环节</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2023/06/22/Snowflake-Streaming-and-Change-in-Table/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2023/06/22/Snowflake-Streaming-and-Change-in-Table/&text=Snowflake: Streaming and Change in Table"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2023/06/22/Snowflake-Streaming-and-Change-in-Table/&title=Snowflake: Streaming and Change in Table"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2023/06/22/Snowflake-Streaming-and-Change-in-Table/&is_video=false&description=Snowflake: Streaming and Change in Table"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Snowflake: Streaming and Change in Table&body=Check out this article: http://blog.mwish.me/2023/06/22/Snowflake-Streaming-and-Change-in-Table/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2023/06/22/Snowflake-Streaming-and-Change-in-Table/&title=Snowflake: Streaming and Change in Table"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2023/06/22/Snowflake-Streaming-and-Change-in-Table/&title=Snowflake: Streaming and Change in Table"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2023/06/22/Snowflake-Streaming-and-Change-in-Table/&title=Snowflake: Streaming and Change in Table"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2023/06/22/Snowflake-Streaming-and-Change-in-Table/&title=Snowflake: Streaming and Change in Table"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2023/06/22/Snowflake-Streaming-and-Change-in-Table/&name=Snowflake: Streaming and Change in Table&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2023/06/22/Snowflake-Streaming-and-Change-in-Table/&t=Snowflake: Streaming and Change in Table"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

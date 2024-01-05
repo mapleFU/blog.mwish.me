@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="System Design Interview 介绍了 system design 的一些面试题，也介绍了分布式系统上的一些 building blocks. 这本书介绍了一下这些内容。 这本书逻辑上大概分为两部分：  介绍分布式应用的 building blocks 介绍一些分布式系统常用组件的实现方式。 介绍一些大型 web 应用的架构。  Part1 building blocks这里的客户">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Note on System Design Interview">
+<meta property="og:url" content="http://blog.mwish.me/2021/05/22/Note-on-System-Design-Interview/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="System Design Interview 介绍了 system design 的一些面试题，也介绍了分布式系统上的一些 building blocks. 这本书介绍了一下这些内容。 这本书逻辑上大概分为两部分：  介绍分布式应用的 building blocks 介绍一些分布式系统常用组件的实现方式。 介绍一些大型 web 应用的架构。  Part1 building blocks这里的客户">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/223BD7B0-1EE7-402E-9F6C-EDD9EA0A8C7B.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/38114998F5B912A9F3097D35DCCBDC4A.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/9C0CB68D373EF6E629488FD1969F8809.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/B6E41610-821B-41E0-BE81-092E3179B667.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/806C279E-1089-4799-A21F-BA71B70FC7F6.png">
+<meta property="og:image" content="http://blog.mwish.me/Users/bytedance/Downloads/0624F981-1F6A-4549-A007-81CACA2D4AEE.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/scrapy_architecture_02.png">
+<meta property="article:published_time" content="2021-05-22T05:15:28.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.559Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/223BD7B0-1EE7-402E-9F6C-EDD9EA0A8C7B.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>Note on System Design Interview</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2021/05/24/Note-on-System-Design-Interview-Part2/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2021/05/13/LevelDB-Read-path/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2021/05/22/Note-on-System-Design-Interview/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2021/05/22/Note-on-System-Design-Interview/&text=Note on System Design Interview"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2021/05/22/Note-on-System-Design-Interview/&title=Note on System Design Interview"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2021/05/22/Note-on-System-Design-Interview/&is_video=false&description=Note on System Design Interview"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Note on System Design Interview&body=Check out this article: http://blog.mwish.me/2021/05/22/Note-on-System-Design-Interview/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2021/05/22/Note-on-System-Design-Interview/&title=Note on System Design Interview"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2021/05/22/Note-on-System-Design-Interview/&title=Note on System Design Interview"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2021/05/22/Note-on-System-Design-Interview/&title=Note on System Design Interview"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2021/05/22/Note-on-System-Design-Interview/&title=Note on System Design Interview"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2021/05/22/Note-on-System-Design-Interview/&name=Note on System Design Interview&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2021/05/22/Note-on-System-Design-Interview/&t=Note on System Design Interview"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Part1-building-blocks"><span class="toc-number">1.</span> <span class="toc-text">Part1 building blocks</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Load-balancer"><span class="toc-number">1.1.</span> <span class="toc-text">Load balancer</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Database-application"><span class="toc-number">1.2.</span> <span class="toc-text">Database application</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#cache"><span class="toc-number">1.3.</span> <span class="toc-text">cache</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#CDN"><span class="toc-number">1.4.</span> <span class="toc-text">CDN</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Stateful-Stateless"><span class="toc-number">1.5.</span> <span class="toc-text">Stateful&#x2F;Stateless</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Data-Centers"><span class="toc-number">1.6.</span> <span class="toc-text">Data Centers</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Message-queue"><span class="toc-number">1.7.</span> <span class="toc-text">Message queue</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Logging-metrics-automation"><span class="toc-number">1.8.</span> <span class="toc-text">Logging, metrics, automation</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#wrap-up"><span class="toc-number">1.9.</span> <span class="toc-text">wrap up</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%87%8F%E7%BA%A7%E4%BC%B0%E8%AE%A1"><span class="toc-number">1.10.</span> <span class="toc-text">量级估计</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Part2-%E7%BB%84%E4%BB%B6%E5%92%8C%E5%AE%9E%E7%8E%B0"><span class="toc-number">2.</span> <span class="toc-text">Part2 组件和实现</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Rate-Limiter"><span class="toc-number">2.1.</span> <span class="toc-text">Rate Limiter</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Consisteny-Hashing"><span class="toc-number">2.2.</span> <span class="toc-text">Consisteny Hashing</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Key-Value-Storage"><span class="toc-number">2.3.</span> <span class="toc-text">Key-Value Storage</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Unique-ID-Generator"><span class="toc-number">2.4.</span> <span class="toc-text">Unique ID Generator</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#URL-Shortener"><span class="toc-number">2.5.</span> <span class="toc-text">URL Shortener</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Part3-Systems"><span class="toc-number">3.</span> <span class="toc-text">Part3: Systems</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Web-Crawler"><span class="toc-number">3.1.</span> <span class="toc-text">Web Crawler</span></a></li></ol></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Note on System Design Interview
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2021-05-22T05:15:28.000Z" itemprop="datePublished">2021-05-22</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>System Design Interview 介绍了 system design 的一些面试题，也介绍了分布式系统上的一些 building blocks. 这本书介绍了一下这些内容。</p>
+<p>这本书逻辑上大概分为两部分：</p>
+<ol>
+<li>介绍分布式应用的 building blocks</li>
+<li>介绍一些分布式系统常用组件的实现方式。</li>
+<li>介绍一些大型 web 应用的架构。</li>
+</ol>
+<h2 id="Part1-building-blocks"><a href="#Part1-building-blocks" class="headerlink" title="Part1 building blocks"></a>Part1 building blocks</h2><p>这里的客户端/user 一般指的是 web 或者是移动端的 app. 这些通过 dns 来拿到服务器的 ip, 然后访问服务器。</p>
+<p>同时，数据存储通常会丢到某个 db 上。按需求选择 MySQL MongoDB 这些选型。</p>
+<p>说句实话一般网络 app 这些东西就够了。但是大型应用这样就等死吧。</p>
+<h3 id="Load-balancer"><a href="#Load-balancer" class="headerlink" title="Load balancer"></a>Load balancer</h3><p>一般需要负载均衡来处理一些问题，nginx, haproxy, envoy 都有这些功能。</p>
+<p>（这里注意一下有个 L4/L7 负载均衡的区别）</p>
+<h3 id="Database-application"><a href="#Database-application" class="headerlink" title="Database application"></a>Database application</h3><p>无论是 master/slave 然后挂个什么方式，可以做 db 的主从备份、在业务测切分 db。</p>
+<p>当然也可以用分布式的 db, 不过有的时候你还是要 manage 一些数据分布之类的问题的：</p>
+<p><img src="https://image.mwish.me/blog-image/223BD7B0-1EE7-402E-9F6C-EDD9EA0A8C7B.png" alt="223BD7B0-1EE7-402E-9F6C-EDD9EA0A8C7B"></p>
+<h3 id="cache"><a href="#cache" class="headerlink" title="cache"></a>cache</h3><p>没有需求上缓存属于折磨自己：<a target="_blank" rel="noopener" href="https://www.zhihu.com/question/383926405">https://www.zhihu.com/question/383926405</a></p>
+<p>但是有需求的话，缓存能够起飞。</p>
+<p>缓存的架构也很复杂，我之前读过一篇 fb 的论文：</p>
+<ol>
+<li><a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/194347153">https://zhuanlan.zhihu.com/p/194347153</a></li>
+<li><a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/310697650">https://zhuanlan.zhihu.com/p/310697650</a></li>
+</ol>
+<p>然后还要区分下 write through cache/write aside cache.</p>
+<p>这本书提了一下使用 cache 需要提前设计的几件事：</p>
+<ol>
+<li>Eviction policy</li>
+<li>mitigating failure</li>
+<li>consistency</li>
+<li>Expiration policy</li>
+<li>Decide when to use cache</li>
+</ol>
+<h3 id="CDN"><a href="#CDN" class="headerlink" title="CDN"></a>CDN</h3><p>CDN 从一个类似 amazon s3 的服务拉内容（当然，直播的话会更复杂）</p>
+<ol>
+<li>cost (真实…)</li>
+<li>cache expiry</li>
+<li>CDN fallback: CDN 挂了怎么办</li>
+<li>Invalidating files</li>
+</ol>
+<h3 id="Stateful-Stateless"><a href="#Stateful-Stateless" class="headerlink" title="Stateful/Stateless"></a>Stateful/Stateless</h3><p>Stateless 的通常可以直接起飞，快乐扩容，但是很多时候也需要访问 stateful 的 db 这类的资源，访问 shared storage 这类。</p>
+<h3 id="Data-Centers"><a href="#Data-Centers" class="headerlink" title="Data Centers"></a>Data Centers</h3><p>很多时候，业务部署都需要多个 DC，一个地方机房过热，可能受灾就有多机器全挂了。</p>
+<p>DC 需要考虑流量调度、数据同步、测试，但也给了系统更好的稳定性。</p>
+<p>对于基础组建而言，多数据中心同步还是一个很麻烦的问题，因为 latency 高，流量贵。</p>
+<h3 id="Message-queue"><a href="#Message-queue" class="headerlink" title="Message queue"></a>Message queue</h3><p>对业务而言，mq 意味着某种形式的解耦。用户可能希望希望：</p>
+<ol>
+<li>丢就丢了，随便你怎么处理</li>
+<li>希望 exactly once 之类的语义。</li>
+</ol>
+<h3 id="Logging-metrics-automation"><a href="#Logging-metrics-automation" class="headerlink" title="Logging, metrics, automation"></a>Logging, metrics, automation</h3><p>查过问题懂得都懂。虽然我不是很懂 logging…</p>
+<h3 id="wrap-up"><a href="#wrap-up" class="headerlink" title="wrap up"></a>wrap up</h3><p><img src="https://image.mwish.me/blog-image/38114998F5B912A9F3097D35DCCBDC4A.png" alt="38114998F5B912A9F3097D35DCCBDC4A"></p>
+<h3 id="量级估计"><a href="#量级估计" class="headerlink" title="量级估计"></a>量级估计</h3><p>这个可以参考 every number programmers should know, 又一个每年都会更新的网站，可以找找看。</p>
+<p>然后知道 MB GB PB 有多大（我需要天天算这个哈哈哈）</p>
+<p><img src="https://image.mwish.me/blog-image/9C0CB68D373EF6E629488FD1969F8809.png" alt="9C0CB68D373EF6E629488FD1969F8809"></p>
+<p>这里还有对 QPS 和 Peek QPS 的估算（实际上我感觉真实情况还是要看统计数据什么的）</p>
+<h2 id="Part2-组件和实现"><a href="#Part2-组件和实现" class="headerlink" title="Part2 组件和实现"></a>Part2 组件和实现</h2><h3 id="Rate-Limiter"><a href="#Rate-Limiter" class="headerlink" title="Rate Limiter"></a>Rate Limiter</h3><p>为了不发现暴写就等死，可以做一些组件上的限流。</p>
+<p>此外，业务本身也会自己估一个 QPS，这个虽然比较粗略，但是也能做一个基本的限制。限流在这方面可以给自己系统一个很好的保障。</p>
+<p>这个可以以客户端的形式提供，也可以做成一个 api gateway，在 QPS 过高的时候返回一个 HTTP 429。</p>
+<p>RateLimit 有下面的算法</p>
+<ul>
+<li>Token bucket</li>
+<li>Leaking bucket</li>
+<li>Fixed window counter</li>
+<li>Sliding window log</li>
+<li>Sliding window counter</li>
+</ul>
+<p>我这里搓了一个简单的单机 <code>leaky_bucket.rs</code> : <a target="_blank" rel="noopener" href="https://github.com/mapleFU/md-snippets/blob/master/components/ratelimiter/src/leaky_bucket.rs#L36">https://github.com/mapleFU/md-snippets/blob/master/components/ratelimiter/src/leaky_bucket.rs#L36</a></p>
+<p>参考了：<a target="_blank" rel="noopener" href="https://github.com/uber-go/ratelimit/blob/main/limiter_atomic.go">https://github.com/uber-go/ratelimit/blob/main/limiter_atomic.go</a></p>
+<p>实际的数据可以存储在 Redis 这样的地方，让这个组件能够 scale. 同时，为了处理 Redis 这方面的并发操作，可以使用 lua script 或者 sorted sets data structure。</p>
+<h3 id="Consisteny-Hashing"><a href="#Consisteny-Hashing" class="headerlink" title="Consisteny Hashing"></a>Consisteny Hashing</h3><p>这节内容没啥讲的，基本和 Dynamo 那篇论文差不多。和 Chord 这篇论文的不一样. 这个是应该假定有 proxy 的</p>
+<p>consistent hashing 我推荐再看看 Jump Consistent Hashing, MagLev. 这两个都是 Google 提出来的。</p>
+<p><a target="_blank" rel="noopener" href="https://writings.sh/post/consistent-hashing-algorithms-part-2-consistent-hash-ring">https://writings.sh/post/consistent-hashing-algorithms-part-2-consistent-hash-ring</a></p>
+<p>上面这篇博客是我找到的最好的相关博客。</p>
+<h3 id="Key-Value-Storage"><a href="#Key-Value-Storage" class="headerlink" title="Key-Value Storage"></a>Key-Value Storage</h3><p>这篇也基本是 Dynamo. 我觉得有兴趣可以看看 Spanner </p>
+<p><img src="https://image.mwish.me/blog-image/B6E41610-821B-41E0-BE81-092E3179B667.png" alt="B6E41610-821B-41E0-BE81-092E3179B667"></p>
+<p>这个 cheatsheet 倒是挺有意思的，看完 dynamo 论文可以回头看一眼。</p>
+<h3 id="Unique-ID-Generator"><a href="#Unique-ID-Generator" class="headerlink" title="Unique ID Generator"></a>Unique ID Generator</h3><p>这个其实也看对 Unique ID 的需求的：</p>
+<ol>
+<li>是否要强有序？或者比较弱的有序？</li>
+<li>你的 id 需要多少位？</li>
+</ol>
+<p>下面有几种方式：</p>
+<p>一：走 DB, 然后 db 可能可以多个 master. 比方说有 k 台机器，然后每台机器递增，然后对外提供就是：如果来自第一台就是 1, 1+k, 1 + 2k… 如此类推。</p>
+<p>这种方式在多 DC 的环境下不太好处理，同时服务器增加的时候，不是很好处理。</p>
+<p>然后其实也可以参考美团的 leaf: <a target="_blank" rel="noopener" href="https://tech.meituan.com/2019/03/07/open-source-project-leaf.html">https://tech.meituan.com/2019/03/07/open-source-project-leaf.html</a></p>
+<p>二：UUID</p>
+<blockquote>
+<p>A UUID is another easy way to obtain unique IDs. UUID is a 128-bit number used to identify information in computer systems. </p>
+</blockquote>
+<p>UUID 有几种不同的生成方法，比如 UUID V1 V2 V3 V4. 通常我们可以用 v4 来高一些随机生成</p>
+<p>当然，uuid 也可以根据别的一些信息来生成。</p>
+<p>三：Ticket Server</p>
+<p>用 Etcd 之类的方式来发号，这个比较类似 PingCAP 的 PD 了。</p>
+<p>四：twitter snowflake</p>
+<p>这个是根据机器 ID 和时间来发号的。注意这个时间应该采用递增的时间，而不允许回退。</p>
+<p>我写了个简单的实现：<a target="_blank" rel="noopener" href="https://github.com/mapleFU/md-snippets/tree/master/components/snowflake">https://github.com/mapleFU/md-snippets/tree/master/components/snowflake</a></p>
+<h3 id="URL-Shortener"><a href="#URL-Shortener" class="headerlink" title="URL Shortener"></a>URL Shortener</h3><p>URL Shortener 通常有要求是：</p>
+<ol>
+<li>不能重复。</li>
+<li>human readable</li>
+</ol>
+<p>这个内容也可以生成验证码。然后存到 db 里面，因为要做去重。这里 db 可以糊一层 cache，但是感觉 bloom 不太好搞，因为 down 掉了感觉恢复起来不晓得咋搞。</p>
+<p>这里我也搓了一遍（不过就只有算法，DB 交互只写了个接口）：<a target="_blank" rel="noopener" href="https://github.com/mapleFU/md-snippets/tree/master/components/url_shortener">https://github.com/mapleFU/md-snippets/tree/master/components/url_shortener</a></p>
+<h2 id="Part3-Systems"><a href="#Part3-Systems" class="headerlink" title="Part3: Systems"></a>Part3: Systems</h2><h3 id="Web-Crawler"><a href="#Web-Crawler" class="headerlink" title="Web Crawler"></a>Web Crawler</h3><p>Web crawler 需要：</p>
+<ol>
+<li>给定一些 Seed, 然后从这些网页开始拉</li>
+<li>能够拉取 robot.txt 遵纪守法；然后要有一定反爬能力</li>
+<li>需要能够解析网页，找到对应的信息</li>
+<li>按照 BFS/DFS 的策略，从已经爬到的链接里拿到后面的目标</li>
+<li>防止无限递归的网址/反爬策略把自己搞傻了</li>
+<li>对网络的访问不要过于频繁，要限流</li>
+<li>要能够合理处理 timeout</li>
+<li>但同时，需要有分布式的爬取能力</li>
+</ol>
+<p><img src="https://image.mwish.me/blog-image/806C279E-1089-4799-A21F-BA71B70FC7F6.png" alt="806C279E-1089-4799-A21F-BA71B70FC7F6"><img src="/Users/bytedance/Downloads/0624F981-1F6A-4549-A007-81CACA2D4AEE.png" alt="0624F981-1F6A-4549-A007-81CACA2D4AEE"></p>
+<p>这里我觉得这个架构还是有点像 Scrapy 的，看了一下 scrapy：</p>
+<p><img src="https://image.mwish.me/blog-image/scrapy_architecture_02.png" alt="scrapy_architecture_02"></p>
+<p>这里有一些中间件，就是上图的 extension model. </p>
+<p>Scheduler 可能可以有一个 Redis 后端，用来调度下一个应该抓的 URL, 然后这个发给 downloader, 走逻辑下载，再回到 engine, 丢给 spiders 的中间件做一些扩展处理，最后把内容丢给 item pipeline.</p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Part1-building-blocks"><span class="toc-number">1.</span> <span class="toc-text">Part1 building blocks</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Load-balancer"><span class="toc-number">1.1.</span> <span class="toc-text">Load balancer</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Database-application"><span class="toc-number">1.2.</span> <span class="toc-text">Database application</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#cache"><span class="toc-number">1.3.</span> <span class="toc-text">cache</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#CDN"><span class="toc-number">1.4.</span> <span class="toc-text">CDN</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Stateful-Stateless"><span class="toc-number">1.5.</span> <span class="toc-text">Stateful&#x2F;Stateless</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Data-Centers"><span class="toc-number">1.6.</span> <span class="toc-text">Data Centers</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Message-queue"><span class="toc-number">1.7.</span> <span class="toc-text">Message queue</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Logging-metrics-automation"><span class="toc-number">1.8.</span> <span class="toc-text">Logging, metrics, automation</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#wrap-up"><span class="toc-number">1.9.</span> <span class="toc-text">wrap up</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%87%8F%E7%BA%A7%E4%BC%B0%E8%AE%A1"><span class="toc-number">1.10.</span> <span class="toc-text">量级估计</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Part2-%E7%BB%84%E4%BB%B6%E5%92%8C%E5%AE%9E%E7%8E%B0"><span class="toc-number">2.</span> <span class="toc-text">Part2 组件和实现</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Rate-Limiter"><span class="toc-number">2.1.</span> <span class="toc-text">Rate Limiter</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Consisteny-Hashing"><span class="toc-number">2.2.</span> <span class="toc-text">Consisteny Hashing</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Key-Value-Storage"><span class="toc-number">2.3.</span> <span class="toc-text">Key-Value Storage</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Unique-ID-Generator"><span class="toc-number">2.4.</span> <span class="toc-text">Unique ID Generator</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#URL-Shortener"><span class="toc-number">2.5.</span> <span class="toc-text">URL Shortener</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Part3-Systems"><span class="toc-number">3.</span> <span class="toc-text">Part3: Systems</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Web-Crawler"><span class="toc-number">3.1.</span> <span class="toc-text">Web Crawler</span></a></li></ol></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2021/05/22/Note-on-System-Design-Interview/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2021/05/22/Note-on-System-Design-Interview/&text=Note on System Design Interview"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2021/05/22/Note-on-System-Design-Interview/&title=Note on System Design Interview"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2021/05/22/Note-on-System-Design-Interview/&is_video=false&description=Note on System Design Interview"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Note on System Design Interview&body=Check out this article: http://blog.mwish.me/2021/05/22/Note-on-System-Design-Interview/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2021/05/22/Note-on-System-Design-Interview/&title=Note on System Design Interview"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2021/05/22/Note-on-System-Design-Interview/&title=Note on System Design Interview"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2021/05/22/Note-on-System-Design-Interview/&title=Note on System Design Interview"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2021/05/22/Note-on-System-Design-Interview/&title=Note on System Design Interview"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2021/05/22/Note-on-System-Design-Interview/&name=Note on System Design Interview&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2021/05/22/Note-on-System-Design-Interview/&t=Note on System Design Interview"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

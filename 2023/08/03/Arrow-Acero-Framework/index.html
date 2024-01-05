@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="Acero 是一个 「Streaming」 的处理引擎。这个 Streaming 有点类似 Monet&#x2F;X100 意义上的：  最早 Monet 他们弄的是整个全部物化，每个按照自己的大 Batch 做执行 后来发现这样物化的开销过高，所以弄成了 Batch Exec  Acero 在 Arrow 中也是这样的存在，它是一个 Push-Based Executor，目前还不支持 Pipeline">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Arrow Acero Framework">
+<meta property="og:url" content="http://blog.mwish.me/2023/08/03/Arrow-Acero-Framework/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="Acero 是一个 「Streaming」 的处理引擎。这个 Streaming 有点类似 Monet&#x2F;X100 意义上的：  最早 Monet 他们弄的是整个全部物化，每个按照自己的大 Batch 做执行 后来发现这样物化的开销过高，所以弄成了 Batch Exec  Acero 在 Arrow 中也是这样的存在，它是一个 Push-Based Executor，目前还不支持 Pipeline">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/415664007430259013.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/7708173130236331652.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/3457402530082094772.png">
+<meta property="article:published_time" content="2023-08-03T15:37:48.000Z">
+<meta property="article:modified_time" content="2023-08-12T15:56:46.201Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/415664007430259013.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>Arrow Acero Framework</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2023/08/21/Arrow-util-File-FileSystem/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2023/07/23/Arrow-Dataset/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2023/08/03/Arrow-Acero-Framework/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2023/08/03/Arrow-Acero-Framework/&text=Arrow Acero Framework"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2023/08/03/Arrow-Acero-Framework/&title=Arrow Acero Framework"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2023/08/03/Arrow-Acero-Framework/&is_video=false&description=Arrow Acero Framework"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Arrow Acero Framework&body=Check out this article: http://blog.mwish.me/2023/08/03/Arrow-Acero-Framework/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2023/08/03/Arrow-Acero-Framework/&title=Arrow Acero Framework"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2023/08/03/Arrow-Acero-Framework/&title=Arrow Acero Framework"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2023/08/03/Arrow-Acero-Framework/&title=Arrow Acero Framework"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2023/08/03/Arrow-Acero-Framework/&title=Arrow Acero Framework"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2023/08/03/Arrow-Acero-Framework/&name=Arrow Acero Framework&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2023/08/03/Arrow-Acero-Framework/&t=Arrow Acero Framework"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Overview"><span class="toc-number">1.</span> <span class="toc-text">Overview</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Framework"><span class="toc-number">2.</span> <span class="toc-text">Framework</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Future"><span class="toc-number">2.1.</span> <span class="toc-text">Future</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Plan"><span class="toc-number">2.2.</span> <span class="toc-text">Plan</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Node"><span class="toc-number">2.3.</span> <span class="toc-text">Node</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Scheduler"><span class="toc-number">2.4.</span> <span class="toc-text">Scheduler</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Node-Implementions"><span class="toc-number">3.</span> <span class="toc-text">Node Implementions</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Scan"><span class="toc-number">3.1.</span> <span class="toc-text">Scan</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Unordered-Generator"><span class="toc-number">3.1.1.</span> <span class="toc-text">Unordered Generator</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Ordered-Generator"><span class="toc-number">3.1.2.</span> <span class="toc-text">Ordered Generator</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#References"><span class="toc-number">4.</span> <span class="toc-text">References</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Arrow Acero Framework
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2023-08-03T15:37:48.000Z" itemprop="datePublished">2023-08-03</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>Acero 是一个 「Streaming」 的处理引擎。这个 Streaming 有点类似 Monet/X100 意义上的：</p>
+<ol>
+<li>最早 Monet 他们弄的是整个全部物化，每个按照自己的大 Batch 做执行</li>
+<li>后来发现这样物化的开销过高，所以弄成了 Batch Exec</li>
+</ol>
+<p>Acero 在 Arrow 中也是这样的存在，它是一个 Push-Based Executor，目前还不支持 Pipeline Executor 之类的形式。 也不支持 Sort Merge Join 和 Sort Agg。基本上支持的算子都在下面了。这也导致了一个现象：</p>
+<ul>
+<li>SortBy, TopK 算子在 Acero 里面是结合 Sink 算子来实现的</li>
+</ul>
+<p><img src="https://image.mwish.me/blog-image/415664007430259013.png" alt="img"></p>
+<p>Acero 相当于一个串联 Dataset (读/写)，Function 的工具，产生需要的数据或者 Table。它并没有什么优化器，类似 Velox，对接的是外层的 Substrait[1] , dplyr [2] 接口。</p>
+<p>我们会从 Declaration，Plan ，Node 层开始介绍 Acero 的结构。</p>
+<h2 id="Overview"><a href="#Overview" class="headerlink" title="Overview"></a>Overview</h2><p>文档的这一节介绍了 Acero 的结构（ <a target="_blank" rel="noopener" href="https://arrow.apache.org/docs/cpp/streaming_execution.html#architecture-overview">https://arrow.apache.org/docs/cpp/streaming_execution.html#architecture-overview</a> ）</p>
+<p>暂时无法在飞书文档外展示此内容</p>
+<ol>
+<li><code>ExecPlan</code> 可以从 <code>Declaration</code> 中创建，作为一些语法糖. <code>ExecPlan</code> 不仅是一个</li>
+<li><code>ExecNode</code> 是一个 Acero 中的基本控制单元，并且可以加入 <code>ExecNodeOptions</code>。各种类型的 ExecNode 构造函数不对外公开，但是可以走 <code>ExecFactoryRegistry</code> 创建。</li>
+<li>数据通过 ExecBatch 来推送，这个东西也是个泛用类型的玩意</li>
+</ol>
+<p>Acero 大部分实现是做在 Compute 上的，Acero 主要做的是串起 Dataset 和 Compute，这里还有张不错的图：</p>
+<p><img src="https://image.mwish.me/blog-image/7708173130236331652.png" alt="img"></p>
+<p>这里创建 ExecNode 的时候，类似 <code>CallFunction</code>, 也可以通过名称来创建，e.g. <a target="_blank" rel="noopener" href="https://arrow.apache.org/docs/cpp/streaming_execution.html#constructing-execnode-using-options">https://arrow.apache.org/docs/cpp/streaming_execution.html#constructing-execnode-using-options</a></p>
+<p>Plan 是一个 ExecNode 的组合。它相当于整个执行的 Plan，而不是类似 <code>PhysicalPlanNode</code> 这种 <code>ExecNode</code> 对应的单个节点的结构。它也有一些执行的上下文 （<code>ExecContext</code> 和 <code>QueryOptions</code>）. </p>
+<p>ExecBatch 是对应的传递的单元，它代码比较简单。这里它代码引入了 <code>SelectionVector</code>，但是实现并没有用上 selection vector。</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// The values representing positional arguments to be passed to a kernel&#x27;s</span></span><br><span class="line"><span class="comment">/// exec function for processing.</span></span><br><span class="line">std::vector&lt;Datum&gt; values;</span><br><span class="line"></span><br><span class="line"><span class="comment">/// SV, 实际上是没有用上的</span></span><br><span class="line">std::shared_ptr&lt;SelectionVector&gt; selection_vector;</span><br><span class="line"></span><br><span class="line"><span class="comment">/// DataBatch 内的 Guarantee. 这里的抽象比较有意思, 因为它可能倾向于</span></span><br><span class="line"><span class="comment">/// 里面来自同一个 RowGroup 或者啥的. 所以对上方吐出的数据会有一个 gurantee.</span></span><br><span class="line">Expression guarantee = <span class="built_in">literal</span>(<span class="literal">true</span>);</span><br><span class="line"></span><br><span class="line"><span class="comment">/// values 里面每个的长度(可能会有 constants, 这里它抽象和 Velox 的)</span></span><br><span class="line"><span class="type">int64_t</span> length = <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line"><span class="comment">/// 这里允许并行读取多个文件然后 unordered 吐出去，这个 index 表示 Order 相关的部分。</span></span><br><span class="line"><span class="type">int64_t</span> index = kUnsequencedIndex;</span><br></pre></td></tr></table></figure>
+<p><img src="https://image.mwish.me/blog-image/3457402530082094772.png" alt="img"></p>
+<p>上面是 ExecBatch 的官图。Acero 里的 <code>Node</code> 工厂如代码所示：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// \brief An extensible registry for factories of ExecNodes</span></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">ARROW_ACERO_EXPORT</span> ExecFactoryRegistry &#123;</span><br><span class="line"> <span class="keyword">public</span>:</span><br><span class="line">  <span class="keyword">using</span> Factory = std::function&lt;<span class="built_in">Result</span>&lt;ExecNode*&gt;(ExecPlan*, std::vector&lt;ExecNode*&gt;,</span><br><span class="line">                                                  <span class="type">const</span> ExecNodeOptions&amp;)&gt;;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">virtual</span> ~<span class="built_in">ExecFactoryRegistry</span>() = <span class="keyword">default</span>;</span><br><span class="line"></span><br><span class="line">  <span class="comment">/// \brief Get the named factory from this registry</span></span><br><span class="line">  <span class="comment">///</span></span><br><span class="line">  <span class="comment">/// will raise if factory_name is not found</span></span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> Result&lt;Factory&gt; <span class="title">GetFactory</span><span class="params">(<span class="type">const</span> std::string&amp; factory_name)</span> </span>= <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">  <span class="comment">/// \brief Add a factory to this registry with the provided name</span></span><br><span class="line">  <span class="comment">///</span></span><br><span class="line">  <span class="comment">/// will raise if factory_name is already in the registry</span></span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> Status <span class="title">AddFactory</span><span class="params">(std::string factory_name, Factory factory)</span> </span>= <span class="number">0</span>;</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="comment">/// The default registry, which includes built-in factories.</span></span><br><span class="line"><span class="function">ARROW_ACERO_EXPORT</span></span><br><span class="line"><span class="function">ExecFactoryRegistry* <span class="title">default_exec_factory_registry</span><span class="params">()</span></span>;</span><br><span class="line"></span><br><span class="line"><span class="comment">/// \brief Construct an ExecNode using the named factory</span></span><br><span class="line"><span class="function"><span class="keyword">inline</span> Result&lt;ExecNode*&gt; <span class="title">MakeExecNode</span><span class="params">(</span></span></span><br><span class="line"><span class="params"><span class="function">    <span class="type">const</span> std::string&amp; factory_name, ExecPlan* plan, std::vector&lt;ExecNode*&gt; inputs,</span></span></span><br><span class="line"><span class="params"><span class="function">    <span class="type">const</span> ExecNodeOptions&amp; options,</span></span></span><br><span class="line"><span class="params"><span class="function">    ExecFactoryRegistry* registry = default_exec_factory_registry())</span> </span>&#123;</span><br><span class="line">  <span class="built_in">ARROW_ASSIGN_OR_RAISE</span>(<span class="keyword">auto</span> factory, registry-&gt;<span class="built_in">GetFactory</span>(factory_name));</span><br><span class="line">  <span class="keyword">return</span> <span class="built_in">factory</span>(plan, std::<span class="built_in">move</span>(inputs), options);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这里需要注意，<code>Node</code> 的关系基本上是 <code>ExecNode</code> 自己维护的，<code>Plan</code> 会去驱动整个执行。<code>MakeExecNode</code> 的时候，这里会 <code>emplace_back</code> 对应的节点。然后在 Build 的阶段拓扑排序。</p>
+<p>节点有不同的类型，这里我们简单的抽象：</p>
+<ul>
+<li>TableSource / Scan: 类似 “scan” 之类的接口，提供数据源。这里一部分代码实现在 Dataset 那套接口下面</li>
+<li>Project: 很正常的 Project，在有的地方 Project 并不会是一个 Node，而是作为属性丢给各个算子自己，而不是搞出一个 Project。不过我感觉这块开销也不是很大</li>
+<li>Filter: 给出对应的过滤逻辑，走 Compute::Filter</li>
+<li>Sink: 计算的结果，OrderBy TopK 之类的算子目前是在 Sink 上面实现的，这有点奇怪。</li>
+</ul>
+<p>在 Node 节点串起来之后，我们需要 Care 一下 Pipeline 的控制流. 在 Acero 内部有两个 Scheduler:</p>
+<ol>
+<li>AsyncScheduler</li>
+<li>TaskScheduler</li>
+</ol>
+<p>AsyncScheduler 有点类似 Pipeline 的根结点，它会把 “scan” 之类最底端的 Node 推进去，然后 ScanNode 可能会调用通知下一层节点，来通信下一层信息。TaskScheduler 是专门给 Join 这种准备的，它会类似 ForkJoin，在线程组上执行多个任务。（不过 TaskScheduler 代码我没完全看懂）</p>
+<h2 id="Framework"><a href="#Framework" class="headerlink" title="Framework"></a>Framework</h2><p>我们在这里介绍 <code>ExecPlan</code> 和 <code>ExecNode</code> 两层，尽可能介绍一下</p>
+<h3 id="Future"><a href="#Future" class="headerlink" title="Future"></a>Future</h3><p>首先我们需要介绍一下 arrow 的 <code>Future</code>，它实现了一套简单的 Future，实际上这是一个支持添加 Callback 的 <code>shared_future</code>，Arrow 用这个共享的 Future 来支持了 push-based 的语核。这里可以看 <code>Future</code> 作 <code>Future&lt;Result&lt;T&gt;&gt;</code>, 它对 <code>Status</code> 等类型做了很好的支持。</p>
+<p>这套东西实现在：<a target="_blank" rel="noopener" href="https://arrow.apache.org/docs/cpp/api/async.html">https://arrow.apache.org/docs/cpp/api/async.html</a> 。这套代码是比较正常的 Future 代码，关注接口就行了。实现等我看一圈 C++ Templates 再来啃吧 XD</p>
+<p>在这里，Future 本身作为 shared_future, 所以可以这样</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">Result&lt;Table&gt; <span class="title">blockingOp</span><span class="params">()</span> </span>&#123;</span><br><span class="line">   <span class="keyword">auto</span> future = plan-&gt;<span class="built_in">GetFuture</span>()</span><br><span class="line">   future.<span class="built_in">Wait</span>();  <span class="comment">// &lt;-- 转换成阻塞操作，不影响内部的执行</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>Future 可以添加 <code>Callback</code> 和 <code>Then</code>.</p>
+<ol>
+<li><code>AddCallback</code> 加入 Callback, Callback 是处理完本 <code>Future</code> 之后执行的一个或者多个回调函数。这里如果对一个 Finished Future 调用 Callback，那么可能会直接调用这个函数（傻了吧，就地 Callback）。为了解决这个问题，这里提供了 <code>TryAddCallback</code> 接口，如果执行完了，这里会不执行这个<ol>
+<li>Callback 可以绑定对应的 <code>options</code> ，其中可以带上对应的 Executor。这里实现的时候，就允许你这个地方执行对应的逻辑。也有一些逻辑决定是否调度对应的 Future，类似 Folly 中的 <code>via</code></li>
+</ol>
+</li>
+<li><code>Then</code> 类似 <code>Callback</code>, 但是本身产生一个 <code>future</code>。它现在会当成 Callback 实现，不会在 <code>Callback</code> 执行完之后被调度，而是当成一个普通的 Callback。</li>
+</ol>
+<p>我们可以简单看几个 Future 的使用例子（而不是看代码）：</p>
+<p>Case 1: All</p>
+<p>这里关键点是用 Callback 实现，然后处理错误，返回一个新的 Future。然后所有 Future 结束在新的 Future 里面 <code>MarkFinished</code></p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T&gt;</span><br><span class="line">Future&lt;std::vector&lt;Result&lt;T&gt;&gt;&gt; <span class="built_in">All</span>(std::vector&lt;Future&lt;T&gt;&gt; futures) &#123;</span><br><span class="line">  <span class="keyword">struct</span> <span class="title class_">State</span> &#123;</span><br><span class="line">    <span class="function"><span class="keyword">explicit</span> <span class="title">State</span><span class="params">(std::vector&lt;Future&lt;T&gt;&gt; f)</span></span></span><br><span class="line"><span class="function">        : futures(std::move(f)), n_remaining(futures.size()) &#123;</span>&#125;</span><br><span class="line"></span><br><span class="line">    std::vector&lt;Future&lt;T&gt;&gt; futures;</span><br><span class="line">    std::atomic&lt;<span class="type">size_t</span>&gt; n_remaining;</span><br><span class="line">  &#125;;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span> (futures.<span class="built_in">size</span>() == <span class="number">0</span>) &#123;</span><br><span class="line">    <span class="keyword">return</span> &#123;std::vector&lt;Result&lt;T&gt;&gt;&#123;&#125;&#125;;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">auto</span> state = std::<span class="built_in">make_shared</span>&lt;State&gt;(std::<span class="built_in">move</span>(futures));</span><br><span class="line"></span><br><span class="line">  <span class="keyword">auto</span> out = Future&lt;std::vector&lt;Result&lt;T&gt;&gt;&gt;::<span class="built_in">Make</span>();</span><br><span class="line">  <span class="keyword">for</span> (<span class="type">const</span> Future&lt;T&gt;&amp; future : state-&gt;futures) &#123;</span><br><span class="line">    future.<span class="built_in">AddCallback</span>([state, out](<span class="type">const</span> Result&lt;T&gt;&amp;) <span class="keyword">mutable</span> &#123;</span><br><span class="line">      <span class="keyword">if</span> (state-&gt;n_remaining.<span class="built_in">fetch_sub</span>(<span class="number">1</span>) != <span class="number">1</span>) <span class="keyword">return</span>;</span><br><span class="line"></span><br><span class="line">      std::vector&lt;Result&lt;T&gt;&gt; <span class="built_in">results</span>(state-&gt;futures.<span class="built_in">size</span>());</span><br><span class="line">      <span class="keyword">for</span> (<span class="type">size_t</span> i = <span class="number">0</span>; i &lt; results.<span class="built_in">size</span>(); ++i) &#123;</span><br><span class="line">        results[i] = state-&gt;futures[i].<span class="built_in">result</span>();</span><br><span class="line">      &#125;</span><br><span class="line">      out.<span class="built_in">MarkFinished</span>(std::<span class="built_in">move</span>(results));</span><br><span class="line">    &#125;);</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="keyword">return</span> out;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>Case2: CountRows:</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">using</span> FragmentGenerator = AsyncGenerator&lt;std::shared_ptr&lt;Fragment&gt;&gt;;</span><br><span class="line"></span><br><span class="line"><span class="function">Result&lt;FragmentGenerator&gt; <span class="title">AsyncScanner::GetFragments</span><span class="params">()</span> <span class="type">const</span> </span>&#123;</span><br><span class="line">  <span class="comment">// TODO(ARROW-8163): Async fragment scanning will return AsyncGenerator&lt;Fragment&gt;</span></span><br><span class="line">  <span class="comment">// here. Current iterator based versions are all fast &amp; sync so we will just ToVector</span></span><br><span class="line">  <span class="comment">// it</span></span><br><span class="line">  <span class="built_in">ARROW_ASSIGN_OR_RAISE</span>(<span class="keyword">auto</span> fragments_it, dataset_-&gt;<span class="built_in">GetFragments</span>(scan_options_-&gt;filter));</span><br><span class="line">  <span class="built_in">ARROW_ASSIGN_OR_RAISE</span>(<span class="keyword">auto</span> fragments_vec, fragments_it.<span class="built_in">ToVector</span>());</span><br><span class="line">  <span class="keyword">return</span> <span class="built_in">MakeVectorGenerator</span>(std::<span class="built_in">move</span>(fragments_vec));</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function">Future&lt;<span class="type">int64_t</span>&gt; <span class="title">AsyncScanner::CountRowsAsync</span><span class="params">(Executor* executor)</span> </span>&#123;</span><br><span class="line">  <span class="built_in">ARROW_ASSIGN_OR_RAISE</span>(<span class="keyword">auto</span> fragment_gen, <span class="built_in">GetFragments</span>());</span><br><span class="line"></span><br><span class="line">  <span class="function">compute::ExecContext <span class="title">exec_context</span><span class="params">(scan_options_-&gt;pool, executor)</span></span>;</span><br><span class="line"></span><br><span class="line">  <span class="built_in">ARROW_ASSIGN_OR_RAISE</span>(<span class="keyword">auto</span> plan, acero::ExecPlan::<span class="built_in">Make</span>(exec_context));</span><br><span class="line">  <span class="comment">// Drop projection since we only need to count rows</span></span><br><span class="line">  <span class="type">const</span> <span class="keyword">auto</span> options = std::<span class="built_in">make_shared</span>&lt;ScanOptions&gt;(*scan_options_);</span><br><span class="line">  <span class="built_in">ARROW_ASSIGN_OR_RAISE</span>(<span class="keyword">auto</span> empty_projection,</span><br><span class="line">                        ProjectionDescr::<span class="built_in">FromNames</span>(std::<span class="built_in">vector</span>&lt;std::string&gt;(),</span><br><span class="line">                                                   *scan_options_-&gt;dataset_schema));</span><br><span class="line">  <span class="built_in">SetProjection</span>(options.<span class="built_in">get</span>(), empty_projection);</span><br><span class="line"></span><br><span class="line">  <span class="keyword">auto</span> total = std::make_shared&lt;std::atomic&lt;<span class="type">int64_t</span>&gt;&gt;(<span class="number">0</span>);</span><br><span class="line"></span><br><span class="line">  fragment_gen = <span class="built_in">MakeMappedGenerator</span>(</span><br><span class="line">      std::<span class="built_in">move</span>(fragment_gen),</span><br><span class="line">      [options, total](<span class="type">const</span> std::shared_ptr&lt;Fragment&gt;&amp; fragment) &#123;</span><br><span class="line">        <span class="keyword">return</span> fragment-&gt;<span class="built_in">CountRows</span>(options-&gt;filter, options)</span><br><span class="line">            .<span class="built_in">Then</span>([options, total, fragment](std::optional&lt;<span class="type">int64_t</span>&gt; fast_count) <span class="keyword">mutable</span></span><br><span class="line">                  -&gt; std::shared_ptr&lt;Fragment&gt; &#123;</span><br><span class="line">              <span class="keyword">if</span> (fast_count) &#123;</span><br><span class="line">                <span class="comment">// fast path: got row count directly; skip scanning this fragment</span></span><br><span class="line">                (*total) += *fast_count;</span><br><span class="line">                <span class="keyword">return</span> std::<span class="built_in">make_shared</span>&lt;InMemoryFragment&gt;(options-&gt;dataset_schema,</span><br><span class="line">                                                          RecordBatchVector&#123;&#125;);</span><br><span class="line">              &#125;</span><br><span class="line"></span><br><span class="line">              <span class="comment">// slow path: actually filter this fragment&#x27;s batches</span></span><br><span class="line">              <span class="keyword">return</span> std::<span class="built_in">move</span>(fragment);</span><br><span class="line">            &#125;);</span><br><span class="line">      &#125;);</span><br><span class="line"></span><br><span class="line">  acero::Declaration count_plan = acero::Declaration::<span class="built_in">Sequence</span>(</span><br><span class="line">      &#123;&#123;<span class="string">&quot;scan&quot;</span>,</span><br><span class="line">        ScanNodeOptions&#123;std::<span class="built_in">make_shared</span>&lt;FragmentDataset&gt;(scan_options_-&gt;dataset_schema,</span><br><span class="line">                                                          std::<span class="built_in">move</span>(fragment_gen)),</span><br><span class="line">                        options&#125;&#125;,</span><br><span class="line">       &#123;<span class="string">&quot;project&quot;</span>, acero::ProjectNodeOptions&#123;&#123;options-&gt;filter&#125;, &#123;<span class="string">&quot;mask&quot;</span>&#125;&#125;&#125;,</span><br><span class="line">       &#123;<span class="string">&quot;aggregate&quot;</span>, acero::AggregateNodeOptions&#123;&#123;compute::Aggregate&#123;</span><br><span class="line">                         <span class="string">&quot;sum&quot;</span>, <span class="literal">nullptr</span>, <span class="string">&quot;mask&quot;</span>, <span class="string">&quot;selected_count&quot;</span>&#125;&#125;&#125;&#125;&#125;);</span><br><span class="line"></span><br><span class="line">  <span class="keyword">return</span> acero::<span class="built_in">DeclarationToBatchesAsync</span>(std::<span class="built_in">move</span>(count_plan), exec_context)</span><br><span class="line">      .<span class="built_in">Then</span>([total](<span class="type">const</span> RecordBatchVector&amp; batches) -&gt; Result&lt;<span class="type">int64_t</span>&gt; &#123;</span><br><span class="line">        <span class="built_in">DCHECK_EQ</span>(<span class="number">1</span>, batches.<span class="built_in">size</span>());</span><br><span class="line">        <span class="built_in">ARROW_ASSIGN_OR_RAISE</span>(std::shared_ptr&lt;Scalar&gt; count_scalar,</span><br><span class="line">                              batches[<span class="number">0</span>]-&gt;<span class="built_in">column</span>(<span class="number">0</span>)-&gt;<span class="built_in">GetScalar</span>(<span class="number">0</span>));</span><br><span class="line">        <span class="keyword">return</span> total-&gt;<span class="built_in">load</span>() +</span><br><span class="line">               <span class="built_in">static_cast</span>&lt;<span class="type">int64_t</span>&gt;(</span><br><span class="line">                   ::arrow::internal::<span class="built_in">checked_pointer_cast</span>&lt;UInt64Scalar&gt;(count_scalar)</span><br><span class="line">                       -&gt;value);</span><br><span class="line">      &#125;);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这个 <code>Then</code> 用的还挺有趣</p>
+<h3 id="Plan"><a href="#Plan" class="headerlink" title="Plan"></a>Plan</h3><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">class</span> <span class="title class_">ARROW_ACERO_EXPORT</span> ExecPlan : <span class="keyword">public</span> std::enable_shared_from_this&lt;ExecPlan&gt; &#123;</span><br><span class="line"> <span class="keyword">public</span>:</span><br><span class="line">  <span class="comment">// This allows operators to rely on signed 16-bit indices</span></span><br><span class="line">  <span class="type">static</span> <span class="type">const</span> <span class="type">uint32_t</span> kMaxBatchSize = <span class="number">1</span> &lt;&lt; <span class="number">15</span>;</span><br><span class="line">  <span class="keyword">using</span> NodeVector = std::vector&lt;ExecNode*&gt;;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">virtual</span> ~<span class="built_in">ExecPlan</span>() = <span class="keyword">default</span>;</span><br><span class="line"></span><br><span class="line">  <span class="function">QueryContext* <span class="title">query_context</span><span class="params">()</span></span>;</span><br><span class="line"></span><br><span class="line">  <span class="comment">/// \brief retrieve the nodes in the plan</span></span><br><span class="line">  <span class="function"><span class="type">const</span> NodeVector&amp; <span class="title">nodes</span><span class="params">()</span> <span class="type">const</span></span>;</span><br><span class="line"></span><br><span class="line">  <span class="function">ExecNode* <span class="title">AddNode</span><span class="params">(std::unique_ptr&lt;ExecNode&gt; node)</span></span>;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">template</span> &lt;<span class="keyword">typename</span> Node, <span class="keyword">typename</span>... Args&gt;</span><br><span class="line">  <span class="function">Node* <span class="title">EmplaceNode</span><span class="params">(Args&amp;&amp;... args)</span> </span>&#123;</span><br><span class="line">    std::unique_ptr&lt;Node&gt; node&#123;<span class="keyword">new</span> Node&#123;std::forward&lt;Args&gt;(args)...&#125;&#125;;</span><br><span class="line">    <span class="keyword">auto</span> out = node.<span class="built_in">get</span>();</span><br><span class="line">    <span class="built_in">AddNode</span>(std::<span class="built_in">move</span>(node));</span><br><span class="line">    <span class="keyword">return</span> out;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="function">Status <span class="title">Validate</span><span class="params">()</span></span>;</span><br><span class="line"></span><br><span class="line">  <span class="comment">/// \brief Start producing on all nodes</span></span><br><span class="line">  <span class="comment">///</span></span><br><span class="line">  <span class="comment">/// Nodes are started in reverse topological order, such that any node</span></span><br><span class="line">  <span class="comment">/// is started before all of its inputs.</span></span><br><span class="line">  <span class="function"><span class="type">void</span> <span class="title">StartProducing</span><span class="params">()</span></span>;</span><br><span class="line"></span><br><span class="line">  <span class="comment">/// \brief Stop producing on all nodes</span></span><br><span class="line">  <span class="comment">///</span></span><br><span class="line">  <span class="comment">/// Triggers all sources to stop producing new data.  In order to cleanly stop the plan</span></span><br><span class="line">  <span class="comment">/// will continue to run any tasks that are already in progress.  The caller should</span></span><br><span class="line">  <span class="comment">/// still wait for `finished` to complete before destroying the plan.</span></span><br><span class="line">  <span class="function"><span class="type">void</span> <span class="title">StopProducing</span><span class="params">()</span></span>;</span><br><span class="line"></span><br><span class="line">  <span class="comment">/// \brief A future which will be marked finished when all tasks have finished.</span></span><br><span class="line">  Future&lt;&gt; <span class="built_in">finished</span>();</span><br><span class="line"></span><br><span class="line">  <span class="comment">/// \brief Return whether the plan has non-empty metadata</span></span><br><span class="line">  <span class="function"><span class="type">bool</span> <span class="title">HasMetadata</span><span class="params">()</span> <span class="type">const</span></span>;</span><br><span class="line"></span><br><span class="line">  <span class="comment">/// \brief Return the plan&#x27;s attached metadata</span></span><br><span class="line">  <span class="function">std::shared_ptr&lt;<span class="type">const</span> KeyValueMetadata&gt; <span class="title">metadata</span><span class="params">()</span> <span class="type">const</span></span>;</span><br><span class="line"></span><br><span class="line">  <span class="function">std::string <span class="title">ToString</span><span class="params">()</span> <span class="type">const</span></span>;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>上面这段代码生命周期管理还是非常好理解的：</p>
+<ol>
+<li><code>StartProducing</code>: 开始产生数据</li>
+<li><code>StopProducing</code>: 停止产生 <strong>source 数据</strong>。</li>
+</ol>
+<h3 id="Node"><a href="#Node" class="headerlink" title="Node"></a>Node</h3><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br><span class="line">105</span><br><span class="line">106</span><br><span class="line">107</span><br><span class="line">108</span><br><span class="line">109</span><br><span class="line">110</span><br><span class="line">111</span><br><span class="line">112</span><br><span class="line">113</span><br><span class="line">114</span><br><span class="line">115</span><br><span class="line">116</span><br><span class="line">117</span><br><span class="line">118</span><br><span class="line">119</span><br><span class="line">120</span><br><span class="line">121</span><br><span class="line">122</span><br><span class="line">123</span><br><span class="line">124</span><br><span class="line">125</span><br><span class="line">126</span><br><span class="line">127</span><br><span class="line">128</span><br><span class="line">129</span><br><span class="line">130</span><br><span class="line">131</span><br><span class="line">132</span><br><span class="line">133</span><br><span class="line">134</span><br><span class="line">135</span><br><span class="line">136</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">class</span> <span class="title class_">ARROW_ACERO_EXPORT</span> ExecNode &#123;</span><br><span class="line"> <span class="keyword">public</span>:</span><br><span class="line">  <span class="keyword">using</span> NodeVector = std::vector&lt;ExecNode*&gt;;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">virtual</span> ~<span class="built_in">ExecNode</span>() = <span class="keyword">default</span>;</span><br><span class="line"></span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> <span class="type">const</span> <span class="type">char</span>* <span class="title">kind_name</span><span class="params">()</span> <span class="type">const</span> </span>= <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// The number of inputs expected by this node</span></span><br><span class="line">  <span class="function"><span class="type">int</span> <span class="title">num_inputs</span><span class="params">()</span> <span class="type">const</span> </span>&#123; <span class="keyword">return</span> <span class="built_in">static_cast</span>&lt;<span class="type">int</span>&gt;(inputs_.<span class="built_in">size</span>()); &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">/// This node&#x27;s predecessors in the exec plan</span></span><br><span class="line">  <span class="function"><span class="type">const</span> NodeVector&amp; <span class="title">inputs</span><span class="params">()</span> <span class="type">const</span> </span>&#123; <span class="keyword">return</span> inputs_; &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">/// True if the plan has no output schema (is a sink)</span></span><br><span class="line">  <span class="function"><span class="type">bool</span> <span class="title">is_sink</span><span class="params">()</span> <span class="type">const</span> </span>&#123; <span class="keyword">return</span> !output_schema_; &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">/// \brief Labels identifying the function of each input.</span></span><br><span class="line">  <span class="function"><span class="type">const</span> std::vector&lt;std::string&gt;&amp; <span class="title">input_labels</span><span class="params">()</span> <span class="type">const</span> </span>&#123; <span class="keyword">return</span> input_labels_; &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">/// This node&#x27;s successor in the exec plan</span></span><br><span class="line">  <span class="function"><span class="type">const</span> ExecNode* <span class="title">output</span><span class="params">()</span> <span class="type">const</span> </span>&#123; <span class="keyword">return</span> output_; &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">/// The datatypes for batches produced by this node</span></span><br><span class="line">  <span class="function"><span class="type">const</span> std::shared_ptr&lt;Schema&gt;&amp; <span class="title">output_schema</span><span class="params">()</span> <span class="type">const</span> </span>&#123; <span class="keyword">return</span> output_schema_; &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">/// This node&#x27;s exec plan</span></span><br><span class="line">  <span class="function">ExecPlan* <span class="title">plan</span><span class="params">()</span> </span>&#123; <span class="keyword">return</span> plan_; &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">/// \brief An optional label, for display and debugging</span></span><br><span class="line">  <span class="comment">///</span></span><br><span class="line">  <span class="comment">/// There is no guarantee that this value is non-empty or unique.</span></span><br><span class="line">  <span class="function"><span class="type">const</span> std::string&amp; <span class="title">label</span><span class="params">()</span> <span class="type">const</span> </span>&#123; <span class="keyword">return</span> label_; &#125;</span><br><span class="line">  <span class="function"><span class="type">void</span> <span class="title">SetLabel</span><span class="params">(std::string label)</span> </span>&#123; label_ = std::<span class="built_in">move</span>(label); &#125;</span><br><span class="line"></span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> Status <span class="title">Validate</span><span class="params">()</span> <span class="type">const</span></span>;</span><br><span class="line"></span><br><span class="line">  <span class="comment">/// \brief the ordering of the output batches</span></span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> <span class="type">const</span> Ordering&amp; <span class="title">ordering</span><span class="params">()</span> <span class="type">const</span></span>;</span><br><span class="line"></span><br><span class="line">  <span class="comment">/// Transfer input batch to ExecNode</span></span><br><span class="line">  <span class="comment">///</span></span><br><span class="line">  <span class="comment">/// A node will typically perform some kind of operation on the batch</span></span><br><span class="line">  <span class="comment">/// and then call InputReceived on its outputs with the result.</span></span><br><span class="line">  <span class="comment">///</span></span><br><span class="line">  <span class="comment">/// Other nodes may need to accumulate some number of inputs before any</span></span><br><span class="line">  <span class="comment">/// output can be produced.  These nodes will add the batch to some kind</span></span><br><span class="line">  <span class="comment">/// of in-memory accumulation queue and return.</span></span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> Status <span class="title">InputReceived</span><span class="params">(ExecNode* input, ExecBatch batch)</span> </span>= <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">  <span class="comment">/// Mark the inputs finished after the given number of batches.</span></span><br><span class="line">  <span class="comment">///</span></span><br><span class="line">  <span class="comment">/// This may be called before all inputs are received.  This simply fixes</span></span><br><span class="line">  <span class="comment">/// the total number of incoming batches for an input, so that the ExecNode</span></span><br><span class="line">  <span class="comment">/// knows when it has received all input, regardless of order.</span></span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> Status <span class="title">InputFinished</span><span class="params">(ExecNode* input, <span class="type">int</span> total_batches)</span> </span>= <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">  <span class="comment">/// \brief Perform any needed initialization</span></span><br><span class="line">  <span class="comment">///</span></span><br><span class="line">  <span class="comment">/// This hook performs any actions in between creation of ExecPlan and the call to</span></span><br><span class="line">  <span class="comment">/// StartProducing. An example could be Bloom filter pushdown. The order of ExecNodes</span></span><br><span class="line">  <span class="comment">/// that executes this method is undefined, but the calls are made synchronously.</span></span><br><span class="line">  <span class="comment">///</span></span><br><span class="line">  <span class="comment">/// At this point a node can rely on all inputs &amp; outputs (and the input schemas)</span></span><br><span class="line">  <span class="comment">/// being well defined.</span></span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> Status <span class="title">Init</span><span class="params">()</span></span>;</span><br><span class="line"></span><br><span class="line">  <span class="comment">/// \brief Start producing</span></span><br><span class="line">  <span class="comment">///</span></span><br><span class="line">  <span class="comment">/// This must only be called once.</span></span><br><span class="line">  <span class="comment">///</span></span><br><span class="line">  <span class="comment">/// This is typically called automatically by ExecPlan::StartProducing().</span></span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> Status <span class="title">StartProducing</span><span class="params">()</span> </span>= <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">  <span class="comment">/// \brief Pause producing temporarily</span></span><br><span class="line">  <span class="comment">///</span></span><br><span class="line">  <span class="comment">/// \param output Pointer to the output that is full</span></span><br><span class="line">  <span class="comment">/// \param counter Counter used to sequence calls to pause/resume</span></span><br><span class="line">  <span class="comment">///</span></span><br><span class="line">  <span class="comment">/// This call is a hint that an output node is currently not willing</span></span><br><span class="line">  <span class="comment">/// to receive data.</span></span><br><span class="line">  <span class="comment">///</span></span><br><span class="line">  <span class="comment">/// This may be called any number of times.</span></span><br><span class="line">  <span class="comment">/// However, the node is still free to produce data (which may be difficult</span></span><br><span class="line">  <span class="comment">/// to prevent anyway if data is produced using multiple threads).</span></span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> <span class="type">void</span> <span class="title">PauseProducing</span><span class="params">(ExecNode* output, <span class="type">int32_t</span> counter)</span> </span>= <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">  <span class="comment">/// \brief Resume producing after a temporary pause</span></span><br><span class="line">  <span class="comment">///</span></span><br><span class="line">  <span class="comment">/// \param output Pointer to the output that is now free</span></span><br><span class="line">  <span class="comment">/// \param counter Counter used to sequence calls to pause/resume</span></span><br><span class="line">  <span class="comment">///</span></span><br><span class="line">  <span class="comment">/// This call is a hint that an output node is willing to receive data again.</span></span><br><span class="line">  <span class="comment">///</span></span><br><span class="line">  <span class="comment">/// This may be called any number of times.</span></span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> <span class="type">void</span> <span class="title">ResumeProducing</span><span class="params">(ExecNode* output, <span class="type">int32_t</span> counter)</span> </span>= <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">  <span class="comment">/// \brief Stop producing new data</span></span><br><span class="line">  <span class="comment">///</span></span><br><span class="line">  <span class="comment">/// If this node is a source then the source should stop generating data</span></span><br><span class="line">  <span class="comment">/// as quickly as possible.  If this node is not a source then there is typically</span></span><br><span class="line">  <span class="comment">/// nothing that needs to be done although a node may choose to start ignoring incoming</span></span><br><span class="line">  <span class="comment">/// data.</span></span><br><span class="line">  <span class="comment">///</span></span><br><span class="line">  <span class="comment">/// This method will be called when an error occurs in the plan</span></span><br><span class="line">  <span class="comment">/// This method may also be called by the user if they wish to end a plan early</span></span><br><span class="line">  <span class="comment">/// Finally, this method may be called if a node determines it no longer needs any more</span></span><br><span class="line">  <span class="comment">/// input (for example, a limit node).</span></span><br><span class="line">  <span class="comment">///</span></span><br><span class="line">  <span class="comment">/// This method may be called multiple times.</span></span><br><span class="line">  <span class="comment">///</span></span><br><span class="line">  <span class="comment">/// This is not a pause.  There will be no way to start the source again after this has</span></span><br><span class="line">  <span class="comment">/// been called.</span></span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> Status <span class="title">StopProducing</span><span class="params">()</span></span>;</span><br><span class="line"></span><br><span class="line">  <span class="function">std::string <span class="title">ToString</span><span class="params">(<span class="type">int</span> indent = <span class="number">0</span>)</span> <span class="type">const</span></span>;</span><br><span class="line"></span><br><span class="line"> <span class="keyword">protected</span>:</span><br><span class="line">  <span class="built_in">ExecNode</span>(ExecPlan* plan, NodeVector inputs, std::vector&lt;std::string&gt; input_labels,</span><br><span class="line">           std::shared_ptr&lt;Schema&gt; output_schema);</span><br><span class="line"></span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> Status <span class="title">StopProducingImpl</span><span class="params">()</span> </span>= <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">  <span class="comment">/// Provide extra info to include in the string representation.</span></span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> std::string <span class="title">ToStringExtra</span><span class="params">(<span class="type">int</span> indent = <span class="number">0</span>)</span> <span class="type">const</span></span>;</span><br><span class="line"></span><br><span class="line">  std::atomic&lt;<span class="type">bool</span>&gt; stopped_;</span><br><span class="line">  ExecPlan* plan_;</span><br><span class="line">  std::string label_;</span><br><span class="line"></span><br><span class="line">  NodeVector inputs_;</span><br><span class="line">  std::vector&lt;std::string&gt; input_labels_;</span><br><span class="line"></span><br><span class="line">  std::shared_ptr&lt;Schema&gt; output_schema_;</span><br><span class="line">  ExecNode* output_ = NULLPTR;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>这块代码还是比较清晰的，而且考虑了 <code>Pause</code> <code>Resume</code> 等操作的并行性（这里给操作带上了一个外部的 Counter，由外部维护操作的序号，来做定序，没有幂等的需求）。哎我真觉得这个代码非常清晰了。</p>
+<p>暂时无法在飞书文档外展示此内容</p>
+<h3 id="Scheduler"><a href="#Scheduler" class="headerlink" title="Scheduler"></a>Scheduler</h3><p><code>TaskScheduler</code> 的代码我没看懂，因此只看 AsyncScheduler 就行。</p>
+<p>这块的代码还是比较奇葩的，<code>AsyncTaskScheduler</code> 会有几个相关的类型：</p>
+<ol>
+<li><code>AsyncTaskScheduler</code></li>
+<li><code>AsyncTaskSchedulerImpl</code>: 具体实现</li>
+<li><code>ThrottledAsyncTaskScheduler</code>: 限流的 Task Scheduler</li>
+<li><code>AsyncTaskGroup</code>: 这个是个比较奇怪的东西，比方说 Scan 的时候，这里会要原本的文件活着，所以成为一个小的调度组。<code>AsyncTaskGroupImpl</code> 是它的一个实现。</li>
+</ol>
+<p>这里简单看一下这里的创建方式就行：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// Construct a scheduler</span></span><br><span class="line"><span class="comment">///</span></span><br><span class="line"><span class="comment">/// \param initial_task The initial task which is responsible for adding</span></span><br><span class="line"><span class="comment">///        the first subtasks to the scheduler.</span></span><br><span class="line"><span class="comment">/// \param abort_callback A callback that will be triggered immediately after a task</span></span><br><span class="line"><span class="comment">///        fails while other tasks may still be running.  Nothing needs to be done here,</span></span><br><span class="line"><span class="comment">///        when a task fails the scheduler will stop accepting new tasks and eventually</span></span><br><span class="line"><span class="comment">///        return the error.  However, this callback can be used to more quickly end</span></span><br><span class="line"><span class="comment">///        long running tasks that have already been submitted.  Defaults to doing</span></span><br><span class="line"><span class="comment">///        nothing.</span></span><br><span class="line"><span class="comment">/// \param stop_token An optional stop token that will allow cancellation of the</span></span><br><span class="line"><span class="comment">///        scheduler.  This will be checked before each task is submitted and, in the</span></span><br><span class="line"><span class="comment">///        event of a cancellation, the scheduler will enter an aborted state. This is</span></span><br><span class="line"><span class="comment">///        a graceful cancellation and submitted tasks will still complete.</span></span><br><span class="line"><span class="comment">/// \return A future that will be completed when the initial task and all subtasks have</span></span><br><span class="line"><span class="comment">///         finished.</span></span><br><span class="line"><span class="type">static</span> Future&lt;&gt; <span class="built_in">Make</span>(</span><br><span class="line">    FnOnce&lt;<span class="built_in">Status</span>(AsyncTaskScheduler*)&gt; initial_task,</span><br><span class="line">    FnOnce&lt;<span class="built_in">void</span>(<span class="type">const</span> Status&amp;)&gt; abort_callback = [](<span class="type">const</span> Status&amp;) &#123;&#125;,</span><br><span class="line">    StopToken stop_token = StopToken::<span class="built_in">Unstoppable</span>());</span><br></pre></td></tr></table></figure>
+<p>注意 Scan 的时候怎么使用的：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line">Future&lt;&gt; <span class="built_in">AddScanTasks</span>(<span class="type">const</span> std::shared_ptr&lt;FragmentScanner&gt;&amp; fragment_scanner) &#123;</span><br><span class="line">  scan_state-&gt;fragment_scanner = fragment_scanner;</span><br><span class="line">  ScanState* state_view = scan_state.<span class="built_in">get</span>();</span><br><span class="line">  Future&lt;&gt; list_and_scan_done = Future&lt;&gt;::<span class="built_in">Make</span>();</span><br><span class="line">  <span class="comment">// Finish callback keeps the scan state alive until all scan tasks done</span></span><br><span class="line">  <span class="keyword">struct</span> <span class="title class_">StateHolder</span> &#123;</span><br><span class="line">    <span class="function">Status <span class="title">operator</span><span class="params">()</span><span class="params">()</span> </span>&#123;</span><br><span class="line">      list_and_scan_done.<span class="built_in">MarkFinished</span>();</span><br><span class="line">      <span class="keyword">return</span> Status::<span class="built_in">OK</span>();</span><br><span class="line">    &#125;</span><br><span class="line">    Future&lt;&gt; list_and_scan_done;</span><br><span class="line">    std::unique_ptr&lt;ScanState&gt; scan_state;</span><br><span class="line">  &#125;;</span><br><span class="line"></span><br><span class="line">  std::unique_ptr&lt;util::AsyncTaskGroup&gt; scan_tasks = util::AsyncTaskGroup::<span class="built_in">Make</span>(</span><br><span class="line">      node-&gt;batches_throttle_.<span class="built_in">get</span>(),</span><br><span class="line">      StateHolder&#123;list_and_scan_done, std::<span class="built_in">move</span>(scan_state)&#125;);</span><br><span class="line">  <span class="keyword">for</span> (<span class="type">int</span> i = <span class="number">0</span>; i &lt; fragment_scanner-&gt;<span class="built_in">NumBatches</span>(); i++) &#123;</span><br><span class="line">    node-&gt;num_batches_.<span class="built_in">fetch_add</span>(<span class="number">1</span>);</span><br><span class="line">    scan_tasks-&gt;<span class="built_in">AddTask</span>(std::<span class="built_in">make_unique</span>&lt;ScanBatchTask&gt;(node, state_view, i));</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="comment">// The &quot;list fragments&quot; task doesn&#x27;t actually end until the fragments are</span></span><br><span class="line">  <span class="comment">// all scanned.  This allows us to enforce fragment readahead.</span></span><br><span class="line">  <span class="keyword">return</span> list_and_scan_done;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这里 <code>scan_state</code> 在 <code>StateHolder</code> 中维护。并且做了 dtor callback。</p>
+<h2 id="Node-Implementions"><a href="#Node-Implementions" class="headerlink" title="Node Implementions"></a>Node Implementions</h2><h3 id="Scan"><a href="#Scan" class="headerlink" title="Scan"></a>Scan</h3><p>ScanNode 采取 Push 的策略。并且可能有一些 Backpressure. 这部分代码可以见于 <code>arrow/dataset/scanner.cc</code></p>
+<p>这里大概逻辑是把 Parquet FileFragment 弄成 Scanner，然后弄成 AsyncRecordBatchGenerator，吐出 RecordBatch</p>
+<h4 id="Unordered-Generator"><a href="#Unordered-Generator" class="headerlink" title="Unordered Generator"></a>Unordered Generator</h4><p>这里会在文件产生的 RecordBatch 上标注一个序，但是不手动定序。</p>
+<h4 id="Ordered-Generator"><a href="#Ordered-Generator" class="headerlink" title="Ordered Generator"></a>Ordered Generator</h4><p>构建在 Unordered Generator 上，排序的 BatchGen</p>
+<h2 id="References"><a href="#References" class="headerlink" title="References"></a>References</h2><ol>
+<li><a target="_blank" rel="noopener" href="https://substrait.io/">https://substrait.io/</a></li>
+<li><a target="_blank" rel="noopener" href="https://dplyr.tidyverse.org/">https://dplyr.tidyverse.org/</a></li>
+<li><a target="_blank" rel="noopener" href="https://arrow.apache.org/docs/cpp/streaming_execution.html">https://arrow.apache.org/docs/cpp/streaming_execution.html</a></li>
+<li><a target="_blank" rel="noopener" href="https://arrow.apache.org/docs/dev/cpp/streaming_execution.html">https://arrow.apache.org/docs/dev/cpp/streaming_execution.html</a></li>
+</ol>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Overview"><span class="toc-number">1.</span> <span class="toc-text">Overview</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Framework"><span class="toc-number">2.</span> <span class="toc-text">Framework</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Future"><span class="toc-number">2.1.</span> <span class="toc-text">Future</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Plan"><span class="toc-number">2.2.</span> <span class="toc-text">Plan</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Node"><span class="toc-number">2.3.</span> <span class="toc-text">Node</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Scheduler"><span class="toc-number">2.4.</span> <span class="toc-text">Scheduler</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Node-Implementions"><span class="toc-number">3.</span> <span class="toc-text">Node Implementions</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Scan"><span class="toc-number">3.1.</span> <span class="toc-text">Scan</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Unordered-Generator"><span class="toc-number">3.1.1.</span> <span class="toc-text">Unordered Generator</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Ordered-Generator"><span class="toc-number">3.1.2.</span> <span class="toc-text">Ordered Generator</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#References"><span class="toc-number">4.</span> <span class="toc-text">References</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2023/08/03/Arrow-Acero-Framework/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2023/08/03/Arrow-Acero-Framework/&text=Arrow Acero Framework"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2023/08/03/Arrow-Acero-Framework/&title=Arrow Acero Framework"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2023/08/03/Arrow-Acero-Framework/&is_video=false&description=Arrow Acero Framework"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Arrow Acero Framework&body=Check out this article: http://blog.mwish.me/2023/08/03/Arrow-Acero-Framework/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2023/08/03/Arrow-Acero-Framework/&title=Arrow Acero Framework"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2023/08/03/Arrow-Acero-Framework/&title=Arrow Acero Framework"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2023/08/03/Arrow-Acero-Framework/&title=Arrow Acero Framework"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2023/08/03/Arrow-Acero-Framework/&title=Arrow Acero Framework"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2023/08/03/Arrow-Acero-Framework/&name=Arrow Acero Framework&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2023/08/03/Arrow-Acero-Framework/&t=Arrow Acero Framework"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="Omits copy and move (since C++11) constructors, resulting in zero-copy pass-by-value semantics.  以上是 copy elision 的解释。 下面列举一些代码： 123456789void get_F1(S&amp; s) &amp;#123;    s.i &#x3D; 8;&amp;#125;S* get_F2() &amp;#1">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Notes on C++ Copy Elision">
+<meta property="og:url" content="http://blog.mwish.me/2021/04/12/Notes-on-C-Copy-Elision/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="Omits copy and move (since C++11) constructors, resulting in zero-copy pass-by-value semantics.  以上是 copy elision 的解释。 下面列举一些代码： 123456789void get_F1(S&amp; s) &amp;#123;    s.i &#x3D; 8;&amp;#125;S* get_F2() &amp;#1">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/BE725B3AB0EF7D38B52D06B194606D7D.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/CFF34BB9BC32A9B1EA0A3C8660C537B0.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/628BAC04ED66DC742323A690115292E2.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/BA42F5DB-AE8A-49C9-8FF4-946D1A2BCB2B.png">
+<meta property="article:published_time" content="2021-04-12T13:55:01.000Z">
+<meta property="article:modified_time" content="2022-11-08T08:05:49.823Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/BE725B3AB0EF7D38B52D06B194606D7D.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>Notes on C++ Copy Elision</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2021/04/21/LSM-based-Storage-Techniques-A-Survey-Part1/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2021/04/08/LevelDB-utils-LRU/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2021/04/12/Notes-on-C-Copy-Elision/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2021/04/12/Notes-on-C-Copy-Elision/&text=Notes on C++ Copy Elision"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2021/04/12/Notes-on-C-Copy-Elision/&title=Notes on C++ Copy Elision"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2021/04/12/Notes-on-C-Copy-Elision/&is_video=false&description=Notes on C++ Copy Elision"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Notes on C++ Copy Elision&body=Check out this article: http://blog.mwish.me/2021/04/12/Notes-on-C-Copy-Elision/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2021/04/12/Notes-on-C-Copy-Elision/&title=Notes on C++ Copy Elision"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2021/04/12/Notes-on-C-Copy-Elision/&title=Notes on C++ Copy Elision"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2021/04/12/Notes-on-C-Copy-Elision/&title=Notes on C++ Copy Elision"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2021/04/12/Notes-on-C-Copy-Elision/&title=Notes on C++ Copy Elision"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2021/04/12/Notes-on-C-Copy-Elision/&name=Notes on C++ Copy Elision&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2021/04/12/Notes-on-C-Copy-Elision/&t=Notes on C++ Copy Elision"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-3"><a class="toc-link" href="#Value-Category-and-Guaranteed-Copy-Elision"><span class="toc-number">1.</span> <span class="toc-text">Value Category and Guaranteed Copy Elision</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#NRVO"><span class="toc-number">2.</span> <span class="toc-text">NRVO</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%81%87%E4%B8%8A-scoped-guard"><span class="toc-number">3.</span> <span class="toc-text">遇上 scoped_guard</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%84%9F%E6%83%B3"><span class="toc-number">4.</span> <span class="toc-text">感想</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#References"><span class="toc-number"></span> <span class="toc-text">References</span></a>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Notes on C++ Copy Elision
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2021-04-12T13:55:01.000Z" itemprop="datePublished">2021-04-12</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <blockquote>
+<p>Omits copy and move (since C++11) constructors, resulting in zero-copy pass-by-value semantics.</p>
+</blockquote>
+<p>以上是 copy elision 的解释。</p>
+<p>下面列举一些代码：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">get_F1</span><span class="params">(S&amp; s)</span> </span>&#123;</span><br><span class="line">    s.i = <span class="number">8</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function">S* <span class="title">get_F2</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    S* ps = <span class="keyword">new</span> S; <span class="comment">// 2. default ctor 2</span></span><br><span class="line">    ps-&gt;i = <span class="number">8</span>;</span><br><span class="line">    <span class="keyword">return</span> ps;     <span class="comment">// should be freed later</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>和</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">T <span class="title">get_object</span><span class="params">(args...)</span> </span>&#123;</span><br><span class="line">	T t;</span><br><span class="line">	<span class="comment">// ...</span></span><br><span class="line">	<span class="keyword">return</span> std::<span class="built_in">move</span>(t);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>至少一般我们被教育过，不要 <code>return std::move(t)</code>, 同时我们知道，返回某个 <code>S</code> 类型的量，可能会有 Copy Elision 的优化，帮助我们就地在外部构造这个值 (<code>constructing the automatic object directly into the exception object.</code>)</p>
+<h3 id="Value-Category-and-Guaranteed-Copy-Elision"><a href="#Value-Category-and-Guaranteed-Copy-Elision" class="headerlink" title="Value Category and Guaranteed Copy Elision"></a>Value Category and Guaranteed Copy Elision</h3><p>C++11 定义了 Value Categories. C++ 中，每个 expression 都有一个 value category</p>
+<p>我们考虑仅定义 <code>lvalue</code> 和 <code>rvalue</code>. 字面量 <code>2</code> 肯定是 <code>rvalue</code>, 而 <code>lvalue</code> 被视作 <code>localizable value</code>, 那么，简单句几个例子:</p>
+<ul>
+<li><code>v</code> 是一个 <code>std::vector</code>, <code>v.front()</code> 是一个 lvalue</li>
+<li><code>*p</code> 是一个 lvalue</li>
+<li>甚至一个字符串字面量都是一个不可更改值的 lvalue.</li>
+</ul>
+<p>而 <code>nullptr</code>, <code>&#39;a&#39;</code>, <code>7</code>  这些被视作 <code>rvalue</code>. </p>
+<p><code>lvalue</code> 可以被转成 <code>rvalue</code> ，所以 <code>y = x</code> 是可以的，当然 <code>7 = 8</code> 就不行啦。</p>
+<p>上面只是一个非常模糊的说明，C++11 定义了下面的内容：</p>
+<p><img src="https://image.mwish.me/blog-image/BE725B3AB0EF7D38B52D06B194606D7D.png" alt="BE725B3AB0EF7D38B52D06B194606D7D"></p>
+<p>而 <a target="_blank" rel="noopener" href="http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2015/p0135r0.html">Guaranteed copy elision through simplified value categories</a> 定义了新的 value category, 随后又了如下变更：<a target="_blank" rel="noopener" href="http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2016/p0135r1.html">http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2016/p0135r1.html</a></p>
+<p>这意味着，如果你有一个</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">T <span class="title">f</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="keyword">return</span> <span class="built_in">T</span>();</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">T x = <span class="built_in">f</span>(); <span class="comment">// 1</span></span><br><span class="line">T x2 = <span class="built_in">T</span>(<span class="built_in">T</span>(<span class="built_in">f</span>())); <span class="comment">// 2</span></span><br></pre></td></tr></table></figure>
+<p>这里需要根据 <code>f()</code> 的上下文推断，<code>T()</code> 是个 prvalue, 那么 C++ 17 会强制 1 仅调用一次  T 的构造函数</p>
+<p>然后，再看 2:</p>
+<blockquote>
+<p><strong>If the initializer expression is a prvalue and the cv-unqualified version of the source type is the same class as the class of the destination, the initializer expression is used to initialize the destination object. [</strong> <em>Example**</em>:<strong> <code>T x = T(T(T()));</code> </strong>calls the<strong> <code>T</code> </strong>default constructor to initialize<strong> <code>x</code></strong>. ]**</p>
+</blockquote>
+<p>所以这里构造函数也只会走一次。</p>
+<p><em>以上内容在 C++17 之后是强制的。</em></p>
+<h3 id="NRVO"><a href="#NRVO" class="headerlink" title="NRVO"></a>NRVO</h3><p>我们再考虑 NRVO：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">T <span class="title">get_object</span><span class="params">(args...)</span> </span>&#123;</span><br><span class="line">	T t;</span><br><span class="line">	<span class="comment">// ...</span></span><br><span class="line">	<span class="keyword">return</span> std::<span class="built_in">move</span>(t);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>我们贴两个图：</p>
+<p><img src="https://image.mwish.me/blog-image/CFF34BB9BC32A9B1EA0A3C8660C537B0.png" alt="CFF34BB9BC32A9B1EA0A3C8660C537B0"></p>
+<p><img src="https://image.mwish.me/blog-image/628BAC04ED66DC742323A690115292E2.png" alt="628BAC04ED66DC742323A690115292E2"></p>
+<p>这里描述了 NRVO 和 NRVO 失败的情况。可以看到，对于一个 <code>HardToCopyAndEasyToMove</code> 的结构，即使不 <code>return std::move(..)</code>, 编译器也能正确的优化</p>
+<h3 id="遇上-scoped-guard"><a href="#遇上-scoped-guard" class="headerlink" title="遇上 scoped_guard"></a>遇上 scoped_guard</h3><p>如果你想在参数返回之前，做一些检查，在 <code>go</code> 里面，你没准这么写了：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">var</span> s Status <span class="comment">// when init s.ok() == true</span></span><br><span class="line"><span class="keyword">defer</span> <span class="function"><span class="keyword">func</span><span class="params">()</span></span> &#123;</span><br><span class="line">  <span class="keyword">if</span> s.ok() &#123;</span><br><span class="line">    ...</span><br><span class="line">  &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">    ...</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// ...</span></span><br><span class="line"><span class="keyword">return</span> s</span><br></pre></td></tr></table></figure>
+<p>不谈代码好不好，这里逻辑上是可以的，因为 Go 万物都是 Copy。</p>
+<p>当你想在 C++ 里面实现这些东西的时候，比如：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">Status s; <span class="comment">// when moved, it will be ok</span></span><br><span class="line">std::scoped_guard defer_fn; <span class="comment">// check s</span></span><br><span class="line">...</span><br><span class="line">  </span><br><span class="line"><span class="keyword">return</span> s;</span><br></pre></td></tr></table></figure>
+<p>如果这里走了 move, 那我们有 evaluation order: <a target="_blank" rel="noopener" href="https://en.cppreference.com/w/cpp/language/eval_order">https://en.cppreference.com/w/cpp/language/eval_order</a></p>
+<p><img src="https://image.mwish.me/blog-image/BA42F5DB-AE8A-49C9-8FF4-946D1A2BCB2B.png" alt="BA42F5DB-AE8A-49C9-8FF4-946D1A2BCB2B"></p>
+<p>我们可以看到，这里可能先发生 move, 再来 check s, move 之后 s 可能就不能满足用户的预期了。</p>
+<h3 id="感想"><a href="#感想" class="headerlink" title="感想"></a>感想</h3><p>其实我也不懂 C++，有什么地方写错了，请立刻通知我，我会第一时间查证和改正。</p>
+<p>查阅的时候，虽然感觉 C++ 规则很复杂，但是大部分时候，即使不熟悉这些细节，正常写代码也能保证高效率。正如没有受过法律的正常人，也很少会犯法。</p>
+<p>好了，搞完了，接着打逆转裁判了。</p>
+<h2 id="References"><a href="#References" class="headerlink" title="References"></a>References</h2><ul>
+<li><a target="_blank" rel="noopener" href="https://zh.cppreference.com/w/cpp/language/value_category">value category</a></li>
+<li><a target="_blank" rel="noopener" href="https://en.cppreference.com/w/cpp/language/copy_elision">copy elision</a></li>
+<li>Guaranteed copy elision through simplified value categories  <a target="_blank" rel="noopener" href="http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2015/p0135r0.html">http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2015/p0135r0.html</a></li>
+<li>C++ Templates 2nd</li>
+</ul>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-3"><a class="toc-link" href="#Value-Category-and-Guaranteed-Copy-Elision"><span class="toc-number">1.</span> <span class="toc-text">Value Category and Guaranteed Copy Elision</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#NRVO"><span class="toc-number">2.</span> <span class="toc-text">NRVO</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%81%87%E4%B8%8A-scoped-guard"><span class="toc-number">3.</span> <span class="toc-text">遇上 scoped_guard</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%84%9F%E6%83%B3"><span class="toc-number">4.</span> <span class="toc-text">感想</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#References"><span class="toc-number"></span> <span class="toc-text">References</span></a>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2021/04/12/Notes-on-C-Copy-Elision/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2021/04/12/Notes-on-C-Copy-Elision/&text=Notes on C++ Copy Elision"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2021/04/12/Notes-on-C-Copy-Elision/&title=Notes on C++ Copy Elision"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2021/04/12/Notes-on-C-Copy-Elision/&is_video=false&description=Notes on C++ Copy Elision"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Notes on C++ Copy Elision&body=Check out this article: http://blog.mwish.me/2021/04/12/Notes-on-C-Copy-Elision/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2021/04/12/Notes-on-C-Copy-Elision/&title=Notes on C++ Copy Elision"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2021/04/12/Notes-on-C-Copy-Elision/&title=Notes on C++ Copy Elision"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2021/04/12/Notes-on-C-Copy-Elision/&title=Notes on C++ Copy Elision"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2021/04/12/Notes-on-C-Copy-Elision/&title=Notes on C++ Copy Elision"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2021/04/12/Notes-on-C-Copy-Elision/&name=Notes on C++ Copy Elision&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2021/04/12/Notes-on-C-Copy-Elision/&t=Notes on C++ Copy Elision"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

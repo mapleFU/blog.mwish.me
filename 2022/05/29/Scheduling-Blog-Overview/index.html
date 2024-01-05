@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="今天本来打算看 Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework for the Many-Core Age 这玩意，看了一点之后感觉自己理性上知道这篇文章是把 Task 切碎了，然后调度的时候根据数据亲和性来做处理，然后做了协同调度。但是看到这些词汇的时候，好像一点都想不起来咋做的，感觉我对调度系统理解是一片空白">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Scheduling Blog Overview">
+<meta property="og:url" content="http://blog.mwish.me/2022/05/29/Scheduling-Blog-Overview/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="今天本来打算看 Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework for the Many-Core Age 这玩意，看了一点之后感觉自己理性上知道这篇文章是把 Task 切碎了，然后调度的时候根据数据亲和性来做处理，然后做了协同调度。但是看到这些词汇的时候，好像一点都想不起来咋做的，感觉我对调度系统理解是一片空白">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/DE0BC35E-653F-4B34-98CB-B2A5E35462CA.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/E2C862EC-D7E8-4B59-91D0-D4A2E6444DD0.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/89918942-3B8F-493A-AF3E-9AE58BB381F6.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/60BBDBE5-2C89-4B54-B9B0-E2EA96080CD8.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/AE849A38-8937-40C4-B68A-A24A3EDD15F9.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/5F54B43F-6BA8-4576-9FE1-776FB791ADB1.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/F762A867-E008-4306-B743-BC2F4392614A.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/B606A247-F83F-4F87-BDFD-D76908EA3036.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/31432F80-4DEE-4105-B7CC-3A736E84463D.png">
+<meta property="article:published_time" content="2022-05-29T14:31:23.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.554Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/DE0BC35E-653F-4B34-98CB-B2A5E35462CA.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>Scheduling Blog Overview</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2022/06/04/crossbeam-epoch/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2022/05/28/Constant-Time-Recovery-in-Azure-SQL-Database/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2022/05/29/Scheduling-Blog-Overview/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2022/05/29/Scheduling-Blog-Overview/&text=Scheduling Blog Overview"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2022/05/29/Scheduling-Blog-Overview/&title=Scheduling Blog Overview"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2022/05/29/Scheduling-Blog-Overview/&is_video=false&description=Scheduling Blog Overview"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Scheduling Blog Overview&body=Check out this article: http://blog.mwish.me/2022/05/29/Scheduling-Blog-Overview/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2022/05/29/Scheduling-Blog-Overview/&title=Scheduling Blog Overview"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2022/05/29/Scheduling-Blog-Overview/&title=Scheduling Blog Overview"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2022/05/29/Scheduling-Blog-Overview/&title=Scheduling Blog Overview"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2022/05/29/Scheduling-Blog-Overview/&title=Scheduling Blog Overview"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2022/05/29/Scheduling-Blog-Overview/&name=Scheduling Blog Overview&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2022/05/29/Scheduling-Blog-Overview/&t=Scheduling Blog Overview"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9F%BA%E6%9C%AC%E6%A6%82%E5%BF%B5-OS"><span class="toc-number">1.</span> <span class="toc-text">基本概念: OS</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%B0%83%E5%BA%A6%E6%9C%BA%E5%88%B6"><span class="toc-number">1.1.</span> <span class="toc-text">调度机制</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8D%95%E6%A0%B8%E8%B0%83%E5%BA%A6"><span class="toc-number">1.2.</span> <span class="toc-text">单核调度</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%9E%E6%97%B6%E8%B0%83%E5%BA%A6"><span class="toc-number">1.3.</span> <span class="toc-text">实时调度</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%A4%9A%E6%A0%B8%E8%B0%83%E5%BA%A6"><span class="toc-number">1.4.</span> <span class="toc-text">多核调度</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Linux-%E8%B0%83%E5%BA%A6"><span class="toc-number">1.5.</span> <span class="toc-text">Linux 调度</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%85%B6%E4%BB%96"><span class="toc-number">1.6.</span> <span class="toc-text">其他</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%88%86%E5%B8%83%E5%BC%8F%E8%B0%83%E5%BA%A6%E7%B3%BB%E7%BB%9F"><span class="toc-number">2.</span> <span class="toc-text">分布式调度系统</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#DB-%E7%9A%84%E8%B0%83%E5%BA%A6%E7%B3%BB%E7%BB%9F"><span class="toc-number">3.</span> <span class="toc-text">DB 的调度系统</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Scheduling Blog Overview
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2022-05-29T14:31:23.000Z" itemprop="datePublished">2022-05-29</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>今天本来打算看 <em>Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework for the Many-Core Age</em> 这玩意，看了一点之后感觉自己理性上知道这篇文章是把 Task 切碎了，然后调度的时候根据数据亲和性来做处理，然后做了协同调度。但是看到这些词汇的时候，好像一点都想不起来咋做的，感觉我对调度系统理解是一片空白。知道它在讲啥也不能清晰的理解内容。</p>
+<p>刚看了看陈海波的 os 书第六章，突然理解了很多名词，不过感觉记 notes 也不如原书这一章好，所以干脆做一个索引。来描述我对调度系统名词理解。</p>
+<p>这篇文章是瞎几把写的，很多东西我也就先占坑，所以没啥必要看，主要是以后理清楚了可以在这里回过头来写写「原来是这样」</p>
+<h2 id="基本概念-OS"><a href="#基本概念-OS" class="headerlink" title="基本概念: OS"></a>基本概念: OS</h2><p>这里最好参考陈海波的 <em>&lt;现代操作系统：原理与实现&gt;</em> 来理解。</p>
+<p>这里有一个任务（Task）的概念，Linux 里面线程/进程都是 <code>task_struct</code> 里面都是 Task。这里还会涉及别的东西，包括：</p>
+<ol>
+<li>优先级（Priority）</li>
+<li>时间片（Timeslice）</li>
+<li>Deadline</li>
+<li>…</li>
+</ol>
+<p>关于调度目标，</p>
+<p>性能相关指标有：吞吐量（单位时间内处理的任务数量）、周转时间（任务发起到结束的时间）、响应时间</p>
+<p>非性能相关：公平性、资源利用率</p>
+<p>任务可能有不同类型，比如<strong>批处理</strong>类型更希望有更大的吞吐量、更小的周转时间；<strong>交互式任务</strong>会希望有更小的响应时间；实时任务会希望有更好的实时性；移动设备可能希望开销小一点，它还大小核什么的。</p>
+<p>同时，任务数量会很多，而且现代系统本身也向多核发展（详见：<a href="https://blog.mwish.me/2022/05/04/perfbook-notes-hardware/">https://blog.mwish.me/2022/05/04/perfbook-notes-hardware/</a> 和 <a href="https://blog.mwish.me/2022/05/02/Arch-Blog-Overviews/">https://blog.mwish.me/2022/05/02/Arch-Blog-Overviews/</a> ）。所以也会希望能用上所有的 CPU、调度开销小。</p>
+<p>然后不同任务指标是不一样的（当时看这里不太理解，但是看 AP/TP/HSAP 等工业界需求，就会明白很多了），这里也有各种 trade-off：</p>
+<ol>
+<li>调度开销 vs 调度效果</li>
+<li>优先级 vs 公平性</li>
+<li>性能 vs 能耗</li>
+</ol>
+<p>关于上面的，还有一些 os 的博客指出它们的 trade-off ，比如 SOCC’14 的 Tales of the Tail: Hardware, OS, and Application-level Sources of Tail Latency</p>
+<h3 id="调度机制"><a href="#调度机制" class="headerlink" title="调度机制"></a>调度机制</h3><p>长期、短期、中期调度，长期控制是否 spawn task，短期处理任务状态，中期根据 IO 等状况调整</p>
+<p><img src="https://image.mwish.me/blog-image/DE0BC35E-653F-4B34-98CB-B2A5E35462CA.png" alt="DE0BC35E-653F-4B34-98CB-B2A5E35462CA"></p>
+<p><img src="https://image.mwish.me/blog-image/E2C862EC-D7E8-4B59-91D0-D4A2E6444DD0.png" alt="E2C862EC-D7E8-4B59-91D0-D4A2E6444DD0"></p>
+<h3 id="单核调度"><a href="#单核调度" class="headerlink" title="单核调度"></a>单核调度</h3><p>FCFS/SJF/MLFQ/RR ，抢占/非抢占，是否有优先级（多级反馈队列），是否有份额（比如各个用户付了不同的钱，那么调度会根据 stride 或者彩票来调度）</p>
+<p>上面其实不是谁比谁更优，而要考虑各种 功能需求 / trade-off</p>
+<h3 id="实时调度"><a href="#实时调度" class="headerlink" title="实时调度"></a>实时调度</h3><p>TBD</p>
+<h3 id="多核调度"><a href="#多核调度" class="headerlink" title="多核调度"></a>多核调度</h3><p><img src="https://image.mwish.me/blog-image/89918942-3B8F-493A-AF3E-9AE58BB381F6.png" alt="89918942-3B8F-493A-AF3E-9AE58BB381F6"></p>
+<p>首先考虑协同调度/群组调度，上层知道任务的分组/协同情况，就更能利用多核的性能。例如 BSP 模型（常用于类似 MR/图计算）。</p>
+<p>这里还要考虑两级调度，这样能保证调度的开销是小的（考虑 NUMA 等情况）：</p>
+<p><img src="https://image.mwish.me/blog-image/60BBDBE5-2C89-4B54-B9B0-E2EA96080CD8.png" alt="60BBDBE5-2C89-4B54-B9B0-E2EA96080CD8"></p>
+<p>调度要考虑调度的开销，Linux 有一个 Per-Entity Load Tracing 机制来考虑。</p>
+<p>然后调度到不同 core 开销也不同，所以有：</p>
+<p><img src="https://image.mwish.me/blog-image/AE849A38-8937-40C4-B68A-A24A3EDD15F9.png" alt="AE849A38-8937-40C4-B68A-A24A3EDD15F9"></p>
+<h3 id="Linux-调度"><a href="#Linux-调度" class="headerlink" title="Linux 调度"></a>Linux 调度</h3><p>CFS 等：</p>
+<p><img src="https://image.mwish.me/blog-image/5F54B43F-6BA8-4576-9FE1-776FB791ADB1.png" alt="5F54B43F-6BA8-4576-9FE1-776FB791ADB1"></p>
+<h3 id="其他"><a href="#其他" class="headerlink" title="其他"></a>其他</h3><ul>
+<li>Tokio 调度，在 coroutine 上引入了一些 ts 等：<a target="_blank" rel="noopener" href="https://tokio.rs/blog/2019-10-scheduler">https://tokio.rs/blog/2019-10-scheduler</a> 和 <a target="_blank" rel="noopener" href="https://tokio.rs/blog/2020-04-preemption">https://tokio.rs/blog/2020-04-preemption</a></li>
+</ul>
+<h2 id="分布式调度系统"><a href="#分布式调度系统" class="headerlink" title="分布式调度系统"></a>分布式调度系统</h2><p>《大数据日知录》第四章。</p>
+<p>静态划分是很好的方法，但是资源利用率不高，更期望把资源当作整体管理：</p>
+<p><img src="https://image.mwish.me/blog-image/F762A867-E008-4306-B743-BC2F4392614A.png" alt="F762A867-E008-4306-B743-BC2F4392614A"></p>
+<p>这里要考虑：workload 的资源的性质（CPU/Disk/GPU，有无状态）；数据局部性（Node -&gt; Rack -&gt; Cluster）；调度的是否抢占（能否暂停/干死正在跑的任务，还是只能从 spare 中分配资源）</p>
+<p>也要考虑单机各种资源隔离的方法，是否饿死任务等。</p>
+<p>调度器也有不同的类型：</p>
+<p><img src="https://image.mwish.me/blog-image/B606A247-F83F-4F87-BDFD-D76908EA3036.png" alt="B606A247-F83F-4F87-BDFD-D76908EA3036"></p>
+<p>还有不同的调度算法：</p>
+<p><img src="https://image.mwish.me/blog-image/31432F80-4DEE-4105-B7CC-3A736E84463D.png" alt="31432F80-4DEE-4105-B7CC-3A736E84463D"></p>
+<h2 id="DB-的调度系统"><a href="#DB-的调度系统" class="headerlink" title="DB 的调度系统"></a>DB 的调度系统</h2><p>相对我们之前提的 OS 调度来说，DB 调度系统可能可以：</p>
+<ol>
+<li>根据 Plan 和 Catalog 预估各种开销</li>
+<li>更好的并行，协同调度，比如 Exchange 算子</li>
+<li>单机还好，分布式的话，开销会引入网络开销，还算未知</li>
+</ol>
+<p>材料有：</p>
+<ol>
+<li><a target="_blank" rel="noopener" href="https://15721.courses.cs.cmu.edu/spring2020/papers/12-scheduling/p743-leis.pdf">Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework for the Many-Core Age</a></li>
+<li><a target="_blank" rel="noopener" href="https://15721.courses.cs.cmu.edu/spring2020/papers/12-scheduling/p1442-psaroudakis.pdf">Scaling Up Concurrent Main-Memory Column-Store Scans: Towards Adaptive NUMA-aware Data and Task Placement</a></li>
+<li>SQL 查询的分布式执行与调度 <a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/100949808">https://zhuanlan.zhihu.com/p/100949808</a></li>
+<li>PolarDB 并行计算框架 <a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/346320114">https://zhuanlan.zhihu.com/p/346320114</a></li>
+</ol>
+<p>Spark, Presto, StarRocks 等</p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9F%BA%E6%9C%AC%E6%A6%82%E5%BF%B5-OS"><span class="toc-number">1.</span> <span class="toc-text">基本概念: OS</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%B0%83%E5%BA%A6%E6%9C%BA%E5%88%B6"><span class="toc-number">1.1.</span> <span class="toc-text">调度机制</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8D%95%E6%A0%B8%E8%B0%83%E5%BA%A6"><span class="toc-number">1.2.</span> <span class="toc-text">单核调度</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%9E%E6%97%B6%E8%B0%83%E5%BA%A6"><span class="toc-number">1.3.</span> <span class="toc-text">实时调度</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%A4%9A%E6%A0%B8%E8%B0%83%E5%BA%A6"><span class="toc-number">1.4.</span> <span class="toc-text">多核调度</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Linux-%E8%B0%83%E5%BA%A6"><span class="toc-number">1.5.</span> <span class="toc-text">Linux 调度</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%85%B6%E4%BB%96"><span class="toc-number">1.6.</span> <span class="toc-text">其他</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%88%86%E5%B8%83%E5%BC%8F%E8%B0%83%E5%BA%A6%E7%B3%BB%E7%BB%9F"><span class="toc-number">2.</span> <span class="toc-text">分布式调度系统</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#DB-%E7%9A%84%E8%B0%83%E5%BA%A6%E7%B3%BB%E7%BB%9F"><span class="toc-number">3.</span> <span class="toc-text">DB 的调度系统</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2022/05/29/Scheduling-Blog-Overview/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2022/05/29/Scheduling-Blog-Overview/&text=Scheduling Blog Overview"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2022/05/29/Scheduling-Blog-Overview/&title=Scheduling Blog Overview"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2022/05/29/Scheduling-Blog-Overview/&is_video=false&description=Scheduling Blog Overview"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Scheduling Blog Overview&body=Check out this article: http://blog.mwish.me/2022/05/29/Scheduling-Blog-Overview/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2022/05/29/Scheduling-Blog-Overview/&title=Scheduling Blog Overview"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2022/05/29/Scheduling-Blog-Overview/&title=Scheduling Blog Overview"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2022/05/29/Scheduling-Blog-Overview/&title=Scheduling Blog Overview"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2022/05/29/Scheduling-Blog-Overview/&title=Scheduling Blog Overview"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2022/05/29/Scheduling-Blog-Overview/&name=Scheduling Blog Overview&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2022/05/29/Scheduling-Blog-Overview/&t=Scheduling Blog Overview"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

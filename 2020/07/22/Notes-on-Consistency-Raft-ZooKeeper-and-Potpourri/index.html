@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="Notes on Consistency: Raft &amp; ZooKeeper Raft 协议按照论文实现的话，是能保证 Linearizable 的，这是最强的一致性模型，在整个系统中，operation 有序并原子的完成，每个操作都像瞬间发生一样，在这个时间点之后看到这个对象都是写入的值，在这个点之前看到的都是前一个值。 以上只是一个我自己理解的很模糊的说法，实际内容可以参考：  htt">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Notes on Consistency: Raft &amp; ZooKeeper and Potpourri">
+<meta property="og:url" content="http://blog.mwish.me/2020/07/22/Notes-on-Consistency-Raft-ZooKeeper-and-Potpourri/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="Notes on Consistency: Raft &amp; ZooKeeper Raft 协议按照论文实现的话，是能保证 Linearizable 的，这是最强的一致性模型，在整个系统中，operation 有序并原子的完成，每个操作都像瞬间发生一样，在这个时间点之后看到这个对象都是写入的值，在这个点之前看到的都是前一个值。 以上只是一个我自己理解的很模糊的说法，实际内容可以参考：  htt">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/B95597B6-1F4D-4579-B286-76A6D16A1A25.png">
+<meta property="article:published_time" content="2020-07-21T19:27:38.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.551Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/B95597B6-1F4D-4579-B286-76A6D16A1A25.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>Notes on Consistency: Raft &amp; ZooKeeper and Potpourri</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2020/08/06/notes-on-craq/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2020/07/17/SQL-ORM-notes/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/07/22/Notes-on-Consistency-Raft-ZooKeeper-and-Potpourri/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/07/22/Notes-on-Consistency-Raft-ZooKeeper-and-Potpourri/&text=Notes on Consistency: Raft &amp; ZooKeeper and Potpourri"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/07/22/Notes-on-Consistency-Raft-ZooKeeper-and-Potpourri/&title=Notes on Consistency: Raft &amp; ZooKeeper and Potpourri"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/07/22/Notes-on-Consistency-Raft-ZooKeeper-and-Potpourri/&is_video=false&description=Notes on Consistency: Raft &amp; ZooKeeper and Potpourri"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Notes on Consistency: Raft &amp; ZooKeeper and Potpourri&body=Check out this article: http://blog.mwish.me/2020/07/22/Notes-on-Consistency-Raft-ZooKeeper-and-Potpourri/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/07/22/Notes-on-Consistency-Raft-ZooKeeper-and-Potpourri/&title=Notes on Consistency: Raft &amp; ZooKeeper and Potpourri"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/07/22/Notes-on-Consistency-Raft-ZooKeeper-and-Potpourri/&title=Notes on Consistency: Raft &amp; ZooKeeper and Potpourri"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/07/22/Notes-on-Consistency-Raft-ZooKeeper-and-Potpourri/&title=Notes on Consistency: Raft &amp; ZooKeeper and Potpourri"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/07/22/Notes-on-Consistency-Raft-ZooKeeper-and-Potpourri/&title=Notes on Consistency: Raft &amp; ZooKeeper and Potpourri"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/07/22/Notes-on-Consistency-Raft-ZooKeeper-and-Potpourri/&name=Notes on Consistency: Raft &amp; ZooKeeper and Potpourri&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/07/22/Notes-on-Consistency-Raft-ZooKeeper-and-Potpourri/&t=Notes on Consistency: Raft &amp; ZooKeeper and Potpourri"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#Notes-on-Consistency-Raft-amp-ZooKeeper"><span class="toc-number">1.</span> <span class="toc-text">Notes on Consistency: Raft &amp; ZooKeeper</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#Sequential-Consistency"><span class="toc-number">1.1.</span> <span class="toc-text">Sequential Consistency</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%AA%8C%E8%AF%81"><span class="toc-number">1.2.</span> <span class="toc-text">验证</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%A4%9A%E4%B8%AA%E5%8F%98%E9%87%8F"><span class="toc-number">1.3.</span> <span class="toc-text">多个变量</span></a></li></ol></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Notes on Consistency: Raft &amp; ZooKeeper and Potpourri
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2020-07-21T19:27:38.000Z" itemprop="datePublished">2020-07-22</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <h1 id="Notes-on-Consistency-Raft-amp-ZooKeeper"><a href="#Notes-on-Consistency-Raft-amp-ZooKeeper" class="headerlink" title="Notes on Consistency: Raft &amp; ZooKeeper"></a>Notes on Consistency: Raft &amp; ZooKeeper</h1><p><img src="https://image.mwish.me/blog-image/B95597B6-1F4D-4579-B286-76A6D16A1A25.png" alt="B95597B6-1F4D-4579-B286-76A6D16A1A25"></p>
+<p>Raft 协议按照论文实现的话，是能保证 Linearizable 的，这是最强的一致性模型，在整个系统中，operation 有序并原子的完成，每个操作都像瞬间发生一样，在这个时间点之后看到这个对象都是写入的值，在这个点之前看到的都是前一个值。</p>
+<p>以上只是一个我自己理解的很模糊的说法，实际内容可以参考：</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://en.wikipedia.org/wiki/Linearizability">https://en.wikipedia.org/wiki/Linearizability</a></li>
+</ul>
+<p>实际上，在了解 Wing&amp;Gong 算法之类的判别法之前，我们可以尝试看看上面的 history4:</p>
+<ul>
+<li>Wx0 在 Rx1 Rx2 之前发生，这意味着如果系统是 Linearizable 的，读取之前就发生了 Wx1 和 Wx2</li>
+<li>C2 Rx1 之后 Rx2, 没有重叠的情况下，2 应该在 1之后被写入</li>
+</ul>
+<p>你可能会在两种地方看到 Linearizable ：</p>
+<ul>
+<li>你在单机的多核处理器中实现了一个 Queue, 需要判断在多核处理器下访问它的语义是否是 Linearizable 的</li>
+<li>你实现了一个 Raft, 要来判断他是否满足 Linearizable</li>
+</ul>
+<p>Linearizable 实现的代价很高，当你实现一个基础的 kv raft 的时候，你得保证：</p>
+<ul>
+<li>Raft 把你写消息广播到了大部分机器上</li>
+<li>在你读取的时候，Raft Leader 仍然是大部分集群的 Leader</li>
+<li>…</li>
+</ul>
+<p>在系统中，我们可能需要 Linearizable 的协调单点，来完成这样的语义。</p>
+<h2 id="Sequential-Consistency"><a href="#Sequential-Consistency" class="headerlink" title="Sequential Consistency"></a>Sequential Consistency</h2><blockquote>
+<p>… the result of any execution is the same as if the operations of all the processors were executed in some sequential order, and the operations of each individual processor appear in this sequence in the order specified by its program.</p>
+</blockquote>
+<p>以上是 Sequential Consistency 的定义，它保证了操作是 total order 的，并且在你读到一个值之后，你就再也不会读到它之前的值了。</p>
+<p>但是，有一点需要注意的是，有的时候你并没有“同时”这个保证：Linearizable 系统中，A写入了，B同时一定就能读到（假设没有其他的 Writer）。但是 Sequential Consistency 的系统中，你可以保证 Total Order，但不能保证这一点。</p>
+<p>你如果了解过 memory order 的话，可能会比较熟悉 <code>acquire</code> <code>release</code> <code>acq_rel</code> <code>seq_cst</code>, 在 stackoverflow 有后两个的讨论，或许能帮你更加了解：</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://stackoverflow.com/questions/12340773/how-do-memory-order-seq-cst-and-memory-order-acq-rel-differ">https://stackoverflow.com/questions/12340773/how-do-memory-order-seq-cst-and-memory-order-acq-rel-differ</a></li>
+</ul>
+<p>ZooKeeper 提供一种类似 Sequential Consistency 的定义，它称为 Linearizable-Write</p>
+<ul>
+<li>写会被有序全局广播</li>
+<li>读会读 local-cache</li>
+<li>通过 watch 来看等待通知</li>
+</ul>
+<p>可以参见我之前翻译的 Paper</p>
+<h2 id="验证"><a href="#验证" class="headerlink" title="验证"></a>验证</h2><p>Jepsen 根据调用的图提供了验证方式，etcd 等都用 Jepsen 来做一些一致性验证和混沌情况下的一致性验证，可以看看 Jepsen 对应的文档：</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://jepsen.io/consistency/models/linearizable">https://jepsen.io/consistency/models/linearizable</a></li>
+<li><a target="_blank" rel="noopener" href="https://jepsen.io/consistency/models/sequential">https://jepsen.io/consistency/models/sequential</a></li>
+</ul>
+<h2 id="多个变量"><a href="#多个变量" class="headerlink" title="多个变量"></a>多个变量</h2><p>当你要处理多个变量的“一致性” 的时候，你可能需要的是数据库的一致性。</p>
+<p>Generalized Isolation Level Definitions 这篇论文介绍了包括 SI 下它的详细定义，PostgreSQL 的 SSI 也是在这基础上实现的。</p>
+<p>之前做过一个相关的 slide: <a target="_blank" rel="noopener" href="https://docs.google.com/presentation/d/1FrW41bGt6iSjxQwbYu0YulYR-SoV2iiqyKpDV4SPxxc/edit?usp=sharing">https://docs.google.com/presentation/d/1FrW41bGt6iSjxQwbYu0YulYR-SoV2iiqyKpDV4SPxxc/edit?usp=sharing</a></p>
+<p>实际上，Jepsen 的 elle 也对这种情况进行了实验：</p>
+<p><a target="_blank" rel="noopener" href="https://github.com/jepsen-io/elle">https://github.com/jepsen-io/elle</a></p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#Notes-on-Consistency-Raft-amp-ZooKeeper"><span class="toc-number">1.</span> <span class="toc-text">Notes on Consistency: Raft &amp; ZooKeeper</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#Sequential-Consistency"><span class="toc-number">1.1.</span> <span class="toc-text">Sequential Consistency</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%AA%8C%E8%AF%81"><span class="toc-number">1.2.</span> <span class="toc-text">验证</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%A4%9A%E4%B8%AA%E5%8F%98%E9%87%8F"><span class="toc-number">1.3.</span> <span class="toc-text">多个变量</span></a></li></ol></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/07/22/Notes-on-Consistency-Raft-ZooKeeper-and-Potpourri/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/07/22/Notes-on-Consistency-Raft-ZooKeeper-and-Potpourri/&text=Notes on Consistency: Raft &amp; ZooKeeper and Potpourri"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/07/22/Notes-on-Consistency-Raft-ZooKeeper-and-Potpourri/&title=Notes on Consistency: Raft &amp; ZooKeeper and Potpourri"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/07/22/Notes-on-Consistency-Raft-ZooKeeper-and-Potpourri/&is_video=false&description=Notes on Consistency: Raft &amp; ZooKeeper and Potpourri"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Notes on Consistency: Raft &amp; ZooKeeper and Potpourri&body=Check out this article: http://blog.mwish.me/2020/07/22/Notes-on-Consistency-Raft-ZooKeeper-and-Potpourri/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/07/22/Notes-on-Consistency-Raft-ZooKeeper-and-Potpourri/&title=Notes on Consistency: Raft &amp; ZooKeeper and Potpourri"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/07/22/Notes-on-Consistency-Raft-ZooKeeper-and-Potpourri/&title=Notes on Consistency: Raft &amp; ZooKeeper and Potpourri"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/07/22/Notes-on-Consistency-Raft-ZooKeeper-and-Potpourri/&title=Notes on Consistency: Raft &amp; ZooKeeper and Potpourri"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/07/22/Notes-on-Consistency-Raft-ZooKeeper-and-Potpourri/&title=Notes on Consistency: Raft &amp; ZooKeeper and Potpourri"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/07/22/Notes-on-Consistency-Raft-ZooKeeper-and-Potpourri/&name=Notes on Consistency: Raft &amp; ZooKeeper and Potpourri&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/07/22/Notes-on-Consistency-Raft-ZooKeeper-and-Potpourri/&t=Notes on Consistency: Raft &amp; ZooKeeper and Potpourri"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

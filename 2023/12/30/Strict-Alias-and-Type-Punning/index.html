@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="最近在看代码的时候老感觉自己的基础不够扎实，加上最近比较摸鱼，于是想灌灌水。事情的起因是早上看到社区的一个优化：https:&#x2F;&#x2F;github.com&#x2F;apache&#x2F;arrow&#x2F;pull&#x2F;39397 这个优化的修改大概是这样的： 12345678910111213141516171819202122  &#x2F;&#x2F; Read definition and repetition levels. Also re">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Strict Alias and Type Punning">
+<meta property="og:url" content="http://blog.mwish.me/2023/12/30/Strict-Alias-and-Type-Punning/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="最近在看代码的时候老感觉自己的基础不够扎实，加上最近比较摸鱼，于是想灌灌水。事情的起因是早上看到社区的一个优化：https:&#x2F;&#x2F;github.com&#x2F;apache&#x2F;arrow&#x2F;pull&#x2F;39397 这个优化的修改大概是这样的： 12345678910111213141516171819202122  &#x2F;&#x2F; Read definition and repetition levels. Also re">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/9C554F6D-AEC1-4758-A462-3B3D75F0ABCC.png">
+<meta property="article:published_time" content="2023-12-30T11:09:01.000Z">
+<meta property="article:modified_time" content="2023-12-30T12:20:12.259Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/9C554F6D-AEC1-4758-A462-3B3D75F0ABCC.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>Strict Alias and Type Punning</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2023/12/10/Compiler-Optimizations-Power-Limits-Auto-vetorize/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2023/12/30/Strict-Alias-and-Type-Punning/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2023/12/30/Strict-Alias-and-Type-Punning/&text=Strict Alias and Type Punning"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2023/12/30/Strict-Alias-and-Type-Punning/&title=Strict Alias and Type Punning"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2023/12/30/Strict-Alias-and-Type-Punning/&is_video=false&description=Strict Alias and Type Punning"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Strict Alias and Type Punning&body=Check out this article: http://blog.mwish.me/2023/12/30/Strict-Alias-and-Type-Punning/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2023/12/30/Strict-Alias-and-Type-Punning/&title=Strict Alias and Type Punning"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2023/12/30/Strict-Alias-and-Type-Punning/&title=Strict Alias and Type Punning"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2023/12/30/Strict-Alias-and-Type-Punning/&title=Strict Alias and Type Punning"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2023/12/30/Strict-Alias-and-Type-Punning/&title=Strict Alias and Type Punning"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2023/12/30/Strict-Alias-and-Type-Punning/&name=Strict Alias and Type Punning&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2023/12/30/Strict-Alias-and-Type-Punning/&t=Strict Alias and Type Punning"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9D%82%E4%BD%99"><span class="toc-number">1.</span> <span class="toc-text">杂余</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%91%8A%E8%AF%89%E7%BC%96%E8%AF%91%E5%99%A8%E5%A5%BD%E5%A5%BD%E5%B7%A5%E4%BD%9C"><span class="toc-number">1.1.</span> <span class="toc-text">告诉编译器好好工作</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Strict-Aliasing-%E5%92%8C-UB"><span class="toc-number">1.2.</span> <span class="toc-text">Strict Aliasing 和 UB</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Type-Punning"><span class="toc-number">2.</span> <span class="toc-text">Type Punning</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Reference"><span class="toc-number">3.</span> <span class="toc-text">Reference</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Strict Alias and Type Punning
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2023-12-30T11:09:01.000Z" itemprop="datePublished">2023-12-30</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>最近在看代码的时候老感觉自己的基础不够扎实，加上最近比较摸鱼，于是想灌灌水。事情的起因是早上看到社区的一个优化：<a target="_blank" rel="noopener" href="https://github.com/apache/arrow/pull/39397">https://github.com/apache/arrow/pull/39397</a></p>
+<p>这个优化的修改大概是这样的：</p>
+<figure class="highlight diff"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line">  // Read definition and repetition levels. Also return the number of definition levels</span><br><span class="line">  // and number of values to read. This function is called before reading values.</span><br><span class="line">  void ReadLevels(int64_t batch_size, int16_t* def_levels, int16_t* rep_levels,</span><br><span class="line">                  int64_t* num_def_levels, int64_t* values_to_read) &#123;</span><br><span class="line">    batch_size =</span><br><span class="line">        std::min(batch_size, this-&gt;num_buffered_values_ - this-&gt;num_decoded_values_);</span><br><span class="line">    // If the field is required and non-repeated, there are no definition levels</span><br><span class="line">    if (this-&gt;max_def_level_ &gt; 0 &amp;&amp; def_levels != nullptr) &#123;</span><br><span class="line">      *num_def_levels = this-&gt;ReadDefinitionLevels(batch_size, def_levels);</span><br><span class="line">      // TODO(wesm): this tallying of values-to-decode can be performed with better</span><br><span class="line">      // cache-efficiency if fused with the level decoding.</span><br><span class="line"><span class="deletion">-      for (int64_t i = 0; i &lt; *num_def_levels; ++i) &#123;</span></span><br><span class="line"><span class="deletion">-        if (def_levels[i] == this-&gt;max_def_level_) &#123;</span></span><br><span class="line"><span class="deletion">-          ++(*values_to_read);</span></span><br><span class="line"><span class="deletion">-        &#125;</span></span><br><span class="line"><span class="deletion">-      &#125;</span></span><br><span class="line"><span class="addition">+			 *values_to_read +=</span></span><br><span class="line"><span class="addition">+          std::count(def_levels, def_levels + *num_def_levels, this-&gt;max_def_level_);</span></span><br><span class="line">    &#125; else &#123;</span><br><span class="line">      // Required field, read all values</span><br><span class="line">      *values_to_read = batch_size;</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
+<p>实际上，这个地方 <code>std::count</code> 比循环效率高吗？否，虽然我们可以认为 <code>std::count</code> 和循环大概可以产生等价的代码，那么是什么东西让这样效果好一点呢？答案是编译器无法确定 <code>num_def_levels</code>, <code>values_to_read</code> 是不是一个东西，在循环中：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> (def_levels[i] == <span class="keyword">this</span>-&gt;max_def_level_) &#123;</span><br><span class="line">  (*values_to_read);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>会生成下面的代码：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">0xc0c2f0 &lt;ReadLevels()+96&gt; inc %rdx</span><br><span class="line">0xc0c2f3 &lt;ReadLevels()+99&gt; cmp %rax,%rdx</span><br><span class="line">0xc0c2f6 &lt;ReadLevels()+102&gt; jge 0xc0c30c &lt;ReadLevels()+124&gt;</span><br><span class="line">0xc0c2f8 &lt;ReadLevels()+104&gt; cmp %cx,(%r14,%rdx,2)</span><br><span class="line">0xc0c2fd &lt;ReadLevels()+109&gt; jne 0xc0c2f0 &lt;ReadLevels()+96&gt;</span><br><span class="line">0xc0c2ff &lt;ReadLevels()+111&gt; incq 0x0(%rbp)</span><br><span class="line">0xc0c303 &lt;ReadLevels()+115&gt; mov (%rbx),%rax</span><br><span class="line">0xc0c306 &lt;ReadLevels()+118&gt; jmp 0xc0c2f0 &lt;ReadLevels()+96&gt;</span><br></pre></td></tr></table></figure>
+<p>这段很简单的代码在循环中反而显得判断很多余。根据我们之前介绍的内容，编译器可以很好的优化这种场景，甚至做一些向量化的优化。</p>
+<p>这里我们会了解到的部分就是 strict aliasing，这部分的 cppreference 可以见：<a target="_blank" rel="noopener" href="https://en.cppreference.com/w/cpp/language/object#Strict_aliasing">https://en.cppreference.com/w/cpp/language/object#Strict_aliasing</a> 。Strict Aliasing 大概就是，什么之后能够判断变量（想象循环里的 <code>def_levels</code>, <code>max_def_level_</code> , <code>values_to_read</code> ）指向不同的区域。</p>
+<p>那么，根据我们上面的 cppreference （也可以参考博文 <a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/595286568">https://zhuanlan.zhihu.com/p/595286568</a> ）。类型上大家都是 <code>int64_t</code>，并不好判断两边不是同一个 alias！</p>
+<h2 id="杂余"><a href="#杂余" class="headerlink" title="杂余"></a>杂余</h2><h3 id="告诉编译器好好工作"><a href="#告诉编译器好好工作" class="headerlink" title="告诉编译器好好工作"></a>告诉编译器好好工作</h3><p>本 patch 的 solving 用了个很简单的方法：直接把变量拷出来！你两个本地内存你能飞到哪去呢？</p>
+<p>除此之外，这里还提到了很多方法</p>
+<ol>
+<li>RESTRICT</li>
+<li><a target="_blank" rel="noopener" href="https://en.cppreference.com/w/cpp/language/attributes/assume">https://en.cppreference.com/w/cpp/language/attributes/assume</a> </li>
+<li><code>gnu::pure</code></li>
+<li>…</li>
+</ol>
+<p>这些方法主要是告诉编译器好好干活不要胡思乱想！具体可以参考这个系列：<a target="_blank" rel="noopener" href="https://developers.redhat.com/blog/2020/06/02/the-joys-and-perils-of-c-and-c-aliasing-part-1#">https://developers.redhat.com/blog/2020/06/02/the-joys-and-perils-of-c-and-c-aliasing-part-1#</a></p>
+<h3 id="Strict-Aliasing-和-UB"><a href="#Strict-Aliasing-和-UB" class="headerlink" title="Strict Aliasing 和 UB"></a>Strict Aliasing 和 UB</h3><p>在 Strict Aliasing 的情况下，这里其实很容易写出一些相关的 ub: </p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">int</span> <span class="title">foo</span><span class="params">( <span class="type">float</span> *f, <span class="type">int</span> *i )</span> </span>&#123; </span><br><span class="line">    *i = <span class="number">1</span>;               </span><br><span class="line">    *f = <span class="number">0.f</span>;            </span><br><span class="line">   </span><br><span class="line">   <span class="keyword">return</span> *i;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="type">int</span> x = <span class="number">0</span>;</span><br><span class="line">    </span><br><span class="line">    std::cout &lt;&lt; x &lt;&lt; <span class="string">&quot;\n&quot;</span>;   <span class="comment">// Expect 0，Output 0</span></span><br><span class="line">    x = <span class="built_in">foo</span>((<span class="type">float</span>*)(&amp;x), &amp;x);</span><br><span class="line">    std::cout &lt;&lt; x &lt;&lt; <span class="string">&quot;\n&quot;</span>;   <span class="comment">// Expect 0, But Output 1</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<blockquote>
+<p>函数 <code>foo( float *f, int *i )</code>，编译器根据 strict aliasing rule 会认为 <code>*f</code> 和 <code>*i</code> 指向不同的内存区域，并以此进行优化，但实际上指向了相同的内存区域，因此产生了错误的结果。</p>
+</blockquote>
+<p>嘛这个虽然 <code>-fno-strict-aliasing</code> 可以阻止一些错误，但是实际也可以参考 Type Punning</p>
+<h2 id="Type-Punning"><a href="#Type-Punning" class="headerlink" title="Type Punning"></a>Type Punning</h2><p>最早看 LevelDB 代码的时候，发现它从 buffer 中读取整数走了一个 memcpy。这个我当时还没理解，后来才知道是 Type Punning 的玄机。我们可以介绍一下 Strict Aliasing 之类的允许的类型转化和一些奇怪的问题。</p>
+<blockquote>
+<p>Whenever an attempt is made to read or modify the stored value of an object of type <code>DynamicType</code> through a glvalue of type <code>AliasedType</code>, the behavior is undefined unless one of the following is true:</p>
+<ul>
+<li><code>AliasedType</code> and <code>DynamicType</code> are <a target="_blank" rel="noopener" href="https://en.cppreference.com/w/cpp/language/implicit_conversion#Similar_types">similar</a>.</li>
+<li><code>AliasedType</code> is the (possibly <a target="_blank" rel="noopener" href="https://en.cppreference.com/w/cpp/language/cv">cv</a>-qualified) signed or unsigned variant of <code>DynamicType</code>.</li>
+<li><code>AliasedType</code> is <a target="_blank" rel="noopener" href="https://en.cppreference.com/w/cpp/types/byte"><code>std::byte</code></a>,(since C++17) char, or unsigned char: this permits examination of the <a target="_blank" rel="noopener" href="https://en.cppreference.com/w/cpp/language/object#Object_representation_and_value_representation">object representation</a> of any object as an array of bytes.</li>
+</ul>
+</blockquote>
+<p>此外，还有下面的图：比如说 int32_t 的 object representation 可能很多，但转成同样位数的 float，却可能是 cb，因为它可能有些 value representation 是没有的！</p>
+<p><img src="https://image.mwish.me/blog-image/9C554F6D-AEC1-4758-A462-3B3D75F0ABCC.png" alt="9C554F6D-AEC1-4758-A462-3B3D75F0ABCC"></p>
+<p>这里具体也可以参考 <a target="_blank" rel="noopener" href="https://www.youtube.com/watch?v=_qzMpk-22cc&amp;ab_channel=CppCon">https://www.youtube.com/watch?v=_qzMpk-22cc&amp;ab_channel=CppCon</a></p>
+<h2 id="Reference"><a href="#Reference" class="headerlink" title="Reference"></a>Reference</h2><ol>
+<li>Type punning in modern C++ - Timur Doumler - CppCon 2019 <a target="_blank" rel="noopener" href="https://www.youtube.com/watch?v=_qzMpk-22cc&amp;ab_channel=CppCon">https://www.youtube.com/watch?v=_qzMpk-22cc&amp;ab_channel=CppCon</a></li>
+<li>严格别名（Strict Aliasing）规则是什么，编译器为什么不做我想做的事？ - Atled的文章 - 知乎<br><a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/595286568">https://zhuanlan.zhihu.com/p/595286568</a></li>
+<li><a target="_blank" rel="noopener" href="https://developers.redhat.com/blog/2020/06/02/the-joys-and-perils-of-c-and-c-aliasing-part-1#">https://developers.redhat.com/blog/2020/06/02/the-joys-and-perils-of-c-and-c-aliasing-part-1#</a></li>
+<li><a target="_blank" rel="noopener" href="https://gist.github.com/shafik/848ae25ee209f698763cffee272a58f8">https://gist.github.com/shafik/848ae25ee209f698763cffee272a58f8</a></li>
+</ol>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9D%82%E4%BD%99"><span class="toc-number">1.</span> <span class="toc-text">杂余</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%91%8A%E8%AF%89%E7%BC%96%E8%AF%91%E5%99%A8%E5%A5%BD%E5%A5%BD%E5%B7%A5%E4%BD%9C"><span class="toc-number">1.1.</span> <span class="toc-text">告诉编译器好好工作</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Strict-Aliasing-%E5%92%8C-UB"><span class="toc-number">1.2.</span> <span class="toc-text">Strict Aliasing 和 UB</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Type-Punning"><span class="toc-number">2.</span> <span class="toc-text">Type Punning</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Reference"><span class="toc-number">3.</span> <span class="toc-text">Reference</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2023/12/30/Strict-Alias-and-Type-Punning/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2023/12/30/Strict-Alias-and-Type-Punning/&text=Strict Alias and Type Punning"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2023/12/30/Strict-Alias-and-Type-Punning/&title=Strict Alias and Type Punning"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2023/12/30/Strict-Alias-and-Type-Punning/&is_video=false&description=Strict Alias and Type Punning"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Strict Alias and Type Punning&body=Check out this article: http://blog.mwish.me/2023/12/30/Strict-Alias-and-Type-Punning/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2023/12/30/Strict-Alias-and-Type-Punning/&title=Strict Alias and Type Punning"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2023/12/30/Strict-Alias-and-Type-Punning/&title=Strict Alias and Type Punning"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2023/12/30/Strict-Alias-and-Type-Punning/&title=Strict Alias and Type Punning"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2023/12/30/Strict-Alias-and-Type-Punning/&title=Strict Alias and Type Punning"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2023/12/30/Strict-Alias-and-Type-Punning/&name=Strict Alias and Type Punning&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2023/12/30/Strict-Alias-and-Type-Punning/&t=Strict Alias and Type Punning"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

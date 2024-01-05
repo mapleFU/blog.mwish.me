@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="Apache Arrow 是由 Pandas 作者 Wes McKenny 主导的一款以内存为主体，辐射到数据交换、内存计算、多格式多平台转换的库。它的大概 Idea 可以见下图，写的非常直观。  我们简单介绍一下 Arrow 的内容：  一切的核心，Arrow 的内存 Columnar 结构(见官方介绍 [1] 和我之前的博客 [2]) 在这上面的 ExtensionType，支持用户定义自己">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Arrow Data System">
+<meta property="og:url" content="http://blog.mwish.me/2023/06/01/Arrow-Data-System/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="Apache Arrow 是由 Pandas 作者 Wes McKenny 主导的一款以内存为主体，辐射到数据交换、内存计算、多格式多平台转换的库。它的大概 Idea 可以见下图，写的非常直观。  我们简单介绍一下 Arrow 的内容：  一切的核心，Arrow 的内存 Columnar 结构(见官方介绍 [1] 和我之前的博客 [2]) 在这上面的 ExtensionType，支持用户定义自己">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/image.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/ipc-file-format.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/C9ACE6F5-A3F6-45B3-A4E6-169BFAAF96A0.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/a7d9c337-14e0-44f8-8c1c-e8badd189e0d.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/9E626D1C-90D9-4261-80DD-761870A41306.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/flight-request-pattern.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/flight-batch.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/casting.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/data.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/expressions.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/acero-nodes.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/B1AA6B5E-808A-43C6-97CC-D165C82B13A8.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/D457D790-709D-4B27-846D-DFBDC4183DB2.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/gandiva.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/0EC24B5E-7C33-4F1D-B813-B9C4BBA65D25.png">
+<meta property="article:published_time" content="2023-06-01T05:50:00.000Z">
+<meta property="article:modified_time" content="2023-06-01T05:47:04.751Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/image.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>Arrow Data System</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2023/06/07/Why-do-we-need-ReadView/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2023/05/27/Arrow-Compute/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2023/06/01/Arrow-Data-System/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2023/06/01/Arrow-Data-System/&text=Arrow Data System"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2023/06/01/Arrow-Data-System/&title=Arrow Data System"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2023/06/01/Arrow-Data-System/&is_video=false&description=Arrow Data System"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Arrow Data System&body=Check out this article: http://blog.mwish.me/2023/06/01/Arrow-Data-System/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2023/06/01/Arrow-Data-System/&title=Arrow Data System"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2023/06/01/Arrow-Data-System/&title=Arrow Data System"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2023/06/01/Arrow-Data-System/&title=Arrow Data System"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2023/06/01/Arrow-Data-System/&title=Arrow Data System"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2023/06/01/Arrow-Data-System/&name=Arrow Data System&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2023/06/01/Arrow-Data-System/&t=Arrow Data System"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Core-In-Memory-Format"><span class="toc-number">1.</span> <span class="toc-text">Core: In Memory Format</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#IPC-Format"><span class="toc-number">1.1.</span> <span class="toc-text">IPC Format</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Stream"><span class="toc-number">1.1.1.</span> <span class="toc-text">Stream</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#File"><span class="toc-number">1.1.2.</span> <span class="toc-text">File</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Extension-Type"><span class="toc-number">1.2.</span> <span class="toc-text">Extension Type</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E4%BA%A4%E6%8D%A2%E7%9A%84%E5%B7%A5%E5%85%B7"><span class="toc-number">2.</span> <span class="toc-text">数据交换的工具</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Arrow-Flight"><span class="toc-number">2.1.</span> <span class="toc-text">Arrow Flight</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#From-JDBC-Converter-to-Others"><span class="toc-number">2.2.</span> <span class="toc-text">From JDBC Converter to Others</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%AE%A1%E7%AE%97%E7%9B%B8%E5%85%B3%E7%9A%84%E5%B7%A5%E5%85%B7"><span class="toc-number">3.</span> <span class="toc-text">计算相关的工具</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Compute-amp-Acero"><span class="toc-number">3.1.</span> <span class="toc-text">Compute &amp; Acero</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Substrait"><span class="toc-number">3.1.1.</span> <span class="toc-text">Substrait</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Datafusion-Ballista"><span class="toc-number">3.2.</span> <span class="toc-text">Datafusion &#x2F; Ballista</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Gandiva"><span class="toc-number">3.3.</span> <span class="toc-text">Gandiva</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E6%BA%90%E5%92%8C%E5%86%99%E5%85%A5%E7%9B%B8%E5%85%B3%E7%9A%84-API"><span class="toc-number">4.</span> <span class="toc-text">数据源和写入相关的 API</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#References"><span class="toc-number">5.</span> <span class="toc-text">References</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Arrow Data System
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2023-06-01T05:50:00.000Z" itemprop="datePublished">2023-06-01</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <ol>
+<li><p>Apache Arrow 是由 Pandas 作者 Wes McKenny 主导的一款以内存为主体，辐射到数据交换、内存计算、多格式多平台转换的库。它的大概 Idea 可以见下图，写的非常直观。</p>
+<p><img src="https://image.mwish.me/blog-image/image.png" alt="image"></p>
+<p>我们简单介绍一下 Arrow 的内容：</p>
+<ol>
+<li>一切的核心，Arrow 的内存 Columnar 结构(见官方介绍 [1] 和我之前的博客 [2])<ol>
+<li>在这上面的 ExtensionType，支持用户定义自己的类型，包括 Tensor 这样的类型</li>
+<li>IPC File</li>
+</ol>
+</li>
+<li>数据交换上成功的工具<ol>
+<li>Arrow JDBC Converter [3]</li>
+<li>ADBC [4]</li>
+<li>Arrow Flight [5] 和基于 Arrow Flight SQL [6]</li>
+</ol>
+</li>
+<li>一些计算相关的 API<ol>
+<li>向量化计算函数的 Compute [7]</li>
+<li>Push-based Execution 的 Acero [8]</li>
+<li>LLVM Codegen 的执行 Gandiva [9] (已经快死了)</li>
+<li>SQL Planning 的 Datafusion [10]</li>
+<li>分布式执行的 Ballista</li>
+</ol>
+</li>
+<li>一些数据源和写入相关的 API<ol>
+<li>FileSystem: 对文件来源的层次的 Unify [11]</li>
+<li>Dataset API: 对某个 FileSystem 下的多个文件 / 分区 / 数据格式的抽象，也可以加上 Project, Filter 等操作 [12]</li>
+</ol>
+</li>
+</ol>
+<p>就我个人评价而言，Arrow 在每个领域中很难说得上是性能最好的，但是胜在提供了比较完善的解决方案，api 相对侵入性也不会很大。很多地方扩展性比较强，例如提供了 <code>ExtensionType</code>（可以用 <code>ExtensionType</code> 去支持机器学习需要的 Tensor 这样的类型 [16] ），也允许用户按照 API 去 Inject 自己想要的东西。Arrow Flight 总体上也是比较开放的。这些合起来的原因和方便的生态导致 Arrow 其实被较为广泛的使用了，包括 Snowflake [13] 和 Bigquery [14] 这几家都在用，开源的数据项目，像 Ray 这样的也会积极拥抱 Arrow。DuckDB 甚至给支持 Arrow 的转换写了一篇博客 [15]。</p>
+<p>总的来说，Arrow 主要为生态开放的做了不少工作，虽然核心的性能不是最好的（参见 Velox 和诸多的大厂开放的引擎，一个比较经典的例子是 Firebolt，基于开源的引擎自己拼了一个数据仓库出来），但是因为很强的通用性和比较完善的生态，现在已经侵入了很多人的系统。</p>
+<h2 id="Core-In-Memory-Format"><a href="#Core-In-Memory-Format" class="headerlink" title="Core: In Memory Format"></a><strong>Core: In Memory Format</strong></h2><p>关于 Arrow 的 In Memory Format，之前尝试介绍过了：</p>
+<ol>
+<li><a href="https://blog.mwish.me/2023/05/04/Type-and-Array-in-Columnar-System/">https://blog.mwish.me/2023/05/04/Type-and-Array-in-Columnar-System/</a></li>
+<li><a href="https://blog.mwish.me/2022/10/04/Parquet-Part2-arrow-Parquet-code-path/">https://blog.mwish.me/2022/10/04/Parquet-Part2-arrow-Parquet-code-path/</a></li>
+</ol>
+<p>这个地方本身没啥好说的，值得说的都在上面的内容了</p>
+<h3 id="IPC-Format"><a href="#IPC-Format" class="headerlink" title="IPC Format"></a><strong>IPC Format</strong></h3><p>IPC File 格式 <strong>基本等价于</strong> 内存中 Format 的 RecordBatch，这里它会尽量在 package 里面做 alignas （比较有意思和关联的 patch 看这个：<a target="_blank" rel="noopener" href="https://github.com/apache/arrow/pull/35565/files">https://github.com/apache/arrow/pull/35565/files</a> ，在计算层要求输出是满足 align 的），然后让数据能够被 Zero-Copy 的解析到 Arrow 格式上。这里应该关心可能的数据和元数据</p>
+<p>IPC Format 有两种格式：</p>
+<ol>
+<li>Streaming Format: Appendable，必须整个解析</li>
+<li>Random Access: 一整个 RecordBatch 写的文件</li>
+</ol>
+<p>在协议上，这里允许（不定大小的）下列元素：</p>
+<ol>
+<li>Schema: <strong>文件或者 Stream</strong> 的 Schema（这里需要注意，ipc 既可以写在文件里，又可以为了整个流来设置）</li>
+<li>DictionaryBatch</li>
+<li>RecordBatch</li>
+</ol>
+<p>在定义的格式中，基本的元素是 Message，下面是对应的 Message Format:</p>
+<p><img src="https://image.mwish.me/blog-image/ipc-file-format.png" alt="ipc-file-format"></p>
+<p>这里元数据由 <code>FlatBuffer</code> 组成（ <a href="https://blog.mwish.me/2022/01/14/format-thinking/">https://blog.mwish.me/2022/01/14/format-thinking/</a> ）它的格式定义在 <a target="_blank" rel="noopener" href="https://github.com/apache/arrow/blob/main/format/Message.fbs">https://github.com/apache/arrow/blob/main/format/Message.fbs</a> 中。这里包括：</p>
+<figure class="highlight protobuf"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">table Message &#123;</span><br><span class="line">  version: org.apache.arrow.flatbuf.MetadataVersion;</span><br><span class="line">  header: MessageHeader;</span><br><span class="line">  bodyLength: long;</span><br><span class="line">  custom_metadata: [ KeyValue ];</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h4 id="Stream"><a href="#Stream" class="headerlink" title="Stream"></a>Stream</h4><p><img src="https://image.mwish.me/blog-image/C9ACE6F5-A3F6-45B3-A4E6-169BFAAF96A0.png" alt="C9ACE6F5-A3F6-45B3-A4E6-169BFAAF96A0"></p>
+<p><img src="https://image.mwish.me/blog-image/a7d9c337-14e0-44f8-8c1c-e8badd189e0d.png" alt="a7d9c337-14e0-44f8-8c1c-e8badd189e0d"></p>
+<p>为什么之前强调了是文件/Stream的 Schema 呢，因为它本身是没有文件（内）级别的 Schema Evolution 的</p>
+<p>比较重要的是 Record Batch Message，这里会在写文件和读取的时候都保证 alignment (8B，也可以手动指定），这里有：<a target="_blank" rel="noopener" href="https://arrow.apache.org/docs/format/Columnar.html#recordbatch-message">https://arrow.apache.org/docs/format/Columnar.html#recordbatch-message</a></p>
+<p>这部分实现的内容很像 ORC 那套格式。</p>
+<p>同时，这部分字典格式是 INCREMENT 的（看上面的 DICTIONARY DELTA），增量的字典带来了一部分的扩展性：<a target="_blank" rel="noopener" href="https://arrow.apache.org/docs/format/Columnar.html#dictionary-messages">https://arrow.apache.org/docs/format/Columnar.html#dictionary-messages</a></p>
+<h4 id="File"><a href="#File" class="headerlink" title="File"></a>File</h4><p><img src="https://image.mwish.me/blog-image/9E626D1C-90D9-4261-80DD-761870A41306.png" alt="9E626D1C-90D9-4261-80DD-761870A41306"></p>
+<h3 id="Extension-Type"><a href="#Extension-Type" class="headerlink" title="Extension Type"></a>Extension Type</h3><p>用户可以以 Key-Value Metadata 的形式去做 Schema 上的扩展，GeoArrow，Tensor 这些，都可以收益于Arrow 包含的扩展：<a target="_blank" rel="noopener" href="https://arrow.apache.org/docs/format/Columnar.html#extension-types">https://arrow.apache.org/docs/format/Columnar.html#extension-types</a></p>
+<h2 id="数据交换的工具"><a href="#数据交换的工具" class="headerlink" title="数据交换的工具"></a>数据交换的工具</h2><p>如果说之前的部分是内存和 Stream 层面的 kernel，那么下面来介绍数据交换。提到这部分，可能首先想起的是 IPC 层 CWI 的相关的论文 「Don’t Hold My Data Hostage – A Case For Client Protocol Redesign」。其实和文章结论比较接近，但是这部分其实比较有意思，也给用户可以科普一下 client-side 的 dirty work 和复杂度。</p>
+<h3 id="Arrow-Flight"><a href="#Arrow-Flight" class="headerlink" title="Arrow Flight"></a>Arrow Flight</h3><p>Arrow Flight 其实是在 grpc 和 protobuf 上开了一套洞的 Arrow 传输协议。</p>
+<p>Q: Arrow Flight 和 Arrow Streaming Format 有什么关系？</p>
+<p>A: Arrow Flight 主要工作在传输协议和分布式上</p>
+<p>如图，下面是 Arrow Flight 的工作模式</p>
+<p><img src="https://image.mwish.me/blog-image/flight-request-pattern.png" alt="flight-request-pattern"></p>
+<p>如图，Arrow Flight 允许以如下方式去捞一个 <strong>Dataset</strong>，和这篇（ <a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/340520316">https://zhuanlan.zhihu.com/p/340520316</a> ）有异曲同工之妙（废话，AP 做法都差不多）</p>
+<p><img src="https://image.mwish.me/blog-image/flight-batch.png" alt="flight-batch"></p>
+<p>在代码实现上，Flight 在 Protobuf 代码上开了个洞，尽量让他解析 Arrow 数据的时候，被 Arrow 拦截，做到实现上的 Zero-copy (众所周知，pb 本身不是为了传输大对象设计的）。</p>
+<p>Flight 还支持一些非 gRPC 的访问，比如协议上准备兼容</p>
+<h3 id="From-JDBC-Converter-to-Others"><a href="#From-JDBC-Converter-to-Others" class="headerlink" title="From JDBC Converter to Others"></a>From JDBC Converter to Others</h3><p>JDBC / ODBC 实际上是 90 年代起数据交换的事实标准，如果考虑到使用的话，流程如左图：</p>
+<p><img src="https://image.mwish.me/blog-image/casting.png" alt="casting"></p>
+<p>右图首先提供了一种 JDBC Client 的交互方式。即首先需要转一层。当然这并不能让人满意，所以接下来出现了下面的数据流</p>
+<p><img src="https://image.mwish.me/blog-image/data.png" alt="data"></p>
+<ol>
+<li>ADBC: 启发自 DuckDB 作者的论文 「Don’t Hold My Data Hostage – A Case For Client Protocol Redesign」。相当于列式的 JDBC。需要注意的是，这个格式虽然比较有潜力，但是才 0.4，可能需要等他自己发展一下</li>
+<li>Driver: 类似数据库的 Driver，能够把 Arrow 转成 JDBC / ADBC</li>
+<li>Flight SQL Protocol: Flight 之上的 Catalog / SQL 框架。与实现大概无关，愿景是一个通用协议层</li>
+</ol>
+<p>说实话这套东西竞争力还挺强的，BigQuery, Snowflake, DataBricks 都或多或少用了这套东西. 主要问题还是用数据库的 JDBC Driver 或者甚至行的接口来处理还是比较菜的。需要专门的接口来 handle 这套内容。</p>
+<h2 id="计算相关的工具"><a href="#计算相关的工具" class="headerlink" title="计算相关的工具"></a>计算相关的工具</h2><h3 id="Compute-amp-Acero"><a href="#Compute-amp-Acero" class="headerlink" title="Compute &amp; Acero"></a>Compute &amp; Acero</h3><p>在 Arrow 的核心中提供了 Arrow Compute 这样的工具，它的基本逻辑和定位见之前的博客：<a href="https://blog.mwish.me/2023/05/27/Arrow-Compute/">https://blog.mwish.me/2023/05/27/Arrow-Compute/</a></p>
+<p>Compute 定位的是向量化的算子( Function )。</p>
+<p>虽然 Compute 本身可能没有 Expression 的概念，但是 Arrow 为了别的地方使用，在 Compute 里面实现了 Expression。几乎所有数据库都有 Expression 相关的概念，它可以是：</p>
+<ol>
+<li>LiteralValue Or Datum</li>
+<li>FieldRef of input Datum</li>
+<li>Compute Function，Function Member 都是别的 Expression</li>
+</ol>
+<p><img src="https://image.mwish.me/blog-image/expressions.png" alt="expressions"></p>
+<p>Acero 是构建在这套系统上的 Operator 层。定位上，Acero 是一个 Push-Based 的算子层，虽然代码写的不是很细，但是比较易懂：</p>
+<p><img src="https://image.mwish.me/blog-image/acero-nodes.png" alt="acero-nodes"></p>
+<p>这里可以根据 Declaration 生成一组对应的 ExecPlan / ExecNode，然后下层来驱动数据流的执行。</p>
+<h4 id="Substrait"><a href="#Substrait" class="headerlink" title="Substrait"></a>Substrait</h4><p>Substrait 的定位是一个开放的 (可能被优化过的) Plan，后面可以是对应的执行器，前面产生对应的 Plan。Arrow C++ Acero 本身并不负责 Planning，只是一个执行的对应的流。</p>
+<p><img src="https://image.mwish.me/blog-image/B1AA6B5E-808A-43C6-97CC-D165C82B13A8.png" alt="B1AA6B5E-808A-43C6-97CC-D165C82B13A8"></p>
+<h3 id="Datafusion-Ballista"><a href="#Datafusion-Ballista" class="headerlink" title="Datafusion / Ballista"></a>Datafusion / Ballista</h3><p><img src="https://image.mwish.me/blog-image/D457D790-709D-4B27-846D-DFBDC4183DB2.png" alt="D457D790-709D-4B27-846D-DFBDC4183DB2"></p>
+<p>SQL 和执行对应的逻辑。</p>
+<h3 id="Gandiva"><a href="#Gandiva" class="headerlink" title="Gandiva"></a>Gandiva</h3><p>Gandiva 类似 Compute，是 Dremio 捐赠给项目的，对应的逻辑是 Codegen. 这个项目感觉差不多已经似了</p>
+<p><img src="https://image.mwish.me/blog-image/gandiva.png" alt="gandiva"></p>
+<h2 id="数据源和写入相关的-API"><a href="#数据源和写入相关的-API" class="headerlink" title="数据源和写入相关的 API"></a>数据源和写入相关的 API</h2><p><img src="https://image.mwish.me/blog-image/0EC24B5E-7C33-4F1D-B813-B9C4BBA65D25.png" alt="0EC24B5E-7C33-4F1D-B813-B9C4BBA65D25"></p>
+<p>Arrow 在对应的内容上有两层</p>
+<ol>
+<li>FileSystem: 处理 Local, S3, HDFS 等「存储后台」的文件</li>
+<li>DataSet: ORC/JSON/CSV 等文件是在 DataSet 层处理的，这层也使用了 FileSystem。有点像 Presto 的 Connector，可以 Filter Pushdown 和读/写</li>
+</ol>
+<h2 id="References"><a href="#References" class="headerlink" title="References"></a><strong>References</strong></h2><ol>
+<li>DuckDB quacks Arrow: A zero-copy data integration between Apache Arrow and DuckDB <a target="_blank" rel="noopener" href="https://duckdb.org/2021/12/03/duck-arrow.html">https://duckdb.org/2021/12/03/duck-arrow.html</a></li>
+<li><a target="_blank" rel="noopener" href="https://arrow.apache.org/docs/cpp/api/tensor.html">https://arrow.apache.org/docs/cpp/api/tensor.html</a> 和 maillist 的讨论 <a target="_blank" rel="noopener" href="https://lists.apache.org/thread/95ncmr4two34mxodlds7bzxvrrzmk1s6">https://lists.apache.org/thread/95ncmr4two34mxodlds7bzxvrrzmk1s6</a></li>
+</ol>
+</li>
+</ol>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Core-In-Memory-Format"><span class="toc-number">1.</span> <span class="toc-text">Core: In Memory Format</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#IPC-Format"><span class="toc-number">1.1.</span> <span class="toc-text">IPC Format</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Stream"><span class="toc-number">1.1.1.</span> <span class="toc-text">Stream</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#File"><span class="toc-number">1.1.2.</span> <span class="toc-text">File</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Extension-Type"><span class="toc-number">1.2.</span> <span class="toc-text">Extension Type</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E4%BA%A4%E6%8D%A2%E7%9A%84%E5%B7%A5%E5%85%B7"><span class="toc-number">2.</span> <span class="toc-text">数据交换的工具</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Arrow-Flight"><span class="toc-number">2.1.</span> <span class="toc-text">Arrow Flight</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#From-JDBC-Converter-to-Others"><span class="toc-number">2.2.</span> <span class="toc-text">From JDBC Converter to Others</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%AE%A1%E7%AE%97%E7%9B%B8%E5%85%B3%E7%9A%84%E5%B7%A5%E5%85%B7"><span class="toc-number">3.</span> <span class="toc-text">计算相关的工具</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Compute-amp-Acero"><span class="toc-number">3.1.</span> <span class="toc-text">Compute &amp; Acero</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Substrait"><span class="toc-number">3.1.1.</span> <span class="toc-text">Substrait</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Datafusion-Ballista"><span class="toc-number">3.2.</span> <span class="toc-text">Datafusion &#x2F; Ballista</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Gandiva"><span class="toc-number">3.3.</span> <span class="toc-text">Gandiva</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E6%BA%90%E5%92%8C%E5%86%99%E5%85%A5%E7%9B%B8%E5%85%B3%E7%9A%84-API"><span class="toc-number">4.</span> <span class="toc-text">数据源和写入相关的 API</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#References"><span class="toc-number">5.</span> <span class="toc-text">References</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2023/06/01/Arrow-Data-System/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2023/06/01/Arrow-Data-System/&text=Arrow Data System"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2023/06/01/Arrow-Data-System/&title=Arrow Data System"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2023/06/01/Arrow-Data-System/&is_video=false&description=Arrow Data System"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Arrow Data System&body=Check out this article: http://blog.mwish.me/2023/06/01/Arrow-Data-System/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2023/06/01/Arrow-Data-System/&title=Arrow Data System"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2023/06/01/Arrow-Data-System/&title=Arrow Data System"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2023/06/01/Arrow-Data-System/&title=Arrow Data System"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2023/06/01/Arrow-Data-System/&title=Arrow Data System"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2023/06/01/Arrow-Data-System/&name=Arrow Data System&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2023/06/01/Arrow-Data-System/&t=Arrow Data System"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

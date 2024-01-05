@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="MapReduce 论文阅读编程模型MapReduce 使用类似 fp 的原语来描述一个计算：  Map(k, v) &#x3D;&gt; list(k2, v2) Reduce(k2, list(v2)) &#x3D;&gt; list(v2) 输入的k, v !&#x3D; 中间的 k2, v2 &#x3D;&#x3D; 输出的k2, v2.  可以做倒排索引、wordcount、分布式排序等事情，前提是你能把你的任务描述成map – red">
+<meta property="og:type" content="article">
+<meta property="og:title" content="MapReduce Paper &amp; Lab Report">
+<meta property="og:url" content="http://blog.mwish.me/2019/10/09/MapReduce-Paper-Lab-Report/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="MapReduce 论文阅读编程模型MapReduce 使用类似 fp 的原语来描述一个计算：  Map(k, v) &#x3D;&gt; list(k2, v2) Reduce(k2, list(v2)) &#x3D;&gt; list(v2) 输入的k, v !&#x3D; 中间的 k2, v2 &#x3D;&#x3D; 输出的k2, v2.  可以做倒排索引、wordcount、分布式排序等事情，前提是你能把你的任务描述成map – red">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://nmsl.maplewish.cn/blog:/Users/fuasahi/Desktop/writing/MapReduce.md:mapreduce%E6%B5%81%E7%A8%8B.png">
+<meta property="article:published_time" content="2019-10-09T07:40:44.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.560Z">
+<meta property="article:author" content="mwish">
+<meta property="article:tag" content="Paper Reading">
+<meta property="article:tag" content="Lab Report">
+<meta property="article:tag" content="Distributed">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://nmsl.maplewish.cn/blog:/Users/fuasahi/Desktop/writing/MapReduce.md:mapreduce%E6%B5%81%E7%A8%8B.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>MapReduce Paper &amp; Lab Report</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2019/10/15/Vector-%E7%9A%84-C-%E5%92%8C-Rust-%E5%AE%9E%E7%8E%B0/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2019/09/29/PyConCn2019/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2019/10/09/MapReduce-Paper-Lab-Report/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2019/10/09/MapReduce-Paper-Lab-Report/&text=MapReduce Paper &amp; Lab Report"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2019/10/09/MapReduce-Paper-Lab-Report/&title=MapReduce Paper &amp; Lab Report"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2019/10/09/MapReduce-Paper-Lab-Report/&is_video=false&description=MapReduce Paper &amp; Lab Report"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=MapReduce Paper &amp; Lab Report&body=Check out this article: http://blog.mwish.me/2019/10/09/MapReduce-Paper-Lab-Report/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2019/10/09/MapReduce-Paper-Lab-Report/&title=MapReduce Paper &amp; Lab Report"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2019/10/09/MapReduce-Paper-Lab-Report/&title=MapReduce Paper &amp; Lab Report"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2019/10/09/MapReduce-Paper-Lab-Report/&title=MapReduce Paper &amp; Lab Report"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2019/10/09/MapReduce-Paper-Lab-Report/&title=MapReduce Paper &amp; Lab Report"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2019/10/09/MapReduce-Paper-Lab-Report/&name=MapReduce Paper &amp; Lab Report&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2019/10/09/MapReduce-Paper-Lab-Report/&t=MapReduce Paper &amp; Lab Report"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#MapReduce-%E8%AE%BA%E6%96%87%E9%98%85%E8%AF%BB"><span class="toc-number">1.</span> <span class="toc-text">MapReduce 论文阅读</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BC%96%E7%A8%8B%E6%A8%A1%E5%9E%8B"><span class="toc-number">1.1.</span> <span class="toc-text">编程模型</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9E%E7%8E%B0"><span class="toc-number">1.2.</span> <span class="toc-text">实现</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%BB%E8%A6%81%E6%B5%81%E7%A8%8B"><span class="toc-number">1.2.1.</span> <span class="toc-text">主要流程</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%95%85%E9%9A%9C%E5%A4%84%E7%90%86"><span class="toc-number">1.2.2.</span> <span class="toc-text">故障处理</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#worker-%E6%95%85%E9%9A%9C"><span class="toc-number">1.2.2.1.</span> <span class="toc-text">worker 故障</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#master-%E6%95%85%E9%9A%9C"><span class="toc-number">1.2.2.2.</span> <span class="toc-text">master 故障</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BB%BB%E5%8A%A1%E7%B2%92%E5%BA%A6"><span class="toc-number">1.2.3.</span> <span class="toc-text">任务粒度</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%A4%87%E7%94%A8%E4%BB%BB%E5%8A%A1"><span class="toc-number">1.2.4.</span> <span class="toc-text">备用任务</span></a></li></ol></li></ol></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        MapReduce Paper &amp; Lab Report
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2019-10-09T07:40:44.000Z" itemprop="datePublished">2019-10-09</time>
+        
+      
+    </div>
+
+
+      
+    <div class="article-category">
+        <i class="fas fa-archive"></i>
+        <a class="category-link" href="/categories/Lab-Report/">Lab Report</a>
+    </div>
+
+
+      
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/Distributed/" rel="tag">Distributed</a>, <a class="tag-link-link" href="/tags/Lab-Report/" rel="tag">Lab Report</a>, <a class="tag-link-link" href="/tags/Paper-Reading/" rel="tag">Paper Reading</a>
+    </div>
+
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <h1 id="MapReduce-论文阅读"><a href="#MapReduce-论文阅读" class="headerlink" title="MapReduce 论文阅读"></a>MapReduce 论文阅读</h1><h2 id="编程模型"><a href="#编程模型" class="headerlink" title="编程模型"></a>编程模型</h2><p>MapReduce 使用类似 fp 的原语来描述一个计算：</p>
+<blockquote>
+<p>Map(k, v) =&gt; list(k2, v2)</p>
+<p>Reduce(k2, list(v2)) =&gt; list(v2)</p>
+<p>输入的k, v != 中间的 k2, v2 == 输出的k2, v2.</p>
+</blockquote>
+<p>可以做倒排索引、wordcount、分布式排序等事情，前提是你能把你的任务描述成map – reduce 形式。</p>
+<h2 id="实现"><a href="#实现" class="headerlink" title="实现"></a>实现</h2><h3 id="主要流程"><a href="#主要流程" class="headerlink" title="主要流程"></a>主要流程</h3><p><img src="https://nmsl.maplewish.cn/blog:/Users/fuasahi/Desktop/writing/MapReduce.md:mapreduce%E6%B5%81%E7%A8%8B.png" alt="mapreduce流程"></p>
+<p>可以看到，这里有 map-worker 和 reduce-worker. Map Reduce 分区数量由用户定义。</p>
+<p>操作按论文说有一些流程，照搬不太好，我就说下自己的理解：</p>
+<ol>
+<li>将输入文件分段，定义一定的数据段大小(原始论文给16-64MB)</li>
+<li>用户程序创建大量的 map reduce 工作副本</li>
+<li>master 分配任务给空闲 worker，有M和R个任务</li>
+<li><strong>Map worker</strong> 完成计算，并且把数据<strong>缓存</strong>在<strong>内存</strong>中， <code>k2, v2</code> 对自动分区成 R 个，写在 <strong>本地文件</strong> 中，消息被传给master, master 把这个信息传给 reducer.</li>
+<li>reducer 接收到 master 的消息后：<ol>
+<li>用 rpc 读取这些数据</li>
+<li>把数据按照 k2 聚合，似乎要排序？</li>
+<li>处理这些数据，按照分区<strong>追加</strong>写到输出文件</li>
+</ol>
+</li>
+<li>完成后，R个分区有<strong>追加</strong> 的 map-reduce 文件。</li>
+</ol>
+<h3 id="故障处理"><a href="#故障处理" class="headerlink" title="故障处理"></a>故障处理</h3><h4 id="worker-故障"><a href="#worker-故障" class="headerlink" title="worker 故障"></a>worker 故障</h4><p>worker 故障的主要解决方案是标记成错误，如果是 map-worker 则通知 reduce-worker ，把任务交给别人执行。</p>
+<p>我很弟弟，看的是论文中文翻译，但是感觉这段写的比我能总结的好很多：</p>
+<blockquote>
+<p>master 周期性的 ping 每个 worker。如果在一个约定的时间范围内没有收到 worker 返回的信息，master 将<br>把这个 worker 标记为失效。所有由这个失效的 worker 完成的 Map 任务被重设为初始的空闲状态，之后这些<br>任务就可以被安排给其他的 worker。同样的，worker 失效时正在运行的 Map 或 Reduce 任务也将被重新置为<br>空闲状态，等待重新调度。</p>
+</blockquote>
+<h4 id="master-故障"><a href="#master-故障" class="headerlink" title="master 故障"></a>master 故障</h4><p>类似内存备份吧，写wal／周期性写入磁盘什么的 …</p>
+<h3 id="任务粒度"><a href="#任务粒度" class="headerlink" title="任务粒度"></a>任务粒度</h3><blockquote>
+<p>理想情况下，M 和 R 应当 比集群中 worker 的机器数量要多得多。在每台 worker 机器都执行大量的不同任务能够 高集群的动态的负载 均衡能力，并且能够加快故障恢复的速度:失效机器上执行的大量 Map 任务都可以分布到所有其他的 worker 机器上去执行。</p>
+<p>但是实际上，在我们的具体实现中对 M 和 R 的取值都有一定的客观限制，因为 master 必须执行 O(M+R) 次调度，并且在内存中保存 O(M<em>R)个状态(对影响内存使用的因素还是比较小的:O(M</em>R)块状态，大概每 对 Map 任务/Reduce 任务 1 个字节就可以了)。</p>
+</blockquote>
+<h3 id="备用任务"><a href="#备用任务" class="headerlink" title="备用任务"></a>备用任务</h3><p>有的任务执行的很慢，我们有的时候会调度 backup (备份) 来处理剩下的、处理中的任务。</p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#MapReduce-%E8%AE%BA%E6%96%87%E9%98%85%E8%AF%BB"><span class="toc-number">1.</span> <span class="toc-text">MapReduce 论文阅读</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BC%96%E7%A8%8B%E6%A8%A1%E5%9E%8B"><span class="toc-number">1.1.</span> <span class="toc-text">编程模型</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%9E%E7%8E%B0"><span class="toc-number">1.2.</span> <span class="toc-text">实现</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%BB%E8%A6%81%E6%B5%81%E7%A8%8B"><span class="toc-number">1.2.1.</span> <span class="toc-text">主要流程</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%95%85%E9%9A%9C%E5%A4%84%E7%90%86"><span class="toc-number">1.2.2.</span> <span class="toc-text">故障处理</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#worker-%E6%95%85%E9%9A%9C"><span class="toc-number">1.2.2.1.</span> <span class="toc-text">worker 故障</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#master-%E6%95%85%E9%9A%9C"><span class="toc-number">1.2.2.2.</span> <span class="toc-text">master 故障</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BB%BB%E5%8A%A1%E7%B2%92%E5%BA%A6"><span class="toc-number">1.2.3.</span> <span class="toc-text">任务粒度</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%A4%87%E7%94%A8%E4%BB%BB%E5%8A%A1"><span class="toc-number">1.2.4.</span> <span class="toc-text">备用任务</span></a></li></ol></li></ol></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2019/10/09/MapReduce-Paper-Lab-Report/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2019/10/09/MapReduce-Paper-Lab-Report/&text=MapReduce Paper &amp; Lab Report"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2019/10/09/MapReduce-Paper-Lab-Report/&title=MapReduce Paper &amp; Lab Report"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2019/10/09/MapReduce-Paper-Lab-Report/&is_video=false&description=MapReduce Paper &amp; Lab Report"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=MapReduce Paper &amp; Lab Report&body=Check out this article: http://blog.mwish.me/2019/10/09/MapReduce-Paper-Lab-Report/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2019/10/09/MapReduce-Paper-Lab-Report/&title=MapReduce Paper &amp; Lab Report"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2019/10/09/MapReduce-Paper-Lab-Report/&title=MapReduce Paper &amp; Lab Report"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2019/10/09/MapReduce-Paper-Lab-Report/&title=MapReduce Paper &amp; Lab Report"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2019/10/09/MapReduce-Paper-Lab-Report/&title=MapReduce Paper &amp; Lab Report"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2019/10/09/MapReduce-Paper-Lab-Report/&name=MapReduce Paper &amp; Lab Report&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2019/10/09/MapReduce-Paper-Lab-Report/&t=MapReduce Paper &amp; Lab Report"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

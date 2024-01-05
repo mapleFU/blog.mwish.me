@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="MVCC 是现代商业数据库非常常用的机制，MySQL InnoDB, Postgres, WiredTiger 都使用了 MVCC，适用范围可见上图，但是 MVCC 本身也引入了问题：  MVCC 如何实现协议？ 在存储、GC 等方面，MVCC 需要一些 trade off  Snapshot Isolation 是个更令人脑壳痛的东西，你会发现很多 DB 实现的就是 SI，但是这些 DB 本身">
+<meta property="og:type" content="article">
+<meta property="og:title" content="MVCC &amp; SI: 协议">
+<meta property="og:url" content="http://blog.mwish.me/2020/11/17/MVCC-SI/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="MVCC 是现代商业数据库非常常用的机制，MySQL InnoDB, Postgres, WiredTiger 都使用了 MVCC，适用范围可见上图，但是 MVCC 本身也引入了问题：  MVCC 如何实现协议？ 在存储、GC 等方面，MVCC 需要一些 trade off  Snapshot Isolation 是个更令人脑壳痛的东西，你会发现很多 DB 实现的就是 SI，但是这些 DB 本身">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/98F9A3FE-E697-417F-8A84-0987DDEEEFF0.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/6EC5DFC5-AC8C-4565-A9DA-59AA31CF6BD3.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/6993165C-819A-4BA7-8B63-DE5F8AFFC552.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/16D1F158-2844-4A7E-9DAD-060F95C86CE6.png">
+<meta property="article:published_time" content="2020-11-17T13:42:13.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.569Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/98F9A3FE-E697-417F-8A84-0987DDEEEFF0.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>MVCC &amp; SI: 协议</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2020/11/23/Long-Tail-Key-Memcache-in-FB/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2020/11/15/transaction-concurrency-control/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/11/17/MVCC-SI/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/11/17/MVCC-SI/&text=MVCC &amp; SI: 协议"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/11/17/MVCC-SI/&title=MVCC &amp; SI: 协议"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/11/17/MVCC-SI/&is_video=false&description=MVCC &amp; SI: 协议"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=MVCC &amp; SI: 协议&body=Check out this article: http://blog.mwish.me/2020/11/17/MVCC-SI/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/11/17/MVCC-SI/&title=MVCC &amp; SI: 协议"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/11/17/MVCC-SI/&title=MVCC &amp; SI: 协议"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/11/17/MVCC-SI/&title=MVCC &amp; SI: 协议"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/11/17/MVCC-SI/&title=MVCC &amp; SI: 协议"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/11/17/MVCC-SI/&name=MVCC &amp; SI: 协议&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/11/17/MVCC-SI/&t=MVCC &amp; SI: 协议"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#MVCC-%E5%8D%8F%E8%AE%AE"><span class="toc-number">1.</span> <span class="toc-text">MVCC: 协议</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#MVTS"><span class="toc-number">1.1.</span> <span class="toc-text">MVTS</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%86%99%E5%85%A5"><span class="toc-number">1.1.1.</span> <span class="toc-text">写入</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E8%AF%BB%E5%8F%96"><span class="toc-number">1.1.2.</span> <span class="toc-text">读取</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Relaxed"><span class="toc-number">1.1.3.</span> <span class="toc-text">Relaxed</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E7%BC%BA%E7%82%B9"><span class="toc-number">1.1.4.</span> <span class="toc-text">缺点</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#MV2PL"><span class="toc-number">1.2.</span> <span class="toc-text">MV2PL</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E8%AF%BB%E5%8F%96-%E5%8F%AA%E8%AF%BB%E4%BA%8B%E5%8A%A1"><span class="toc-number">1.2.1.</span> <span class="toc-text">读取: 只读事务</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E8%AF%BB%E5%86%99%E4%BA%8B%E5%8A%A1"><span class="toc-number">1.2.2.</span> <span class="toc-text">读写事务</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Snapshot-Isolation"><span class="toc-number">2.</span> <span class="toc-text">Snapshot Isolation</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#SSI"><span class="toc-number">2.1.</span> <span class="toc-text">SSI</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Reference"><span class="toc-number">3.</span> <span class="toc-text">Reference</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        MVCC &amp; SI: 协议
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2020-11-17T13:42:13.000Z" itemprop="datePublished">2020-11-17</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p><img src="https://image.mwish.me/blog-image/98F9A3FE-E697-417F-8A84-0987DDEEEFF0.png" alt="98F9A3FE-E697-417F-8A84-0987DDEEEFF0"></p>
+<p>MVCC 是现代商业数据库非常常用的机制，MySQL InnoDB, Postgres, WiredTiger 都使用了 MVCC，适用范围可见上图，但是 MVCC 本身也引入了问题：</p>
+<ol>
+<li>MVCC 如何实现协议？</li>
+<li>在存储、GC 等方面，MVCC 需要一些 trade off</li>
+</ol>
+<p>Snapshot Isolation 是个更令人脑壳痛的东西，你会发现很多 DB 实现的就是 SI，但是这些 DB 本身其实没有实现 Generalized SQL definition 里面的 SI，实现的可能只是 <code>monotonic atomic view</code>。</p>
+<p>这两个事情在一起比较让人头晕，下面会讲 MVTS，MV2PL 和 SI。</p>
+<p>这里仅仅介绍协议，暂时不介绍 MVCC 的存储和 GC，这几个坑还挺大的。</p>
+<h2 id="MVCC-协议"><a href="#MVCC-协议" class="headerlink" title="MVCC: 协议"></a>MVCC: 协议</h2><p>MVCC 的目的是：</p>
+<p><strong>Writers do not block readers. Readers do not block writers.</strong></p>
+<p>（当然，实际上我感觉还是取决于实现。TS 协议其实都可以 block 呢）</p>
+<p>MVCC 需要大量引入 timestamp 的概念，reader 以 timestamp 来读，并决定自己能读到什么。</p>
+<p>在逻辑视图上，MVCC record 需要引入额外的记录：</p>
+<ol>
+<li>begin</li>
+<li>end</li>
+</ol>
+<p>这两个表示对象的生命周期，也决定了读者来读什么。写入的时候，写者会创建一条记录，给 end 标记上自己的对应的 ts。读者根据自己的 ts 来决定“应该读到什么”。</p>
+<p>实际上 MVCC 和 SI 可能关系比较大，经常用于实现 SI，但是 ts 用来决定读并不代表只能 SI。它可以实现 RC 和 Serializable。但同时，这个协议也会影响具体实现后隔离的表现。</p>
+<p>MVCC 有下面一些 trade-off:</p>
+<ul>
+<li>Concurrency Control Protocol </li>
+<li>Version Storage</li>
+<li>Garbage Collection</li>
+<li>Index Management</li>
+<li>Foreign Key</li>
+</ul>
+<h3 id="MVTS"><a href="#MVTS" class="headerlink" title="MVTS"></a>MVTS</h3><p>MVTS 协议源于 1979 年，是最早的 MVCC 协议。</p>
+<p>TS 协议中，每个事务在开始的时候都会定下一个 commit-ts. 记作 $TS(T_i)$, 同时, 以 commit-ts 为标准，来限制 Tuple 读写，如果不能满足需求，就会被 abort. 同时，tuple 有 read-ts 和 write-ts, 表示单条记录读写。</p>
+<p><img src="https://image.mwish.me/blog-image/6EC5DFC5-AC8C-4565-A9DA-59AA31CF6BD3.png" alt="6EC5DFC5-AC8C-4565-A9DA-59AA31CF6BD3"></p>
+<p>MVTS 中：</p>
+<p>end-ts 相当于之前的 write-ts, read-ts 相当于这个版本对应的最大 read-ts</p>
+<h4 id="写入"><a href="#写入" class="headerlink" title="写入"></a>写入</h4><p>一个事务写入时，如果：</p>
+<ol>
+<li>另一个事务在更新这条记录，有一个最新的正在写入的版本</li>
+<li>已存在的最高版本的 record begin_ts 大于自身</li>
+<li>已存在的最高版本的 record begin_ts 小于自身，但 read-ts 大于自身</li>
+</ol>
+<p>它都会 abort。</p>
+<p>事务写入 tuple 的时候，会在上述的 <code>txn-id</code> 字段设置成自己，相当于 grab 写锁。</p>
+<p>如果 tuple Q 最高版本 <code>k</code> 满足 <code>TS(T) == W-TS(Q_k)</code>, 那么说明是本事务写入，可以放心写。</p>
+<p>如果上述条件都不满足，它会创建一个新的版本，把之前的 end-ts 设置成 <code>TS(T)</code>，然后创建一条新的纪录，把 end-ts 设置成无限，begin-ts 设置成 <code>TS(T)</code>.</p>
+<h4 id="读取"><a href="#读取" class="headerlink" title="读取"></a>读取</h4><ol>
+<li>$T_i$ 读取时，数据库找到 <code>[begin-ts, end-ts]</code> 包含 $TS(T_i)$ 的记录，即事务读到它之前最近的请求</li>
+<li>如果上面有 <code>T_id</code> 的写锁，那么abort或者 wait</li>
+</ol>
+<h4 id="Relaxed"><a href="#Relaxed" class="headerlink" title="Relaxed"></a>Relaxed</h4><p>数据库系统实现里面模型比上面的 relax 一些，读取的时候，如果大于最大的 ts, 那直接读最大的记录。这样读永远不会 abort, 感觉这样实现比较有问题= =</p>
+<h4 id="缺点"><a href="#缺点" class="headerlink" title="缺点"></a>缺点</h4><ol>
+<li>仍然需要一定的更改，才能让 MVTS 是 Recoverable 的</li>
+<li>很多时候读取要更新 ts, 可能会放大磁盘写</li>
+</ol>
+<h3 id="MV2PL"><a href="#MV2PL" class="headerlink" title="MV2PL"></a>MV2PL</h3><p><img src="https://image.mwish.me/blog-image/6993165C-819A-4BA7-8B63-DE5F8AFFC552.png" alt="6993165C-819A-4BA7-8B63-DE5F8AFFC552"></p>
+<p>TS 的时间戳来自事务开始时分配的 commit-ts, MVTS 沿用了这个 ts。2PL 的 Commit 时间被当成是全局唯一的时间，准确说是释放第一个锁锁的时间。在 Rigirous 2PL 协议下，可以当成它们等效。</p>
+<p>MV2PL 维护了一个全局单调递增的 ts-counter。事务 Commit 的时候，会把这个 counter 递增，同时赋予自己这个 counter。实际上，MV2PL 使用的不是 timestamp，而是“事务提交的 counter”。</p>
+<h4 id="读取-只读事务"><a href="#读取-只读事务" class="headerlink" title="读取: 只读事务"></a>读取: 只读事务</h4><p>只读事务在读取时，对于只读事务，事务 <code>TS = ts-counter</code>, 然后用这个 ts-counter 去读。</p>
+<p>已知：事务获取 ts-counter 时，之前所有的事务都已经提交。</p>
+<p>即：读取的时候，没有 blocking, 没有 abort。事务记录是完整的。</p>
+<h4 id="读写事务"><a href="#读写事务" class="headerlink" title="读写事务"></a>读写事务</h4><p>读写事务读取时，获得 S-Lock, 读取最新版本，写入时，先对现在的最新，写入后的次新上一个 X-Lock，然后再写一个新版本。然后设置新版本的 <code>end-ts</code> 为无穷，当 Commit 阶段时，事务获得一个 CommitTS, 然后把自己的 ts 对应成这个 commit-ts, 然后设置自己修改所有内容的<code>begin-ts</code> 为自身，设置次新版本 <code>end-ts</code> 为自身，</p>
+<p>实际上，在这里事务的外部时间顺序被削弱了，read 可能可以慢于写。但是时间和事务的 order 被不同的 <code>ts-counter</code> 給 fence 开了。</p>
+<p><img src="https://image.mwish.me/blog-image/16D1F158-2844-4A7E-9DAD-060F95C86CE6.png" alt="16D1F158-2844-4A7E-9DAD-060F95C86CE6"></p>
+<p>在论文  <strong>Fast Serializable Multi-Version Concurrency Control for Main-Memory Database Systems</strong> 中，对于这点提出了证明。</p>
+<p>此外，MV2PL 冲突处理，有如下 comments:</p>
+<blockquote>
+<p>The key difference among 2PL protocols is in how they handle deadlocks. Previous research has shown that the <em>no-wait</em> policy [9] is the most scalable deadlock prevention technique [48]. With this, the DBMS immediately aborts a transaction if it is unable to acquire a lock on a tuple (as opposed to waiting to see whether the lock is released). Since transactions never wait, the DBMS does not have to employ a background thread to detect and break deadlocks.</p>
+</blockquote>
+<h2 id="Snapshot-Isolation"><a href="#Snapshot-Isolation" class="headerlink" title="Snapshot Isolation"></a>Snapshot Isolation</h2><p>Snapshot Isolation 是一种特殊的并发控制方案，已在包括 Oracle，PostgreSQL 和SQL Server在内的商业和开源系统中得到广泛认可。</p>
+<p>实现上，SI 通常依赖 MVCC，但是 MVCC 却不止能实现 SI。</p>
+<ol>
+<li>事务在开始的时候，拿到一个 Snapshot，就是开始时刻事务对应的<strong>一致性</strong>的视图。</li>
+<li>事务在自己的 space 中进行修改。</li>
+<li>事务 Commit 的时候，需要验证和别的事务是否有冲突</li>
+<li>事务<strong>原子性</strong>的 Commit, 一旦 Commit ，要么对别的所有 Snapshot 不可见，要么一下子全部可见。</li>
+</ol>
+<p>那么，采用多版本实现的时候，我们通常需要：</p>
+<ol>
+<li>$StartTS(T_i)$, is the time at which transaction $T_i$ started. </li>
+<li>The second timestamp, $CommitTS(T_i)$ is the time when the transaction $T_i$ requested validation.</li>
+</ol>
+<p>事务读取时，不会看到其后的任何写。</p>
+<blockquote>
+<p>注: MySQL 的 RR 下，有两种读，一种读一致性 Snapshot, 一种全局。实际上 SELECT + SELECT for Update 混用，实际表现会略显混乱.</p>
+</blockquote>
+<p>对于更新事务而言，需要 Commit 之前，要 validate 自身是否是合理合法的。首先，需要了解的是，SI 已经有了 PL-2 的级别，能够防止 G0 G1. 在 SI 的情况下，加入实现的时候，有两个事务，更新了同一条记录，然后提交，可能会造成“某个事务的更新被丢失”，即 lost update。在一些满足 <code>LWW</code>, 即“最近写入为准”的系统中，这是可以的，但是这样可能会违反事务的一致性约束。所以也要避免它。</p>
+<p>可能的情况有：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">StartTS(Tj) ≤ StartTS(Ti) ≤ CommitTS(Tj), or</span><br><span class="line">StartTS(Ti) ≤ StartTS(Tj) ≤ CommitTS(Ti).</span><br></pre></td></tr></table></figure>
+<p>有两种策略：</p>
+<ol>
+<li><strong>first committer wins</strong></li>
+<li><strong>first updater wins</strong></li>
+</ol>
+<p>这些策略按照实现而定具体应该选用什么。</p>
+<h3 id="SSI"><a href="#SSI" class="headerlink" title="SSI"></a>SSI</h3><p>Postgres 实现了 SSI，这个和 Generalized SQL 那篇论文强相关。PG 靠防止 anti dependency 成环，abort 掉可能成环的事务，来实现了 SSI 的调度。同时做了对只读事务的优化。</p>
+<h2 id="Reference"><a href="#Reference" class="headerlink" title="Reference"></a>Reference</h2><ul>
+<li><strong>An Empirical Evaluation of In-Memory Multi-Version Concurrency Control</strong></li>
+<li><strong>Fast Serializable Multi-Version Concurrency Control for Main-Memory Database Systems</strong> </li>
+<li><a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/54979396">https://zhuanlan.zhihu.com/p/54979396</a></li>
+<li>数据库系统概念，第七版。</li>
+</ul>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#MVCC-%E5%8D%8F%E8%AE%AE"><span class="toc-number">1.</span> <span class="toc-text">MVCC: 协议</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#MVTS"><span class="toc-number">1.1.</span> <span class="toc-text">MVTS</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%86%99%E5%85%A5"><span class="toc-number">1.1.1.</span> <span class="toc-text">写入</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E8%AF%BB%E5%8F%96"><span class="toc-number">1.1.2.</span> <span class="toc-text">读取</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Relaxed"><span class="toc-number">1.1.3.</span> <span class="toc-text">Relaxed</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E7%BC%BA%E7%82%B9"><span class="toc-number">1.1.4.</span> <span class="toc-text">缺点</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#MV2PL"><span class="toc-number">1.2.</span> <span class="toc-text">MV2PL</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E8%AF%BB%E5%8F%96-%E5%8F%AA%E8%AF%BB%E4%BA%8B%E5%8A%A1"><span class="toc-number">1.2.1.</span> <span class="toc-text">读取: 只读事务</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E8%AF%BB%E5%86%99%E4%BA%8B%E5%8A%A1"><span class="toc-number">1.2.2.</span> <span class="toc-text">读写事务</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Snapshot-Isolation"><span class="toc-number">2.</span> <span class="toc-text">Snapshot Isolation</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#SSI"><span class="toc-number">2.1.</span> <span class="toc-text">SSI</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Reference"><span class="toc-number">3.</span> <span class="toc-text">Reference</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/11/17/MVCC-SI/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/11/17/MVCC-SI/&text=MVCC &amp; SI: 协议"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/11/17/MVCC-SI/&title=MVCC &amp; SI: 协议"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/11/17/MVCC-SI/&is_video=false&description=MVCC &amp; SI: 协议"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=MVCC &amp; SI: 协议&body=Check out this article: http://blog.mwish.me/2020/11/17/MVCC-SI/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/11/17/MVCC-SI/&title=MVCC &amp; SI: 协议"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/11/17/MVCC-SI/&title=MVCC &amp; SI: 协议"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/11/17/MVCC-SI/&title=MVCC &amp; SI: 协议"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/11/17/MVCC-SI/&title=MVCC &amp; SI: 协议"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/11/17/MVCC-SI/&name=MVCC &amp; SI: 协议&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/11/17/MVCC-SI/&t=MVCC &amp; SI: 协议"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

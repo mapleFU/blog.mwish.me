@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="Distributed Transaction需求：要么全部提交，要么全都不提交。事务的各个成分都是原子的。 假设：  每个 Node 记录 Log，但是得不到全局的 Log 允许 coordinator process 的存在，它可能是事务的发起者，其他的 Node 被视为 participants. 发送消息的时候，可能需要记录到日志中  2PC 有两个阶段：  The commit-requ">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Distribute Transaction: basic of 2PC">
+<meta property="og:url" content="http://blog.mwish.me/2020/04/06/Distribute-Transaction-basic-of-2PC/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="Distributed Transaction需求：要么全部提交，要么全都不提交。事务的各个成分都是原子的。 假设：  每个 Node 记录 Log，但是得不到全局的 Log 允许 coordinator process 的存在，它可能是事务的发起者，其他的 Node 被视为 participants. 发送消息的时候，可能需要记录到日志中  2PC 有两个阶段：  The commit-requ">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/3149FDE05902E361F776579665A3F442.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/14B5C5E1-CB99-4552-A969-A5A88D95D6F3.png">
+<meta property="article:published_time" content="2020-04-06T12:02:38.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.570Z">
+<meta property="article:author" content="mwish">
+<meta property="article:tag" content="distributed">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/3149FDE05902E361F776579665A3F442.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>Distribute Transaction: basic of 2PC</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2020/05/01/Types-In-Golang/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2020/04/04/CALL-libc-%E5%92%8C-C-%E6%A0%87%E5%87%86%E5%BA%93/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/04/06/Distribute-Transaction-basic-of-2PC/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/04/06/Distribute-Transaction-basic-of-2PC/&text=Distribute Transaction: basic of 2PC"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/04/06/Distribute-Transaction-basic-of-2PC/&title=Distribute Transaction: basic of 2PC"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/04/06/Distribute-Transaction-basic-of-2PC/&is_video=false&description=Distribute Transaction: basic of 2PC"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Distribute Transaction: basic of 2PC&body=Check out this article: http://blog.mwish.me/2020/04/06/Distribute-Transaction-basic-of-2PC/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/04/06/Distribute-Transaction-basic-of-2PC/&title=Distribute Transaction: basic of 2PC"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/04/06/Distribute-Transaction-basic-of-2PC/&title=Distribute Transaction: basic of 2PC"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/04/06/Distribute-Transaction-basic-of-2PC/&title=Distribute Transaction: basic of 2PC"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/04/06/Distribute-Transaction-basic-of-2PC/&title=Distribute Transaction: basic of 2PC"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/04/06/Distribute-Transaction-basic-of-2PC/&name=Distribute Transaction: basic of 2PC&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/04/06/Distribute-Transaction-basic-of-2PC/&t=Distribute Transaction: basic of 2PC"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#Distributed-Transaction"><span class="toc-number">1.</span> <span class="toc-text">Distributed Transaction</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#2PC-%E7%9A%84%E7%BB%93%E6%9E%84"><span class="toc-number">1.1.</span> <span class="toc-text">2PC 的结构</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#2PC-%E7%9A%84%E6%81%A2%E5%A4%8D"><span class="toc-number">1.1.1.</span> <span class="toc-text">2PC 的恢复</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Timeout"><span class="toc-number">1.1.2.</span> <span class="toc-text">Timeout</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3PC-%E5%92%8C-Pre-Commit"><span class="toc-number">1.1.3.</span> <span class="toc-text">3PC 和 Pre Commit</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Reference"><span class="toc-number">1.2.</span> <span class="toc-text">Reference</span></a></li></ol></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Distribute Transaction: basic of 2PC
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2020-04-06T12:02:38.000Z" itemprop="datePublished">2020-04-06</time>
+        
+      
+    </div>
+
+
+      
+
+      
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/distributed/" rel="tag">distributed</a>
+    </div>
+
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <h1 id="Distributed-Transaction"><a href="#Distributed-Transaction" class="headerlink" title="Distributed Transaction"></a>Distributed Transaction</h1><p>需求：要么全部提交，要么全都不提交。事务的各个成分都是原子的。</p>
+<p>假设：</p>
+<ol>
+<li>每个 Node 记录 Log，但是得不到全局的 Log</li>
+<li>允许 <em>coordinator process</em> 的存在，它可能是事务的发起者，其他的 Node 被视为 participants.</li>
+<li>发送消息的时候，可能需要记录到日志中</li>
+</ol>
+<p>2PC 有两个阶段：</p>
+<ul>
+<li>The <em>commit-request phase</em> (or <em>voting phase</em>)<ul>
+<li>这个阶段<em>coordinator</em> 试图 prepare. 结果有以下两种</li>
+<li>“Yes”: commit (if the transaction participant’s local portion execution has ended properly)</li>
+<li>“No”: abort (if a problem has been detected with the local portion)</li>
+</ul>
+</li>
+<li>The <em>commit phase</em> 根据之前收集到的结果来决定是否进行最终的 Commit 或者 abort, 并且把这个消息 broadcast.</li>
+</ul>
+<p>上面是 2PC 的初级印象，但是细想起来其实问题蛮多的：</p>
+<ul>
+<li>participants “可以提交” 是一个什么样的状态？</li>
+<li>对于 abort 2PC 应该如何处理这个日志？</li>
+<li>并行的 2PC 是什么样子的？对 Lock Manager 有什么影响？</li>
+</ul>
+<p>下面详细解释一下。</p>
+<h2 id="2PC-的结构"><a href="#2PC-的结构" class="headerlink" title="2PC 的结构"></a>2PC 的结构</h2><p><img src="https://image.mwish.me/blog-image/3149FDE05902E361F776579665A3F442.png" alt="3149FDE05902E361F776579665A3F442"></p>
+<ol>
+<li><code>coordinator</code> <ol>
+<li>写<code>&lt;prepare TXN&gt;</code>  WAL</li>
+<li>broadcast <code>prepare</code></li>
+</ol>
+</li>
+<li><code>participants</code> 收到 <code>prepare</code><ol>
+<li>执行事务，写 undo log 和 redo log</li>
+<li>如果操作是成功的，那么事务进入一个 <code>pre-commit</code> 的状态：<ol>
+<li>即使 abort 了也能够恢复这个状态</li>
+<li>事务会写入一个 <code>&lt;prepare TXN&gt;</code> 的 log</li>
+</ol>
+</li>
+<li>如果操作是失败的，那么写入 <code>&lt;don&#39;t commit TXN&gt;</code> 并且 abort</li>
+<li>如果以上操作都成功，返回一个 <code>agreement</code>, 否则返回 <code>abort</code></li>
+</ol>
+</li>
+</ol>
+<p>对于 commit 阶段，实际上逻辑如下</p>
+<ol>
+<li><code>coordinator</code><ol>
+<li>如果都是 <code>agreement</code>, 那么写 <code>&lt;Commit Txn&gt;</code> 的 Log, 否则写 <code>&lt;Abort Txn&gt;</code></li>
+<li>广播</li>
+</ol>
+</li>
+<li><code>participants</code> 收到后，执行对应逻辑，完成后返回 <code>ACK</code></li>
+</ol>
+<p><img src="https://image.mwish.me/blog-image/14B5C5E1-CB99-4552-A969-A5A88D95D6F3.png" alt="14B5C5E1-CB99-4552-A969-A5A88D95D6F3"></p>
+<h3 id="2PC-的恢复"><a href="#2PC-的恢复" class="headerlink" title="2PC 的恢复"></a>2PC 的恢复</h3><ol>
+<li>如果 Txn 有 <code>&lt;don&#39;t commit TXN&gt;</code> <code>&lt;commit TXN&gt;</code> <code>&lt;abort TXN&gt;</code> 的 Log, 情况应该非常明显了。</li>
+<li>如果是 <code>&lt;ready&gt;</code> 的 log, 需要和其他节点一起决定状况（这意味着协调者的状态是 <code>wait</code>, 而各个节点都是 <code>ready</code>）</li>
+<li>如果没有相关的状态，那么至少 <code>abort</code> 它是安全的。</li>
+</ol>
+<p>在 wiki 上也可以找到：</p>
+<blockquote>
+<p><em>Presumed abort</em> or <em>Presumed commit</em> are common such optimizations.<a target="_blank" rel="noopener" href="https://en.wikipedia.org/wiki/Two-phase_commit_protocol#cite_note-weikum2001-2">[2]</a><a target="_blank" rel="noopener" href="https://en.wikipedia.org/wiki/Two-phase_commit_protocol#cite_note-Bern2009-3">[3]</a><a target="_blank" rel="noopener" href="https://en.wikipedia.org/wiki/Two-phase_commit_protocol#cite_note-mohan1983-5">[5]</a> An assumption about the outcome of transactions, either commit, or abort, can save both messages and logging operations by the participants during the 2PC protocol’s execution. For example, when presumed abort, if during system recovery from failure no logged evidence for commit of some transaction is found by the recovery procedure, then it assumes that the transaction has been aborted, and acts accordingly. This means that it does not matter if aborts are logged at all, and such logging can be saved under this assumption. Typically a penalty of additional operations is paid during recovery from failure, depending on optimization type. Thus the best variant of optimization, if any, is chosen according to failure and transaction outcome statistics.</p>
+</blockquote>
+<h3 id="Timeout"><a href="#Timeout" class="headerlink" title="Timeout"></a>Timeout</h3><blockquote>
+<p>The greatest disadvantage of the two-phase commit protocol is that it is a blocking protocol. If the coordinator fails permanently, some participants will never resolve their transactions: After a participant has sent an <strong>agreement</strong> message to the coordinator, it will block until a <strong>commit</strong> or <strong>rollback</strong> is received.</p>
+</blockquote>
+<p>如果协调者收到了一个 <code>abort</code>, 其实还蛮欢喜的：那肯定大家一起 abort 。但是如果哪个机器憋着没消息了，哦豁，你得一直 block 着。</p>
+<p>所以 2PC 一定程度上可能需要引入 timeout：</p>
+<blockquote>
+<p>对于协调者来说如果在指定时间内没有收到所有参与者的应答，则可以自动退出 WAIT 状态，并向所有参与者发送 rollback 通知。对于参与者来说如果位于 READY 状态，但是在指定时间内没有收到协调者的第二阶段通知，则不能武断地执行 rollback 操作，因为协调者可能发送的是 commit 通知，这个时候执行 rollback 就会导致数据不一致。</p>
+<p>此时，我们可以介入互询机制，让参与者 A 去询问其他参与者 B 的执行情况。如果 B 执行了 rollback 或 commit 操作，则 A 可以大胆的与 B 执行相同的操作；如果 B 此时还没有到达 READY 状态，则可以推断出协调者发出的肯定是 rollback 通知；如果 B 同样位于 READY 状态，则 A 可以继续询问另外的参与者。只有当所有的参与者都位于 READY 状态时，此时两阶段提交协议无法处理，将陷入长时间的阻塞状态。</p>
+</blockquote>
+<h3 id="3PC-和-Pre-Commit"><a href="#3PC-和-Pre-Commit" class="headerlink" title="3PC 和 Pre Commit"></a>3PC 和 Pre Commit</h3><p>我们之前说到，全是<code>ready log</code> 是一个奇怪的状态。这个时候一定程度上可以引入 3PC：</p>
+<p><a target="_blank" rel="noopener" href="https://en.wikipedia.org/wiki/Three-phase_commit_protocol">https://en.wikipedia.org/wiki/Three-phase_commit_protocol</a></p>
+<blockquote>
+<p>A <a target="_blank" rel="noopener" href="https://en.wikipedia.org/wiki/Two-phase_commit_protocol">two-phase commit protocol</a> cannot dependably recover from a failure of both the coordinator and a cohort member during the <strong>Commit phase</strong>. If only the coordinator had failed, and no cohort members had received a commit message, it could safely be inferred that no commit had happened. If, however, both the coordinator and a cohort member failed, it is possible that the failed cohort member was the first to be notified, and had actually done the commit. Even if a new coordinator is selected, it cannot confidently proceed with the operation until it has received an agreement from all cohort members, and hence must block until all cohort members respond.</p>
+<p>The three-phase commit protocol eliminates this problem by introducing the Prepared to commit state. If the coordinator fails before sending preCommit messages, the cohort will unanimously agree that the operation was aborted. The coordinator will not send out a doCommit message until all cohort members have <strong>ACK</strong>ed that they are <strong>Prepared to commit</strong>. This eliminates the possibility that any cohort member actually completed the transaction before all cohort members were aware of the decision to do so (an ambiguity that necessitated indefinite blocking in the <a target="_blank" rel="noopener" href="https://en.wikipedia.org/wiki/Two-phase_commit_protocol">two-phase commit protocol</a>).</p>
+</blockquote>
+<p><strong>Prepared to commit</strong> 这个状态表示, precommit 成功了就只能 commit 了，否则是应该 abort 的。</p>
+<h2 id="Reference"><a href="#Reference" class="headerlink" title="Reference"></a>Reference</h2><ul>
+<li><a target="_blank" rel="noopener" href="https://segmentfault.com/a/1190000012534071">https://segmentfault.com/a/1190000012534071</a></li>
+<li><a target="_blank" rel="noopener" href="https://en.wikipedia.org/wiki/Two-phase_commit_protocol">https://en.wikipedia.org/wiki/Two-phase_commit_protocol</a></li>
+<li><a target="_blank" rel="noopener" href="https://en.wikipedia.org/wiki/Three-phase_commit_protocol">https://en.wikipedia.org/wiki/Three-phase_commit_protocol</a></li>
+</ul>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#Distributed-Transaction"><span class="toc-number">1.</span> <span class="toc-text">Distributed Transaction</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#2PC-%E7%9A%84%E7%BB%93%E6%9E%84"><span class="toc-number">1.1.</span> <span class="toc-text">2PC 的结构</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#2PC-%E7%9A%84%E6%81%A2%E5%A4%8D"><span class="toc-number">1.1.1.</span> <span class="toc-text">2PC 的恢复</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Timeout"><span class="toc-number">1.1.2.</span> <span class="toc-text">Timeout</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3PC-%E5%92%8C-Pre-Commit"><span class="toc-number">1.1.3.</span> <span class="toc-text">3PC 和 Pre Commit</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Reference"><span class="toc-number">1.2.</span> <span class="toc-text">Reference</span></a></li></ol></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/04/06/Distribute-Transaction-basic-of-2PC/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/04/06/Distribute-Transaction-basic-of-2PC/&text=Distribute Transaction: basic of 2PC"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/04/06/Distribute-Transaction-basic-of-2PC/&title=Distribute Transaction: basic of 2PC"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/04/06/Distribute-Transaction-basic-of-2PC/&is_video=false&description=Distribute Transaction: basic of 2PC"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Distribute Transaction: basic of 2PC&body=Check out this article: http://blog.mwish.me/2020/04/06/Distribute-Transaction-basic-of-2PC/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/04/06/Distribute-Transaction-basic-of-2PC/&title=Distribute Transaction: basic of 2PC"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/04/06/Distribute-Transaction-basic-of-2PC/&title=Distribute Transaction: basic of 2PC"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/04/06/Distribute-Transaction-basic-of-2PC/&title=Distribute Transaction: basic of 2PC"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/04/06/Distribute-Transaction-basic-of-2PC/&title=Distribute Transaction: basic of 2PC"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/04/06/Distribute-Transaction-basic-of-2PC/&name=Distribute Transaction: basic of 2PC&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/04/06/Distribute-Transaction-basic-of-2PC/&t=Distribute Transaction: basic of 2PC"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

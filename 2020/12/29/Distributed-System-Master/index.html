@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="上一篇文章中，我们介绍了 CPU 的 cache coherent 机制和两种实现方式的基础内容，同时介绍了分布式系统的 Lease 机制。这篇文章我们将回顾一下用到 Lease 的系统，同时介绍一下分布式系统的主节点操作：这也同时会涉及 ZooKeeper, Redis 和分布式锁相关的内容。 Problems我们在介绍 Lease 的时候，引入了假设：Clock Drift 在一定范围内。我们">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Distributed System: Master">
+<meta property="og:url" content="http://blog.mwish.me/2020/12/29/Distributed-System-Master/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="上一篇文章中，我们介绍了 CPU 的 cache coherent 机制和两种实现方式的基础内容，同时介绍了分布式系统的 Lease 机制。这篇文章我们将回顾一下用到 Lease 的系统，同时介绍一下分布式系统的主节点操作：这也同时会涉及 ZooKeeper, Redis 和分布式锁相关的内容。 Problems我们在介绍 Lease 的时候，引入了假设：Clock Drift 在一定范围内。我们">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/A436F352-391E-4CEB-8DC6-415AFF87FDE7.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/unsafe-lock.png">
+<meta property="article:published_time" content="2020-12-28T16:11:29.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.559Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/A436F352-391E-4CEB-8DC6-415AFF87FDE7.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>Distributed System: Master</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2021/02/08/Notes-on-Query-Execution/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2020/12/12/Cache-Consistency-in-CPU-and-Distributed-Sysem-Part2/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/12/29/Distributed-System-Master/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/12/29/Distributed-System-Master/&text=Distributed System: Master"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/12/29/Distributed-System-Master/&title=Distributed System: Master"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/12/29/Distributed-System-Master/&is_video=false&description=Distributed System: Master"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Distributed System: Master&body=Check out this article: http://blog.mwish.me/2020/12/29/Distributed-System-Master/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/12/29/Distributed-System-Master/&title=Distributed System: Master"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/12/29/Distributed-System-Master/&title=Distributed System: Master"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/12/29/Distributed-System-Master/&title=Distributed System: Master"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/12/29/Distributed-System-Master/&title=Distributed System: Master"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/12/29/Distributed-System-Master/&name=Distributed System: Master&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/12/29/Distributed-System-Master/&t=Distributed System: Master"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Problems"><span class="toc-number">1.</span> <span class="toc-text">Problems</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Lease-%E5%92%8C-%E4%B8%BB%E6%93%8D%E4%BD%9C"><span class="toc-number">2.</span> <span class="toc-text">Lease 和 主操作</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9F%BA%E7%A1%80%E7%9A%84-Raft-%E5%92%8C-term"><span class="toc-number">2.1.</span> <span class="toc-text">基础的 Raft 和 term</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Session-amp-amp-Lease"><span class="toc-number">2.2.</span> <span class="toc-text">Session &amp;&amp; Lease</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Corner-Case-%E4%B8%8E%E4%B8%BB%E8%8A%82%E7%82%B9%E6%93%8D%E4%BD%9C"><span class="toc-number">2.3.</span> <span class="toc-text">Corner Case 与主节点操作</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8F%82%E8%80%83"><span class="toc-number">3.</span> <span class="toc-text">参考</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Distributed System: Master
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2020-12-28T16:11:29.000Z" itemprop="datePublished">2020-12-29</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>上一篇文章中，我们介绍了 CPU 的 cache coherent 机制和两种实现方式的基础内容，同时介绍了分布式系统的 Lease 机制。这篇文章我们将回顾一下用到 Lease 的系统，同时介绍一下分布式系统的主节点操作：这也同时会涉及 ZooKeeper, Redis 和分布式锁相关的内容。</p>
+<h2 id="Problems"><a href="#Problems" class="headerlink" title="Problems"></a>Problems</h2><p>我们在介绍 Lease 的时候，引入了假设：Clock Drift 在一定范围内。我们会看到今天介绍的内容中，仍然有一部分系统是依赖这个假设的。</p>
+<p>尽管 <code>gettimeofday</code> 调用是线程安全的，但是分布式系统的时间永远有种种问题。</p>
+<p>可以简单阅读： <a target="_blank" rel="noopener" href="https://tldp.org/LDP/sag/html/keeping-time.html">https://tldp.org/LDP/sag/html/keeping-time.html</a></p>
+<p>为了理解这个问题，不妨看一看 rCore 产生 timer interrupt 的代码（这个是教学用的，可能实际的会复杂一些）：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// 设置下一次时钟中断的时间</span></span><br><span class="line"><span class="keyword">pub</span> <span class="keyword">fn</span> <span class="title function_">set_timer</span>(time: <span class="type">usize</span>) &#123;</span><br><span class="line">    <span class="title function_ invoke__">sbi_call</span>(SBI_SET_TIMER, time, <span class="number">0</span>, <span class="number">0</span>);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">/// 时钟中断的间隔，单位是 CPU 指令</span></span><br><span class="line"><span class="keyword">static</span> INTERVAL: <span class="type">usize</span> = <span class="number">100000</span>;</span><br><span class="line"></span><br><span class="line"><span class="comment">/// 设置下一次时钟中断</span></span><br><span class="line"><span class="comment">/// </span></span><br><span class="line"><span class="comment">/// 获取当前时间，加上中断间隔，通过 SBI 调用预约下一次中断</span></span><br><span class="line"><span class="keyword">fn</span> <span class="title function_">set_next_timeout</span>() &#123;</span><br><span class="line">    <span class="title function_ invoke__">set_timer</span>(time::<span class="title function_ invoke__">read</span>() + INTERVAL);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">/// 触发时钟中断计数</span></span><br><span class="line"><span class="keyword">pub</span> <span class="keyword">static</span> <span class="keyword">mut</span> TICKS: <span class="type">usize</span> = <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line"><span class="comment">/// 每一次时钟中断时调用</span></span><br><span class="line"><span class="comment">/// </span></span><br><span class="line"><span class="comment">/// 设置下一次时钟中断，同时计数 +1</span></span><br><span class="line"><span class="keyword">pub</span> <span class="keyword">fn</span> <span class="title function_">tick</span>() &#123;</span><br><span class="line">    <span class="title function_ invoke__">set_next_timeout</span>();</span><br><span class="line">    <span class="keyword">unsafe</span> &#123;</span><br><span class="line">        TICKS += <span class="number">1</span>;</span><br><span class="line">        <span class="keyword">if</span> TICKS % <span class="number">100</span> == <span class="number">0</span> &#123;</span><br><span class="line">            <span class="built_in">println!</span>(<span class="string">&quot;&#123;&#125; tick&quot;</span>, TICKS);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<ul>
+<li>硬件有一个 Monotonic 的时钟，在启动之后能够拿到自己的 <code>tick</code> 。但是，可能是没有什么表意的。</li>
+<li>我们也有 <code>gettimeofday</code> 这样的调用，我们可以知道时区之类的信息，但是由于种种原因，我们的时间很可能是不准的。假设开启了 NTP, 我们甚至有可能进行短暂的回退。</li>
+</ul>
+<p>上面的内容在语言的库层面也有支持，比如 C++ 的 <code>chrono</code> , 你可以简略阅读 cppreference，或者阅读这里：<a target="_blank" rel="noopener" href="https://www.modernescpp.com/index.php/the-three-clocks">https://www.modernescpp.com/index.php/the-three-clocks</a></p>
+<p>所以，简单来说，依赖什么时钟，怎么依赖时钟，都是一个问题。</p>
+<h2 id="Lease-和-主操作"><a href="#Lease-和-主操作" class="headerlink" title="Lease 和 主操作"></a>Lease 和 主操作</h2><p>回到 Lease, 虽然这个词语义可能不一样，比如在 memcache 里面，对 Read Miss 它会发放 Lease，以便合理的访问 DB, 保证 (1) 一致性 (2) 防止暴读打挂 DB。拜 sharding 所赐，这个 Lease 维护的时间序简单一些。同时，因为是 cache，所以丢失也无关紧要。</p>
+<p>而我们上一篇文章介绍的 Lease，大致流程如下：</p>
+<blockquote>
+<ul>
+<li>写入：client 需要向一个逻辑上的单点（我们在 Redis 里面会看到这个）发送 Lease Request, 拿到对应的 lease 之后，才能在 lease 期间写资源</li>
+<li>另外一个写入需要写时，server 会尝试 invalid 之前 grant 的 lease，然后再 grant lease</li>
+<li>如果 invalid 联系不上（比如发生网络分区），这里会等待到 grant 的 lease 时间结束。</li>
+</ul>
+</blockquote>
+<p>在上述这段中，如果你感受不到什么问题的话，其实才是问题所在：</p>
+<ol>
+<li>你依赖了一个额外的同步 Server，你做的操作和它不一定有关系。同时它是一个物理单点的话，挂掉就不好了。</li>
+<li>写入操作需要保证是“只有一个拿到 Lease 的在操作“，这并不自然。</li>
+</ol>
+<h3 id="基础的-Raft-和-term"><a href="#基础的-Raft-和-term" class="headerlink" title="基础的 Raft 和 term"></a>基础的 Raft 和 term</h3><p>当我们需要 HA 的时候，这方面我们可能需要 Paxos 这样的 Consensus。这样，某种程度上，我们可以把一个单点变成逻辑上的 HA 的集合。我们来简单回到 Raft，来看看<strong>最简单的</strong> Raft 是怎么做主节点的操作的：</p>
+<ol>
+<li>半数以上（包括自己）投票产生 Leader, 而Leader 对应一个 <code>term</code></li>
+<li>如果新 Leader 选举出来了，同时旧 Leader 还存在。那么它在集群内部的请求是无法生效的，因为它的 <code>term</code> 小于现有半数机器的 <code>term</code></li>
+</ol>
+<p>这里没有依赖物理时钟，而是依赖了单调递增的一个逻辑值 <code>term</code>，来进行操作。</p>
+<h3 id="Session-amp-amp-Lease"><a href="#Session-amp-amp-Lease" class="headerlink" title="Session &amp;&amp; Lease"></a>Session &amp;&amp; Lease</h3><p>回到我们的 Lease, 比如 ZooKeeper 维护了一个 Session Timeout, 在这里，可以参考一下 ZooKeeper 的论文 4.4 节：</p>
+<blockquote>
+<p>在我们的实现中，设置 timeout 是为了使 leader 在 follower 放弃他们之前意识到他们不再是 leader，因此它们就不会发布空事务。</p>
+<p>为了检测客户端 session 的 failure, ZooKeeper 使用了 timeout。如果在 timeout 时间内，没有其他服务器收到一个 client session 对应的消息，即判定为 failure。如果客户端足够频繁地发送请求，则无需发送任何其他消息。 否则，客户端会在活动不足时发送心跳消息。 如果客户端无法与服务器通信以发送请求或心跳，则它将连接到其他ZooKeeper服务器以重新建立其会话。 为了防止会话超时，ZooKeeper客户端库在会话闲置了<code>s/3</code> ms后发送了心跳信号，如果在<em><code>2s/3</code></em> ms内未收到服务器的消息，则切换到新服务器，其中<em>s</em>是 session timeout（以毫秒为单位）。</p>
+</blockquote>
+<p>（顺便安利一下我翻译的：<a target="_blank" rel="noopener" href="https://github.com/mapleFU/zookeeper_paper_cn#44-client-server-interactions">https://github.com/mapleFU/zookeeper_paper_cn#44-client-server-interactions</a> ，可能有的地方翻译的不太好，欢迎 PR）</p>
+<p>上述保证允许 ZooKeeper 的 client 能够比较好的使用。用 <code>s</code> 的 <code>1/3</code> 和 <code>2/3</code> 隐式依赖 clock drift 不会太大。</p>
+<p>Raft 的 Lease Read 也做了 Lease 相关的优化。简单的 Raft 读一般需要 Leader 证明 “自己仍然是 Leader”，获取一个 Read Index，等提交越过这个 Read Index 之后返回。而 Lease Read 则是一个简单的推理：在一次 heartbeat 和 election timeout 相关的一段时间内，自己仍然是 Leader 。这个在博士论文中有介绍：</p>
+<p><img src="https://image.mwish.me/blog-image/A436F352-391E-4CEB-8DC6-415AFF87FDE7.png" alt="A436F352-391E-4CEB-8DC6-415AFF87FDE7"></p>
+<p>这个也可以参考 TiKV 的实现相关的讨论：<a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/25367435">https://zhuanlan.zhihu.com/p/25367435</a></p>
+<h3 id="Corner-Case-与主节点操作"><a href="#Corner-Case-与主节点操作" class="headerlink" title="Corner Case 与主节点操作"></a>Corner Case 与主节点操作</h3><p>在上面工具的帮助下，你可能认为没有问题了，当然，这是不现实的～</p>
+<p>DDIA 的作者在它的博客上写过一篇 how to do distributed locking <a target="_blank" rel="noopener" href="https://martin.kleppmann.com/2016/02/08/how-to-do-distributed-locking.html">https://martin.kleppmann.com/2016/02/08/how-to-do-distributed-locking.html</a> ，提到了下面的时序问题：</p>
+<p><img src="https://image.mwish.me/blog-image/unsafe-lock.png" alt="unsafe-lock"></p>
+<p>本质上，这是因为 Storage 并非 lock service, 这导致操作出现不一致：在 Lock Service 里，我们有独立的 Lock, 但是在外部操作视角，这并不是独立的。这导致我们之前的约束再次出现问题！</p>
+<p>这两篇文章提到了 ZooKeeper 相关的解决方案：</p>
+<ol>
+<li><a target="_blank" rel="noopener" href="https://fpj.systems/2016/02/10/note-on-fencing-and-distributed-locks/">https://fpj.systems/2016/02/10/note-on-fencing-and-distributed-locks/</a></li>
+<li><a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/299272034">https://zhuanlan.zhihu.com/p/299272034</a></li>
+</ol>
+<p>（我更推荐你阅读后者，虽然其实不止要读一遍）</p>
+<p>这里是在说，发送操作的时候，如果获取到主的权限，可以产生一个 Term，发送操作的时候带上这个 Term，如果 Term 不合理的话，下层允许拒绝掉这个操作。</p>
+<p>此外，HDFS 中，允许你使用 IO Fencing: 当一个新的节点成为 Leader 的时候，你能够 ssh 到旧的 leader 上，来 kill 掉它，防止出现时序问题。</p>
+<h2 id="参考"><a href="#参考" class="headerlink" title="参考"></a>参考</h2><ol>
+<li>Hardware/Software Clocks <a target="_blank" rel="noopener" href="https://tldp.org/LDP/sag/html/hw-sw-clocks.html">https://tldp.org/LDP/sag/html/hw-sw-clocks.html</a></li>
+<li>Modern Cpp: The There Clocks <a target="_blank" rel="noopener" href="https://www.modernescpp.com/index.php/the-three-clocks">https://www.modernescpp.com/index.php/the-three-clocks</a></li>
+<li>TiKV 读优化：<a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/25367435">https://zhuanlan.zhihu.com/p/25367435</a></li>
+<li><a target="_blank" rel="noopener" href="https://fpj.systems/2016/02/10/note-on-fencing-and-distributed-locks/">https://fpj.systems/2016/02/10/note-on-fencing-and-distributed-locks/</a></li>
+<li><a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/299272034">https://zhuanlan.zhihu.com/p/299272034</a></li>
+</ol>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Problems"><span class="toc-number">1.</span> <span class="toc-text">Problems</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Lease-%E5%92%8C-%E4%B8%BB%E6%93%8D%E4%BD%9C"><span class="toc-number">2.</span> <span class="toc-text">Lease 和 主操作</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9F%BA%E7%A1%80%E7%9A%84-Raft-%E5%92%8C-term"><span class="toc-number">2.1.</span> <span class="toc-text">基础的 Raft 和 term</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Session-amp-amp-Lease"><span class="toc-number">2.2.</span> <span class="toc-text">Session &amp;&amp; Lease</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Corner-Case-%E4%B8%8E%E4%B8%BB%E8%8A%82%E7%82%B9%E6%93%8D%E4%BD%9C"><span class="toc-number">2.3.</span> <span class="toc-text">Corner Case 与主节点操作</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8F%82%E8%80%83"><span class="toc-number">3.</span> <span class="toc-text">参考</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/12/29/Distributed-System-Master/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/12/29/Distributed-System-Master/&text=Distributed System: Master"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/12/29/Distributed-System-Master/&title=Distributed System: Master"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/12/29/Distributed-System-Master/&is_video=false&description=Distributed System: Master"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Distributed System: Master&body=Check out this article: http://blog.mwish.me/2020/12/29/Distributed-System-Master/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/12/29/Distributed-System-Master/&title=Distributed System: Master"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/12/29/Distributed-System-Master/&title=Distributed System: Master"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/12/29/Distributed-System-Master/&title=Distributed System: Master"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/12/29/Distributed-System-Master/&title=Distributed System: Master"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/12/29/Distributed-System-Master/&name=Distributed System: Master&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/12/29/Distributed-System-Master/&t=Distributed System: Master"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

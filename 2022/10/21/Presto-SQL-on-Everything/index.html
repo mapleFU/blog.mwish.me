@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="本栏想介绍一些大数据和 OLAP 相关的东西，因为本人对大数据相对没有存储那么熟悉，所以很多地方可能早期写作的时候不会有太多自己的理解，以后读代码或者什么的时候会尽量补充一下。这里的 Ref 段也会引用一些国内介绍的二手文章，来便于做一些简单理解。 Presto 在 facebook 内部比较早的时候会在 Hadoop 系的系统上查询。13 年左右的时候开源出来了，据说 facebook 自己没那">
+<meta property="og:type" content="article">
+<meta property="og:title" content="ICDE&#39;19: Presto: SQL on Everything">
+<meta property="og:url" content="http://blog.mwish.me/2022/10/21/Presto-SQL-on-Everything/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="本栏想介绍一些大数据和 OLAP 相关的东西，因为本人对大数据相对没有存储那么熟悉，所以很多地方可能早期写作的时候不会有太多自己的理解，以后读代码或者什么的时候会尽量补充一下。这里的 Ref 段也会引用一些国内介绍的二手文章，来便于做一些简单理解。 Presto 在 facebook 内部比较早的时候会在 Hadoop 系的系统上查询。13 年左右的时候开源出来了，据说 facebook 自己没那">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/2B26F07F-6136-4021-960C-D6A68CEBB857.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/1B137B26-BBA4-4044-8828-EE73D637522C.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/A4D930D9-5D5D-4E27-B570-06206A282597.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/8ECB9443-012A-41F5-A956-E9A331423D2E.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/7B7E3B3A-0D27-4EBA-AC39-244B61584C69.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/E1FE9C7F-A989-48EE-A1C1-07BDC5B092BF.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/066C1494-660B-4ABF-A322-2A673A75F354.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/42C83D4A-3E2B-465F-B378-99C5A866DF9D.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/862369FC-A797-4C3B-8959-D0CBFCA1A827.png">
+<meta property="article:published_time" content="2022-10-20T16:00:00.000Z">
+<meta property="article:modified_time" content="2022-10-29T18:28:01.138Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/2B26F07F-6136-4021-960C-D6A68CEBB857.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>ICDE&#39;19: Presto: SQL on Everything</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2022/10/30/Kudu-Storage-for-Fast-Analytics-on-Fast-Data/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2022/10/19/Parquet-Part3-read-rep-and-def-levels/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2022/10/21/Presto-SQL-on-Everything/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2022/10/21/Presto-SQL-on-Everything/&text=ICDE&#39;19: Presto: SQL on Everything"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2022/10/21/Presto-SQL-on-Everything/&title=ICDE&#39;19: Presto: SQL on Everything"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2022/10/21/Presto-SQL-on-Everything/&is_video=false&description=ICDE&#39;19: Presto: SQL on Everything"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=ICDE&#39;19: Presto: SQL on Everything&body=Check out this article: http://blog.mwish.me/2022/10/21/Presto-SQL-on-Everything/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2022/10/21/Presto-SQL-on-Everything/&title=ICDE&#39;19: Presto: SQL on Everything"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2022/10/21/Presto-SQL-on-Everything/&title=ICDE&#39;19: Presto: SQL on Everything"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2022/10/21/Presto-SQL-on-Everything/&title=ICDE&#39;19: Presto: SQL on Everything"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2022/10/21/Presto-SQL-on-Everything/&title=ICDE&#39;19: Presto: SQL on Everything"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2022/10/21/Presto-SQL-on-Everything/&name=ICDE&#39;19: Presto: SQL on Everything&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2022/10/21/Presto-SQL-on-Everything/&t=ICDE&#39;19: Presto: SQL on Everything"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Introduction"><span class="toc-number">1.</span> <span class="toc-text">Introduction</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Use-cases"><span class="toc-number">2.</span> <span class="toc-text">Use cases</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Architecture-overview"><span class="toc-number">3.</span> <span class="toc-text">Architecture overview</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#System-Design"><span class="toc-number">4.</span> <span class="toc-text">System Design</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Scheduling"><span class="toc-number">4.1.</span> <span class="toc-text">Scheduling</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Execution"><span class="toc-number">5.</span> <span class="toc-text">Execution</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8D%95%E6%9C%BA%E6%89%A7%E8%A1%8C"><span class="toc-number">5.1.</span> <span class="toc-text">单机执行</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Shuffle"><span class="toc-number">5.2.</span> <span class="toc-text">Shuffle</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%86%99%E6%93%8D%E4%BD%9C"><span class="toc-number">5.3.</span> <span class="toc-text">写操作</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%B5%84%E6%BA%90%E7%AE%A1%E7%90%86"><span class="toc-number">5.4.</span> <span class="toc-text">资源管理</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#CPU-Scheduling"><span class="toc-number">5.4.1.</span> <span class="toc-text">CPU Scheduling</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Memory-Management"><span class="toc-number">5.4.2.</span> <span class="toc-text">Memory Management</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Fault-Tolerance"><span class="toc-number">5.5.</span> <span class="toc-text">Fault Tolerance</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Query-Processing-Optimizations"><span class="toc-number">6.</span> <span class="toc-text">Query Processing Optimizations</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#JVM"><span class="toc-number">6.1.</span> <span class="toc-text">JVM</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Codegen"><span class="toc-number">6.2.</span> <span class="toc-text">Codegen</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#File-Format-Features"><span class="toc-number">6.3.</span> <span class="toc-text">File Format Features</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Lazy-Data-Loading"><span class="toc-number">6.4.</span> <span class="toc-text">Lazy Data Loading</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Operating-on-Compressed-Data"><span class="toc-number">6.5.</span> <span class="toc-text">Operating on Compressed Data</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#References"><span class="toc-number">7.</span> <span class="toc-text">References</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        ICDE&#39;19: Presto: SQL on Everything
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2022-10-20T16:00:00.000Z" itemprop="datePublished">2022-10-21</time>
+        
+      
+    </div>
+
+
+      
+    <div class="article-category">
+        <i class="fas fa-archive"></i>
+        <a class="category-link" href="/categories/bigdata/">bigdata</a>
+    </div>
+
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>本栏想介绍一些大数据和 OLAP 相关的东西，因为本人对大数据相对没有存储那么熟悉，所以很多地方可能早期写作的时候不会有太多自己的理解，以后读代码或者什么的时候会尽量补充一下。这里的 Ref 段也会引用一些国内介绍的二手文章，来便于做一些简单理解。</p>
+<p>Presto 在 facebook 内部比较早的时候会在 Hadoop 系的系统上查询。13 年左右的时候开源出来了，据说 facebook 自己没那么管，然后 fb 出来一波人搞了个 Presto DB，后来更名为 Trino。在国内使用者中，用户会使用 Presto 来做一些 ad-hoc 的 AP 查询，然后用 Spark 做一些 batch job。本文在 19 年发表于 ICDE，作为 Presto 的总结。论文比较简单直接，没有扯很多花头，而是比较简单的介绍了一下 Presto 都在做什么。文章细节还是很多的，基本上可以作为一个引擎的详细介绍。</p>
+<p>论文的标题是 SQL on Everything，用户可以设置 connector (数据源) 之后，运行 SQL。源头包括 HDFS、S3，也包括一些对应的外表。它会解析 SQL，然后去分布式的执行它们。Presto 包括了</p>
+<ol>
+<li>SQL 对应的解析和优化。这里的重点应该关注这个 Plan 是怎么分布式调度和执行的。</li>
+<li>Connector，对应类型丰富的数据源。新数据源应该也可以编写自己的 connector。</li>
+</ol>
+<p>接下来上论文吧</p>
+<h2 id="Introduction"><a href="#Introduction" class="headerlink" title="Introduction"></a>Introduction</h2><p>Presto 认为自己的关键字是：adaptive / extensible / flexible:</p>
+<ul>
+<li>Adaptive: 多租户、可扩展到数千节点庞大的集群中、能处理 memory / io / cpu bound 的各种优化。</li>
+<li>Extensible: 允许用户对接各种数据源的数据，只要 connector 靠谱</li>
+<li>Flexible: 支持各种类型的负载</li>
+</ul>
+<p>此外，它还要求支持高性能：新的查询不会起新的 JVM 容器，而是在单机 worker 的 long running JVM 进程中运行。这用调度和资源管理的复杂度来优化了 response time。</p>
+<p>这篇论文描述了：</p>
+<ol>
+<li>Presto 的架构和实现</li>
+<li>一些关键优化对性能的提升指标。</li>
+</ol>
+<h2 id="Use-cases"><a href="#Use-cases" class="headerlink" title="Use cases"></a>Use cases</h2><p>论文描述了几个 use cases:</p>
+<ol>
+<li>Interative analytics:<ol>
+<li>处理少量数据 ( 50GB-3TB 的压缩数据)</li>
+<li>并发 50-100</li>
+<li>对<strong>响应时间</strong>比较敏感</li>
+<li>可能会 kill， 或者 limit 来限制查询结果</li>
+</ol>
+</li>
+<li>Batch ETL<ol>
+<li>transformation 带来的 CPU 开销大、aggregation 和 Join 内存开销可能大致数 TB</li>
+<li><strong>吞吐量</strong>很重要，响应时间没那么重要</li>
+</ol>
+</li>
+<li>A/B Testing:<ol>
+<li>数小时内完成分析</li>
+<li>结果完整且准确</li>
+<li><strong>可以拿到各个时间段的分析</strong>，所以预聚合可能不太适合</li>
+<li>可能需要 JOIN 几个非常大的数据集，比如 user, device, test, event attributes</li>
+<li>查询相对之前几个比较固定</li>
+</ol>
+</li>
+<li>开发者/广告 分析 (好家伙，我用的 Google analytics 应该就是这种)<ol>
+<li>给用户而非开发者使用</li>
+<li>查询相对比较固定，包括 Join / Aggregation with window </li>
+<li>数据总量很大，但是可以过滤掉非常多的数据</li>
+<li>查询时间尽量在 ~50ms - 5s</li>
+</ol>
+</li>
+</ol>
+<h2 id="Architecture-overview"><a href="#Architecture-overview" class="headerlink" title="Architecture overview"></a>Architecture overview</h2><p><img src="https://image.mwish.me/blog-image/2B26F07F-6136-4021-960C-D6A68CEBB857.png" alt="2B26F07F-6136-4021-960C-D6A68CEBB857"></p>
+<p>Presto 的进程分为两种：</p>
+<ol>
+<li>Coordinator</li>
+<li>Worker</li>
+</ol>
+<p>这个 Coordinator 和 2PC 那个不是一个东西，它负责解析 SQL、分发查询（可能一些特别轻的 SQL，或者在 meta 直接处理完的、schema 相关的不会发给 worker？）。它负责：</p>
+<ol>
+<li>请求的 queue</li>
+<li>生成、优化 distributed execution planner</li>
+</ol>
+<p>Worker 则负责读取数据、执行 Coordinator 产生的各个算子，它也负责读取对应数据源的各种数据。最底层的 worker 会分配到对应的 split，split 是外部存储系统的对应数据/数据范围。执行的时候有下列几个基本组成部分：</p>
+<ol>
+<li>Statement: 用户对应的 SQL 查询</li>
+<li>Query: Presto 收到用户查询的时候，生成的 Query，这里可以当成 Presto 处理 sql 后的结构</li>
+<li>Stage: SQL 会被拆成多个 stage</li>
+<li>Task：单个 Stage 内会有多个 Task</li>
+</ol>
+<p>单机的并发中，机器靠并发执行 Task 来做到并发，Execution 尽量是 pipeline 执行的。Stage 间的数据会尽量存储在 memory 中，当在 node 间 shuffle 数据的时候，也会尽量用 buffer 来降低 latency (recall: Spark RDD)。</p>
+<p>Presto 提供了很多 Plugin API，包括：</p>
+<ol>
+<li>Data types / functions / ACL / event consumer / queuing policies</li>
+<li>最重要的是，它开放了对应数据源的 connector 接口：<ol>
+<li>Metadata  API: Data 对应的元数据，比如 schema 等，其实是一组繁杂的 api</li>
+<li>Data Location API: 数据分布的 api</li>
+<li>Data Source API: 读取数据的 API</li>
+<li>Data Sink AP: 写入数据的 API</li>
+</ol>
+</li>
+</ol>
+<p>实际上，Presto 不仅可以借助这些 API 完成和优化对数据源的查询，甚至可以借助这套 api，比较轻松完成一些任务，比如说联邦查询</p>
+<h2 id="System-Design"><a href="#System-Design" class="headerlink" title="System Design"></a>System Design</h2><p>Presto 接受 SQL 查询，同时，有 RESTful HTTP 客户端和包括 JDBC 在内的各种连接，查询生成包括你们都听到腻的几部分：</p>
+<ol>
+<li>Parsing: 用基于 Antlr 的 Parser 来将 SQL 转成 ast，然后做一些语义上的分析</li>
+<li>Logical Planning: 处理 ast，生成 PlanNode 的树，如下图（这个 SQL 要用到很后面）</li>
+</ol>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">SELECT</span> </span><br><span class="line">  orders.orderkey, <span class="built_in">SUM</span>(tax) </span><br><span class="line"><span class="keyword">FROM</span> orders</span><br><span class="line"><span class="keyword">LEFT</span> <span class="keyword">JOIN</span> lineitem</span><br><span class="line">  <span class="keyword">ON</span> orders.orderkey <span class="operator">=</span> lineitem.orderkey </span><br><span class="line"><span class="keyword">WHERE</span> discount <span class="operator">=</span> <span class="number">0</span> </span><br><span class="line"><span class="keyword">GROUP</span> <span class="keyword">BY</span> orders.orderkey</span><br></pre></td></tr></table></figure>
+<p><img src="https://image.mwish.me/blog-image/1B137B26-BBA4-4044-8828-EE73D637522C.png" alt="1B137B26-BBA4-4044-8828-EE73D637522C"></p>
+<p>然后进入 Optimization 阶段。论文里 Optimizer 描述的比较简单，CMU Talk 2021 <a target="_blank" rel="noopener" href="https://www.youtube.com/watch?v=ZwaVZplVmVA&amp;ab_channel=CMUDatabaseGroup">介绍</a>了一些 Trino Optimizer 的设计。它有 rbo 和 cbo 部分，会根据代价算各种 MPP 优化，之后我应该会专门介绍。比较关键的是这里会根据下列信息作决策：</p>
+<ol>
+<li>Data Layouts: 根据 Data Layout API 拿到 partitioning, sorting, grouping, indices 相关的 properties。</li>
+<li>Predicate Pushdown: 根据 connector 选择是否下推 range / equality，提升查询性能<ol>
+<li>这包括可能推一些 selection filter 之类的东西，或者要不要推一些东西到存储上，connector 会提供一些相关的信息，还是很管用的</li>
+</ol>
+</li>
+<li>inter-node parallelism (增大 node 间并发): 可以并行的部分可以拆分成专门的 stage，举个最简单的例子，扫描大量简单数据，然后 agg。这个因为扫描大量简单数据在有些情况下拆分开来并行扫描是可能更优的，所以这里可以唱分成一个 stage，每个 stage 在部分 input data 上执行同样的操作。stage 计算完毕结果会放到本地的内存 buffer 中。Stage 之前依靠 Shuffle 来进行交互。Shuffle 将带来比较重的 CPU 和网络开销，所以 Optimizer 应该慎重作出抉择。Figure 3 表示了 Optimizer 大概生成的内容（后面会对这个再优化）：</li>
+</ol>
+<p><img src="https://image.mwish.me/blog-image/A4D930D9-5D5D-4E27-B570-06206A282597.png" alt="A4D930D9-5D5D-4E27-B570-06206A282597"></p>
+<p>生成之后，优化器需要根据一些 API 来进行优化，包括：</p>
+<ol>
+<li>Data Layout Properties: 可以根据 partition 之类的，来做一些 co-located join 相关的优化；或者如果发现某个 Join Column 是 Index 的时候，走 index nested loop join；也可以根据 MySQL 的 Partition 和连接的性质来做优化。在 Batch ETL 或者 AP 查询中，这里也可以做很多的数据裁剪。</li>
+<li>Node Properties: 这里 Node 是指 PlanNode，这个类似 Cascades 模型提到的 Properties，节点会有 partition / sorting / bucketing 之类的信息。查询也可以设置 Preference，表示亲和的、必要的 properties，在优化 shuffle 的时候，Presto 会尽量满足更多的 Properties。可以根据这些信息来和 Data Layout Properties 一样优化查询、减少 shuffle。这样当然也可能会导致一定的 da ta skew，因为本来是有一定 dop 被分成 stage 的，现在 stage 合并了，所以倾斜的概率也会提高。这个 Figure3 中的表达式，如果有一些 layout properties 是可以尝试合并的。</li>
+</ol>
+<p>还有一些 intra-node parallelism 的处理：在单个 node 中，可能会因为 skew （比如用户随便写了个 SQL，没咋优化，也没咋设计 partition，就很容易 skew）或者 job 本身太大（在少量节点执行重 ETL）导致 Task 很重，然后 Task 的 Executor 没法快速消费下游生成的数据，这也不太行。节点内并行能稍微缓解一些这些症状，如下图：</p>
+<p><img src="https://image.mwish.me/blog-image/8ECB9443-012A-41F5-A956-E9A331423D2E.png" alt="8ECB9443-012A-41F5-A956-E9A331423D2E"></p>
+<p>这里在 Hash Join 的 Build Side 中，在 Pipeline 1 和 Pipeline 2 中引入了并发（我感觉这个相当于识别到不需要多 stage 处理，但是执行的时候会在一些 operator 里尝试并发？），原本的 Scan -&gt; Hash 被拆分成了两个 pipeline。</p>
+<p>所以回顾一下，Optimizer 大概会：</p>
+<p><img src="https://image.mwish.me/blog-image/7B7E3B3A-0D27-4EBA-AC39-244B61584C69.png" alt="7B7E3B3A-0D27-4EBA-AC39-244B61584C69"></p>
+<h3 id="Scheduling"><a href="#Scheduling" class="headerlink" title="Scheduling"></a>Scheduling</h3><p>Coordinator 会把 Plan Stage 产生的 Executable Tasks 分发给 workers，然后也会有 task stages -&gt; task stages 的数据通路，让最后有一个执行树。</p>
+<p>Task 可能包含一个或多个 Pipeline，Pipeline 是 Operator 的链（like HyPer)，当 Optimizer 发现一个 Pipeline 需要内部并行来提高性能的时候，就会尝试并行（我觉得基本上就是 Figure 4）。其实这里可以视作在<strong>不同级别</strong>做拆分操作：</p>
+<ol>
+<li>Probe Build 可能被拆分成 Stage1 -&gt; Shuffle -&gt; Stage2</li>
+<li>这里在同一个 Stage 中，成了 Pipeline2 -&gt; LocalShuffle -&gt; Pipeline1</li>
+</ol>
+<p>顺带一提，我搜了下 google，竟然没搜到 LocalShuffle 这个词。</p>
+<p>上述是 Optimizer 的部分行为，然后 Execution 的时候，调度行为如下：</p>
+<ol>
+<li>看那些 Stages 需要被调度</li>
+<li>看多少人物需要被调度，被放置到哪些 node 上</li>
+</ol>
+<p><strong>Stage Scheduling</strong> 有 all-at-once 和 phased 两种策略：</p>
+<ol>
+<li>All-at-once 全部调度，减少了一定的 latency（但是资源开销可能比较大？）</li>
+<li>Phase Scheduling 需要避免死锁，比如避免 Probe 比 Build 先运行。在 Batch ETL 场景大大减少了内存开销。</li>
+</ol>
+<p>当 Scheduler 需要执行某个 Stage 的时候，这里需要 assign 一定数目的 tasks 到对应的 nodes 上。Stage 被分为 Leaf Stage 和 Intermediate Stage。Leaf Stage 从 Connector 里面读取数据，而 intermediate stage 会拿到别的 Stage 生成的数据。</p>
+<p>对于 Leaf Stage，这里会根据 Connector 和 network 相关的配置，来分配任务到各个节点上：</p>
+<ol>
+<li>极端的说，如果是 shared-nothing 部署，Leaf Stage 需要完全分配到对应的数据节点上</li>
+<li>此外，会根据之前提到的 Connector Data Layout 相关的 API 做调度。</li>
+</ol>
+<p>分析场景有很大一部分开销在解压、decoding列存编码、过滤和数据类型转换上。这些任务算是 cpu + io bound 的，所以它们会被 dispatch 到<strong>尽量多</strong>的节点上（老实说，我觉得应该有个根据统计算的计算公式，比如：<a target="_blank" rel="noopener" href="https://github.com/apache/arrow/blob/master/cpp/src/arrow/io/caching.cc#L52">https://github.com/apache/arrow/blob/master/cpp/src/arrow/io/caching.cc#L52</a> ）</p>
+<p>这里也会根据网络来做一些配置，比如要求尽量读同一个机房的数据。</p>
+<p>对于 Intermediate Stages，这里会根据 properties 和数据分布决定 worker / task 数量，甚至能够一定情况下动态更新 tasks 数目。</p>
+<p>在 Leaf Stage 中的 worker 会被分配 Connector 中定义的 split，这个 split 相当于数据源中的一段数据，比如 Parquet / ORC 文件中的某段，或者是 Redis 的 server, key-value 等。Leaf Stage 需要被 assign 对应的 Split 才是可运行的，而中间节点在 assign 后一直可运行，并且在消费完上游数据或者 abort 之后完成。</p>
+<p><img src="https://image.mwish.me/blog-image/E1FE9C7F-A989-48EE-A1C1-07BDC5B092BF.png" alt="E1FE9C7F-A989-48EE-A1C1-07BDC5B092BF"></p>
+<p>关于 Task 的分发，这里会让 Connector 枚举对应的 split，然后一点点分发给 worker，这个地方希望：</p>
+<ol>
+<li>Hive 之类的 Connector 枚举可能需要很久，这里可以部分解耦查询时间</li>
+<li>不处理完所有数据就生成查询结果</li>
+<li>worker 上维护 split 队列，coordinator 会根据队列剩余长度来做一些调度，来一定程度避免 skew 和适配负载</li>
+<li>split 搞完了就不一定要存在内存中了，在访问几白万个 split 的时候，降低内存和 tracking 的开销。</li>
+</ol>
+<p>当然，这个可能也会导致估计查询进度不准确。</p>
+<h2 id="Execution"><a href="#Execution" class="headerlink" title="Execution"></a>Execution</h2><h3 id="单机执行"><a href="#单机执行" class="headerlink" title="单机执行"></a>单机执行</h3><p><img src="https://image.mwish.me/blog-image/066C1494-660B-4ABF-A322-2A673A75F354.png" alt="066C1494-660B-4ABF-A322-2A673A75F354"></p>
+<p>Presto 在单机执行上有 Operator 和 Driver 两个概念，Driver 类似之前执行图中的单个 Pipeline 中的单个并行单元，在论文中，Driver 特点是：</p>
+<ol>
+<li>以 Page 为单位，处理数据，Page 类似 Figure 5</li>
+<li>Pipeline 的处理 Operator，这里可以很简单的发现哪些是 blocking 状态，然后可以让出线程；非阻塞状态的 Page 可以在 Operator 之间移动</li>
+</ol>
+<p><img src="https://image.mwish.me/blog-image/42C83D4A-3E2B-465F-B378-99C5A866DF9D.png" alt="42C83D4A-3E2B-465F-B378-99C5A866DF9D"></p>
+<h3 id="Shuffle"><a href="#Shuffle" class="headerlink" title="Shuffle"></a>Shuffle</h3><p>对于 Shuffle 而言，Presto 使用长轮询来拉取数据，即使数据很小，这样也有良好的不高的 latency。buffer 也需要一定的调整，buffer 太小或者消费跟不上导致 full 的话，split 处理就无法继续了，而且会占着大块内存；反之，如果 buffer 利用率不够，每次积攒了一些小 buffer 都被取走了，那么实际上网络这些开销就会比较大。</p>
+<p>这里通过监控来调整消费端（下游）与输出端（上游）的数据：</p>
+<ol>
+<li>当上游 buffer 利用率持续比较高，这里会尝试减少分配给它的 split，来降低生产端数据产生。论文指出这样能优化不少对应的内存开销。</li>
+<li>接收端会计算自己每个请求平均从下游获取了多少 bytes，然后来算一个合理的获取数据的并发。</li>
+</ol>
+<h3 id="写操作"><a href="#写操作" class="headerlink" title="写操作"></a>写操作</h3><p>对于写操作，Presto 也会调整对应的并发度。当写入 Buffer 占用过大的时候，这里会增大写的并发度，来调整对应的效率（这里举了个 S3 + Hive 的例子，但我没完全 get 到）。</p>
+<h3 id="资源管理"><a href="#资源管理" class="headerlink" title="资源管理"></a>资源管理</h3><p>因为需要执行不同的 Task，Task 又包含各种 Pipeline，自然，做 Task 级别或者更下层的调度和资源管理也很重要。这里单个集群可能有数百的并发，同时也有一个资源管理系统。</p>
+<h4 id="CPU-Scheduling"><a href="#CPU-Scheduling" class="headerlink" title="CPU Scheduling"></a>CPU Scheduling</h4><p>Presto 最关注的资源就是 CPU。node 级别的 scheduler 对 turnaround time 时间短的小查询做了特殊的优化，同时，对 CPU 资源需求差不多的查询做了公平共享(fair sharing)的调度。Task 的资源使用量等价于每个 split 的 CPU time 之和，同时，调度的时候，节点会记录自己 node 上 Task 执行的时间，然后做 Task-level 的调度。</p>
+<p>在并发处理上，Presto 使用了协作多任务的模型。每个任务最多有一个 1秒钟的时间片，在运行完 1 秒后，它需要重新进入任务队列。当 output buffer 满了（下游消费数据慢）或者上游 buffer 空、系统没有足够内存的时候，系统会调度别的任务。</p>
+<p>在调度策略上（即选择下一个调度的任务），Presto 使用了 MLFQ 来做调度，用 CPU Time 来做调度的指标。在执行上，这个依靠 connector 提供的 async api 和 yield signal，这样 io-task 就可以让出对应的 cpu 了。同时，相对来说，batch etl 调度优先级会低一些，而短的任务通常会被很快的执行</p>
+<h4 id="Memory-Management"><a href="#Memory-Management" class="headerlink" title="Memory Management"></a>Memory Management</h4><p>内存申请需要走 Pool，然后被标记为 user memory 或者 system memory：</p>
+<ol>
+<li>user memory: 和用户的输入数据有关，能够反馈给用户</li>
+<li>system memory: 系统内部的实现，大小和用户关系不大，比如 shuffle buffers</li>
+</ol>
+<p>这两个限制是分离的，同时，超过了节点级别内存限制或者各个节点总内存开销超过限制的 Query 会被 kill 掉。而如果机器内存不够，task allocate 不出内存，它会 blocking 直到能够申请内存。</p>
+<p>节点级别内存和总内存可以限制并行度、防止 skew，这个都…莫名很好懂，感觉可以参考 DynamoDB 的 WCU / RCU。当然，这里 Batch ETL 会遇到内存不够用的情况，所以这里提供了 Spilling 和 Reserved Pool:</p>
+<ol>
+<li>Reserved Pool: 预留内存池，类似 DynamoDB 的 burst 资源池，已经<a target="_blank" rel="noopener" href="https://github.com/trinodb/trino/issues/6677">无了</a>，因为 trino 讨论者认为这玩意没有起到实际的作用</li>
+<li>spilling state to disk. <strong>Presto supports spilling for hash joins and aggregations.</strong><ol>
+<li>However, we do not conﬁgure any of the Facebook deployments to spill. Cluster sizes are typically large enough to support several TBs of distributed memory, users appreciate the predictable latency of fully inmemory execution, and local disks would increase hardware costs (especially in Facebook’s shared-storage deployments).</li>
+</ol>
+</li>
+</ol>
+<h3 id="Fault-Tolerance"><a href="#Fault-Tolerance" class="headerlink" title="Fault Tolerance"></a>Fault Tolerance</h3><p>在论文发表的时候，Presto 似乎对 fault tolerance 支持不是很好：</p>
+<ol>
+<li>Task / Stage 之类的错误，会重试</li>
+<li>Coorindator 的错误会导致整个服务不可用。在 fb，Interactive analytics 和 batch etl 用 standby coordinator，A/B 和 analysis 则用多个集群。</li>
+<li>Presto 认为 ckpt 之类的策略都过重了，所以写文章的时候还没支持。听说还有用 Presto on Spark 支持 batch ETL 的，真的牛批</li>
+</ol>
+<h2 id="Query-Processing-Optimizations"><a href="#Query-Processing-Optimizations" class="headerlink" title="Query Processing Optimizations"></a>Query Processing Optimizations</h2><h3 id="JVM"><a href="#JVM" class="headerlink" title="JVM"></a>JVM</h3><p>利用 JIT，调整 GC。不懂 Java，不锐评了。</p>
+<h3 id="Codegen"><a href="#Codegen" class="headerlink" title="Codegen"></a>Codegen</h3><p>不懂，不锐评了。</p>
+<h3 id="File-Format-Features"><a href="#File-Format-Features" class="headerlink" title="File Format Features"></a>File Format Features</h3><p>这个我可太懂了…</p>
+<p><img src="https://image.mwish.me/blog-image/862369FC-A797-4C3B-8959-D0CBFCA1A827.png" alt="862369FC-A797-4C3B-8959-D0CBFCA1A827"></p>
+<p>这图有比较细节的部分：</p>
+<ol>
+<li>Page 是有不同的列的</li>
+<li>Page 内列块为 block，可能是编码的数据</li>
+<li>如果是字典编码，那么字典是可以 reuse 的</li>
+</ol>
+<h3 id="Lazy-Data-Loading"><a href="#Lazy-Data-Loading" class="headerlink" title="Lazy Data Loading"></a>Lazy Data Loading</h3><blockquote>
+<p>Connectors can generate lazy blocks, which read, decompress, and decode data only when cells are actually accessed.</p>
+<p>Given that a large fraction of CPU time is spent decompressing and decoding and that it is common for ﬁlters to be highly selective, this optimization is highly effective when columns are infrequently accessed.</p>
+</blockquote>
+<p>这里类似 <code>Select a where b &lt; xxx;</code> 的时候，如果过滤效率好，很多 a 相关的列就不用一起解压了，但实现起来其实是很多脏活的。</p>
+<h3 id="Operating-on-Compressed-Data"><a href="#Operating-on-Compressed-Data" class="headerlink" title="Operating on Compressed Data"></a>Operating on Compressed Data</h3><p>参考 abadi 的论文，我之前博客也提到过：<a href="https://blog.mwish.me/2022/01/15/format-thinking-2/#DB-%E7%9B%B4%E6%8E%A5%E5%9C%A8%E5%8E%8B%E7%BC%A9%E7%9A%84%E6%95%B0%E6%8D%AE%E4%B8%8A%E8%BF%9B%E8%A1%8C%E8%AE%A1%E7%AE%97">https://blog.mwish.me/2022/01/15/format-thinking-2/#DB-%E7%9B%B4%E6%8E%A5%E5%9C%A8%E5%8E%8B%E7%BC%A9%E7%9A%84%E6%95%B0%E6%8D%AE%E4%B8%8A%E8%BF%9B%E8%A1%8C%E8%AE%A1%E7%AE%97</a></p>
+<h2 id="References"><a href="#References" class="headerlink" title="References"></a>References</h2><ol>
+<li>Trino: The Definition Guide (这本书有第二版，但我没下载到靠谱的，所以翻了下第一版)</li>
+<li>Presto概述：特性、原理、架构 <a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/260399749">https://zhuanlan.zhihu.com/p/260399749</a> </li>
+<li>Presto Explain: <a target="_blank" rel="noopener" href="https://prestodb.io/docs/current/sql/explain.html">https://prestodb.io/docs/current/sql/explain.html</a></li>
+<li>分布式SQL查询引擎原理（以Presto SQL为例）<a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/293775390">https://zhuanlan.zhihu.com/p/293775390</a></li>
+<li>Presto 是如何 schedule task 的? <a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/58959725">https://zhuanlan.zhihu.com/p/58959725</a></li>
+<li>Presto 数据如何进行shuffle <a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/61565957">https://zhuanlan.zhihu.com/p/61565957</a></li>
+<li><a target="_blank" rel="noopener" href="https://docs.qq.com/slide/DZVhBRlhqc2dhVHda">https://docs.qq.com/slide/DZVhBRlhqc2dhVHda</a></li>
+</ol>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Introduction"><span class="toc-number">1.</span> <span class="toc-text">Introduction</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Use-cases"><span class="toc-number">2.</span> <span class="toc-text">Use cases</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Architecture-overview"><span class="toc-number">3.</span> <span class="toc-text">Architecture overview</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#System-Design"><span class="toc-number">4.</span> <span class="toc-text">System Design</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Scheduling"><span class="toc-number">4.1.</span> <span class="toc-text">Scheduling</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Execution"><span class="toc-number">5.</span> <span class="toc-text">Execution</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8D%95%E6%9C%BA%E6%89%A7%E8%A1%8C"><span class="toc-number">5.1.</span> <span class="toc-text">单机执行</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Shuffle"><span class="toc-number">5.2.</span> <span class="toc-text">Shuffle</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%86%99%E6%93%8D%E4%BD%9C"><span class="toc-number">5.3.</span> <span class="toc-text">写操作</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%B5%84%E6%BA%90%E7%AE%A1%E7%90%86"><span class="toc-number">5.4.</span> <span class="toc-text">资源管理</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#CPU-Scheduling"><span class="toc-number">5.4.1.</span> <span class="toc-text">CPU Scheduling</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Memory-Management"><span class="toc-number">5.4.2.</span> <span class="toc-text">Memory Management</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Fault-Tolerance"><span class="toc-number">5.5.</span> <span class="toc-text">Fault Tolerance</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Query-Processing-Optimizations"><span class="toc-number">6.</span> <span class="toc-text">Query Processing Optimizations</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#JVM"><span class="toc-number">6.1.</span> <span class="toc-text">JVM</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Codegen"><span class="toc-number">6.2.</span> <span class="toc-text">Codegen</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#File-Format-Features"><span class="toc-number">6.3.</span> <span class="toc-text">File Format Features</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Lazy-Data-Loading"><span class="toc-number">6.4.</span> <span class="toc-text">Lazy Data Loading</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Operating-on-Compressed-Data"><span class="toc-number">6.5.</span> <span class="toc-text">Operating on Compressed Data</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#References"><span class="toc-number">7.</span> <span class="toc-text">References</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2022/10/21/Presto-SQL-on-Everything/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2022/10/21/Presto-SQL-on-Everything/&text=ICDE&#39;19: Presto: SQL on Everything"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2022/10/21/Presto-SQL-on-Everything/&title=ICDE&#39;19: Presto: SQL on Everything"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2022/10/21/Presto-SQL-on-Everything/&is_video=false&description=ICDE&#39;19: Presto: SQL on Everything"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=ICDE&#39;19: Presto: SQL on Everything&body=Check out this article: http://blog.mwish.me/2022/10/21/Presto-SQL-on-Everything/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2022/10/21/Presto-SQL-on-Everything/&title=ICDE&#39;19: Presto: SQL on Everything"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2022/10/21/Presto-SQL-on-Everything/&title=ICDE&#39;19: Presto: SQL on Everything"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2022/10/21/Presto-SQL-on-Everything/&title=ICDE&#39;19: Presto: SQL on Everything"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2022/10/21/Presto-SQL-on-Everything/&title=ICDE&#39;19: Presto: SQL on Everything"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2022/10/21/Presto-SQL-on-Everything/&name=ICDE&#39;19: Presto: SQL on Everything&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2022/10/21/Presto-SQL-on-Everything/&t=ICDE&#39;19: Presto: SQL on Everything"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

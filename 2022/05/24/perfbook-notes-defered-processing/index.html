@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="Data ownership一种避免 Locking 开销的方式是，让数据属于某个 CPU&#x2F;Thread，回到并行设计的策略，你会发现这个是完美贴合的：  Interestingly enough, data ownership covers each of the “big three” parallel design techniques: It partitions over threads">
+<meta property="og:type" content="article">
+<meta property="og:title" content="perfbook notes: defered processing">
+<meta property="og:url" content="http://blog.mwish.me/2022/05/24/perfbook-notes-defered-processing/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="Data ownership一种避免 Locking 开销的方式是，让数据属于某个 CPU&#x2F;Thread，回到并行设计的策略，你会发现这个是完美贴合的：  Interestingly enough, data ownership covers each of the “big three” parallel design techniques: It partitions over threads">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/04885DC0-FF37-4AD8-9792-56E7FBFF6494.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/77841631-8B37-407F-8529-CF2704D4D054.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/3BCAF617-31BD-4713-A98F-D44F3F23915C.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/C0251FC1-7B61-440C-B9D8-F10E8A8B3DD2.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/B8059A1F-F9F4-4BAD-B5CA-8BB637F88D5F.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/963AF616-C2C7-4FB2-A67F-85CC643E5DBE.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/BB98CABE-1A28-4403-BFAD-196E131C327B.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/6566C47B-B026-4AD8-823F-CA68D6695468.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/41DE6CA6-1269-4D58-A3A3-A8F59D013650.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/48ABD729-5EBE-4CD4-A71C-AEF661EF9CF5.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/C2794F61-0FD2-4975-953C-152CEEDD10F3.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/6567DA82-6B70-40C4-AF96-3ED5E95BBC77.png">
+<meta property="article:published_time" content="2022-05-23T17:29:11.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.567Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/04885DC0-FF37-4AD8-9792-56E7FBFF6494.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>perfbook notes: defered processing</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2022/05/28/Constant-Time-Recovery-in-Azure-SQL-Database/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2022/05/04/perfbook-notes-parallel-mutex-fastpath/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2022/05/24/perfbook-notes-defered-processing/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2022/05/24/perfbook-notes-defered-processing/&text=perfbook notes: defered processing"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2022/05/24/perfbook-notes-defered-processing/&title=perfbook notes: defered processing"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2022/05/24/perfbook-notes-defered-processing/&is_video=false&description=perfbook notes: defered processing"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=perfbook notes: defered processing&body=Check out this article: http://blog.mwish.me/2022/05/24/perfbook-notes-defered-processing/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2022/05/24/perfbook-notes-defered-processing/&title=perfbook notes: defered processing"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2022/05/24/perfbook-notes-defered-processing/&title=perfbook notes: defered processing"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2022/05/24/perfbook-notes-defered-processing/&title=perfbook notes: defered processing"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2022/05/24/perfbook-notes-defered-processing/&title=perfbook notes: defered processing"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2022/05/24/perfbook-notes-defered-processing/&name=perfbook notes: defered processing&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2022/05/24/perfbook-notes-defered-processing/&t=perfbook notes: defered processing"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Data-ownership"><span class="toc-number">1.</span> <span class="toc-text">Data ownership</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Deferred-Processing"><span class="toc-number">2.</span> <span class="toc-text">Deferred Processing</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Reference-Counting"><span class="toc-number">2.1.</span> <span class="toc-text">Reference Counting</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Hazard-Pointer"><span class="toc-number">2.2.</span> <span class="toc-text">Hazard Pointer</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Sequence-Locks"><span class="toc-number">2.3.</span> <span class="toc-text">Sequence Locks</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#RCU"><span class="toc-number">2.4.</span> <span class="toc-text">RCU</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E4%BB%8E%E4%B8%80%E4%B8%AA%E6%8C%87%E9%92%88%E5%BC%80%E5%A7%8B%E7%9A%84-RCU-Introduction"><span class="toc-number">2.4.1.</span> <span class="toc-text">从一个指针开始的 RCU Introduction</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#RCU-Fundamentals"><span class="toc-number">2.4.2.</span> <span class="toc-text">RCU Fundamentals</span></a><ol class="toc-child"><li class="toc-item toc-level-5"><a class="toc-link" href="#Publish-Subscribe-Mechanism"><span class="toc-number">2.4.2.1.</span> <span class="toc-text">Publish-Subscribe Mechanism</span></a></li><li class="toc-item toc-level-5"><a class="toc-link" href="#Wait-For-Pre-Existing-RCU-Readers"><span class="toc-number">2.4.2.2.</span> <span class="toc-text">Wait For Pre-Existing RCU Readers</span></a></li><li class="toc-item toc-level-5"><a class="toc-link" href="#Maintain-Multiple-Versions-of-Recently-Updated-Objects"><span class="toc-number">2.4.2.3.</span> <span class="toc-text">Maintain Multiple Versions of Recently Updated Objects</span></a></li></ol></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Kernel-%E7%9A%84-RCU-API"><span class="toc-number">2.4.3.</span> <span class="toc-text">Kernel 的 RCU API</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#RCU-Usage"><span class="toc-number">2.4.4.</span> <span class="toc-text">RCU Usage</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Which-to-Choose"><span class="toc-number">2.5.</span> <span class="toc-text">Which to Choose?</span></a></li></ol></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        perfbook notes: defered processing
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2022-05-23T17:29:11.000Z" itemprop="datePublished">2022-05-24</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <h2 id="Data-ownership"><a href="#Data-ownership" class="headerlink" title="Data ownership"></a>Data ownership</h2><p>一种避免 Locking 开销的方式是，让数据属于某个 CPU/Thread，回到并行设计的策略，你会发现这个是完美贴合的：</p>
+<blockquote>
+<p>Interestingly enough, data ownership covers each of the “big three” parallel design techniques: It partitions over threads (or CPUs, as the case may be), it <strong>batches</strong> all local operations, and its elimination of synchronization operations is weakening carried to its logical extreme.</p>
+</blockquote>
+<p>这里有几种方式来做这些操作：</p>
+<ol>
+<li>data 全是线程自身的，不需要同步方案</li>
+<li>Data 来自一个共享区域，但是每个线程 manage 其中的一部分（想象一个固定 slot 的 bucket）</li>
+<li>function shipping，用一些方式来访问别的地方 own 的数据</li>
+<li>Designated Thread，特定的线程访问这些数据</li>
+</ol>
+<p>关于 (1) 我们可以回顾 Counter 的方案，counter 数据是线程/CPU 自身的。只能自己单线程添加，但别的线程可以去 read。在 Linux Kernel 中，也有这种情况：某个 CPU A 在 <strong>interrupt disabled</strong> 的情况下，可以读取一些自己的变量；别的 CPU B 在拿到了这个 CPU A 的 per-CPU 锁的时候，才能读 CPU A 的这些变量；而 CPU A 在更新的情况下，需要 <strong>interrupt disabled</strong> + CPU A 的 Per-CPU lock。Per-CPU 的 memory allocator 也是一个很好的例子。</p>
+<p>function shipping 类似 counter 那节的信号 counter。通过一些通信的方式，来获取（拿走）别的线程的数据，这通常可以引入一些 concurrent queue 或者 message queue 一类的东西。这里还会涉及到一个「哪些线程管自己的数据」这种问题。其实这个可以参考线程池之类的，走 queue 分配，tokio 应该有不错的博客描述它们的方案。</p>
+<p>还有一种方式是 Designated Thread，即一个/多个特定的线程访问特定的数据。这个可以参考 <code>eventually</code>，最终一致性的 counter，即有一个 <code>eventual</code> 线程扫所有线程的 counter，把他们移动到 <code>global</code>。这个就用一个特定的线程来并发。这个思路在非 counter 也很常见，比如 <code>rpc</code> 可能会有特定的线程来扫数据，处理回调。</p>
+<p>有一种提升并发的方式，就是将共享的并发同步点，变成私有的数据。</p>
+<blockquote>
+<p>Data ownership is perhaps the most underappreciated synchronization mechanism in existence. When used properly, it delivers unrivaled simplicity, performance, and scalability. Perhaps its simplicity costs it the respect that it deserves. Hopefully a greater appreciation for the subtlety and power of data ownership will lead to greater level of respect, to say nothing of leading to greater performance and scalability coupled with reduced complexity.</p>
+</blockquote>
+<h2 id="Deferred-Processing"><a href="#Deferred-Processing" class="headerlink" title="Deferred Processing"></a>Deferred Processing</h2><p>对于并行系统来说，deferred processing 能减弱对同步原语的需求，并大大提升性能。这里会介绍：</p>
+<ol>
+<li>Reference counting</li>
+<li>hazard pointers</li>
+<li>sequence locking</li>
+<li>RCU</li>
+</ol>
+<p>这里举了一个 Practical 的例子：</p>
+<p><img src="https://image.mwish.me/blog-image/04885DC0-FF37-4AD8-9792-56E7FBFF6494.png" alt="04885DC0-FF37-4AD8-9792-56E7FBFF6494"></p>
+<p>这里提供的是一个链表，链表有 lookup, add, del 的需求，单线程代码如下：<a target="_blank" rel="noopener" href="https://github.com/paulmckrcu/perfbook/blob/master/CodeSamples/defer/route_seq.c">https://github.com/paulmckrcu/perfbook/blob/master/CodeSamples/defer/route_seq.c</a></p>
+<p>显然，网络栈相关的代码是不太会单线程的，所以需要并行方式来处理。</p>
+<h3 id="Reference-Counting"><a href="#Reference-Counting" class="headerlink" title="Reference Counting"></a>Reference Counting</h3><p>rc 作为一个常见方案是很常用的。<code>Arc</code> 和 <code>shared_ptr</code> 都是一种并发的 RC，关于它们的语义，boost 有很精彩的介绍：<a target="_blank" rel="noopener" href="https://www.boost.org/doc/libs/1_63_0/doc/html/atomic.html">https://www.boost.org/doc/libs/1_63_0/doc/html/atomic.html</a> . 据传，RC 可以追溯到上世纪四五十年代里面计算机硬件管理的流程上，要用的地方贴个条，没条了才能关。</p>
+<p>perfbook 给了一个不是很完善的实现：<a target="_blank" rel="noopener" href="https://github.com/paulmckrcu/perfbook/blob/master/CodeSamples/defer/route_refcnt.c">https://github.com/paulmckrcu/perfbook/blob/master/CodeSamples/defer/route_refcnt.c</a> </p>
+<p>RC 会需要对一个 atomic 的计数器，通过 faa 来增加/减少 counter。我们之前讲到 faa 的限制，实际上可以参考下图：</p>
+<p><img src="https://image.mwish.me/blog-image/77841631-8B37-407F-8529-CF2704D4D054.png" alt="77841631-8B37-407F-8529-CF2704D4D054"></p>
+<p>这里 ref-cnt 随着 CPU/Thread 增多，不太是 scalable 的。</p>
+<p>Ref-cnt 还有个问题，就是说，我们假设有一块 RC 的内存，那这个 <code>count</code> 本身和 <code>data</code> 放在一起的话，可能是不合适的，所以一般实现上，控制块和数据块可能是分开的。这点也启发了后续的一些内容。</p>
+<h3 id="Hazard-Pointer"><a href="#Hazard-Pointer" class="headerlink" title="Hazard Pointer"></a>Hazard Pointer</h3><p>hzdptr 思路和 ref-cnt 有点类似，不过：</p>
+<blockquote>
+<p>Rather than incrementing an integer stored in the data element, instead store a pointer to that data element in per-CPU (or per-thread) lists. Each element of these lists is called a hazard pointer [Mic04].</p>
+</blockquote>
+<p>这里 hazard pointer 遵守规则：</p>
+<ol>
+<li>如果被 free 了，后续再也不会增加这个被 free 的线程的读者</li>
+<li>不维护计数，而是每个线程维护一个 hazptr 列表（实际上就类似计数）。某个元素的引用计数 等于 所有线程的列表中，指向这块内存地址中 hazptr 的总量。</li>
+<li>Batch 访问，来减轻计算 (2) 中引用计数的开销。</li>
+</ol>
+<p>下面是使用的时候：</p>
+<ol>
+<li>Hazptr 在访问的时候，都要记录到本线程的 hazptr 列表中，这里会调用 API <code>hp_record</code> 或者 <code>hp_try_record</code> 来注册。它会注册到本线程的列表中。在访问的时候，这里抽出了一个 grace 值，<code>HAZPTR_POISON</code> ，实现为 <code>0x8</code>，这个值用来表示 hazptr 的特殊值。当写入或者删除的时候，需要靠这个值表示「被删掉了」或者「状态未决」。</li>
+<li>在摘除的时候，不会直接 free 内存，而会走 <code>hazptr_free_later</code>，注册到一个 free 列表中。<code>hazptr_free_later</code> 同时有一个计数器，如果里面元素过多的话，会触发 <code>hazptr_scan</code>，做真正的删除（这里体现了 Batch 操作）</li>
+<li><code>hazptr_scan</code> 会把全局的引用列表扫出来，然后和本线程的 free 列表对比，看看有没有被引用的，没有被 hazptr 引用就可以 gc 掉了。注意：free 列表中的对象在被 free 之后就不再会被引用，而且至多被 free 一次。</li>
+</ol>
+<p>上述就是风险指针的流程，具体的实现会复杂很多，主要是有很多并发的小 corner case 要处理。</p>
+<p>hazptr 代码可以参考：</p>
+<ol>
+<li>Folly: <a target="_blank" rel="noopener" href="https://github.com/facebook/folly/blob/main/folly/synchronization/Hazptr.h">https://github.com/facebook/folly/blob/main/folly/synchronization/Hazptr.h</a></li>
+<li>perfbook: <a target="_blank" rel="noopener" href="https://github.com/paulmckrcu/perfbook/blob/master/CodeSamples/defer/hazptr.h">https://github.com/paulmckrcu/perfbook/blob/master/CodeSamples/defer/hazptr.h</a> 和 <a target="_blank" rel="noopener" href="https://github.com/paulmckrcu/perfbook/blob/master/CodeSamples/defer/hazptr.c">https://github.com/paulmckrcu/perfbook/blob/master/CodeSamples/defer/hazptr.c</a></li>
+</ol>
+<p>对上述这些 api 的使用，可以参考 perfbook 的例子：<a target="_blank" rel="noopener" href="https://github.com/paulmckrcu/perfbook/blob/master/CodeSamples/defer/route_hazptr.c">https://github.com/paulmckrcu/perfbook/blob/master/CodeSamples/defer/route_hazptr.c</a> 。这里注意到，由于 <code>hazptr</code> 列表可能被修改，一旦遇上了 <code>HAZPTR_POISON</code>，这里就会重试。不过这也不是必须的，这里提到：</p>
+<blockquote>
+<p>In certain cases, restart can be avoided by using link counting as exempliﬁed by the UnboundedQueue and  ConcurrentHashMap data structures implemented in Folly open-source library.</p>
+</blockquote>
+<p>下面是性能相关：</p>
+<p><img src="https://image.mwish.me/blog-image/3BCAF617-31BD-4713-A98F-D44F3F23915C.png" alt="3BCAF617-31BD-4713-A98F-D44F3F23915C"></p>
+<p>可以看到，由于利用了 Batching，hazptr 相对来说性能提升不少。</p>
+<h3 id="Sequence-Locks"><a href="#Sequence-Locks" class="headerlink" title="Sequence Locks"></a>Sequence Locks</h3><blockquote>
+<p>Sequence locks are used in the Linux kernel for readmostly data that must be seen in a consistent state by readers. However, unlike reader-writer locking, readers do not exclude writers. Instead, like hazard pointers, sequence locks force readers to retry an operation if they detect activity from a concurrent writer.</p>
+</blockquote>
+<p>这个方式可以理解为有点类似在数据库 OCC Validation 中做的那样。它需要在数据上有一个对应的 seq，这里会允许多读者、单写者，并且读者如果是需要重试的，这个其实也可以对比 OCC。结论就是，和 OCC 类似，没有更新的时候，性能会非常好。</p>
+<p>perfbook 上的 seqlock 有点邪门，它不关心「有没有读到一个一致的快照」，它在开始更新的时候会把 <code>seq</code> 设置为奇数，然后更新完成会设置为偶数。</p>
+<p>对于读写，这里接口有：</p>
+<ol>
+<li><code>read_seqbegin</code> 和 <code>read_seqretry</code></li>
+<li><code>write_seqlock</code> 和 <code>write_sequnlock</code></li>
+</ol>
+<p><img src="https://image.mwish.me/blog-image/C0251FC1-7B61-440C-B9D8-F10E8A8B3DD2.png" alt="C0251FC1-7B61-440C-B9D8-F10E8A8B3DD2"></p>
+<p>这个实现是非常简单的：<a target="_blank" rel="noopener" href="https://github.com/paulmckrcu/perfbook/blob/master/CodeSamples/defer/seqlock.h">https://github.com/paulmckrcu/perfbook/blob/master/CodeSamples/defer/seqlock.h</a> 。它提供了一种不阻塞，而是重试读的「乐观读写锁」。</p>
+<p>当然，用我们之前 Lock 的视角分析，这个方案需要更精细的设计，因为这里读可能会被不停的写入饿死，正如系统描述的：</p>
+<blockquote>
+<p>Both the read-side and write-side critical sections of a sequence lock can be thought of as transactions, and sequence locking therefore can be thought of as a limited form of transactional memory, which will be discussed in Section 17.2. The limitations of sequence locking are: (1) Sequence locking restricts updates and (2) sequence locking does not permit traversal of pointers to objects that might be freed by updaters. These limitations are of course overcome by transactional memory, but can also be overcome by combining other synchronization primitives with sequence locking.</p>
+</blockquote>
+<p>不过，它的好处是，没有写入者的时候，系统是 scalable 的。</p>
+<p><img src="https://image.mwish.me/blog-image/B8059A1F-F9F4-4BAD-B5CA-8BB637F88D5F.png" alt="B8059A1F-F9F4-4BAD-B5CA-8BB637F88D5F"></p>
+<h3 id="RCU"><a href="#RCU" class="headerlink" title="RCU"></a>RCU</h3><p>Perfbook 的作者是 RCU 的提出者，所以他花了比上面内容合起来嗨唱的篇幅来介绍 RCU 技术。当然，这也是值得的。RCU 实际上是有很多变体的，包括 Double Buffer 这种。</p>
+<p>对于 RC，它把 faa 的巨大开销丢给了读者，让读者不 scalable；hazptr 减小了同步开销，但是线程需要记录相关的 ptr，读内存需要有 <code>WRITE_ONCE</code> 之类的接口来写入，这也可能有一定开销；seqlock 避免了读相关的 contention，但是写非常拉胯。需要注意的是，它们可以视为「在同一块内存空间上的并发」。这些接口在读的时候，也需要引入 <code>memory barrier</code>，来做同步。</p>
+<p>RCU(read-copy update) 提供了 API，允许通过增大更新代价，来让读可扩展。书后面介绍了经典的 RCU、基本的 RCU 概念、内核 Linux API、RCU 的用处。</p>
+<h4 id="从一个指针开始的-RCU-Introduction"><a href="#从一个指针开始的-RCU-Introduction" class="headerlink" title="从一个指针开始的 RCU Introduction"></a>从一个指针开始的 RCU Introduction</h4><p><img src="https://image.mwish.me/blog-image/963AF616-C2C7-4FB2-A67F-85CC643E5DBE.png" alt="963AF616-C2C7-4FB2-A67F-85CC643E5DBE"></p>
+<p>这里的模型是一个指向结构体的指针，然后实现 Insert 和 Delete。</p>
+<p>Insert 相对于用 <code>atomic</code> 接口读写指针没啥区别，Figure 9.6 则是正常的 <code>std::atomic</code> 指针那套（这里用的是内核的各种接口，不过意思懂就行）。</p>
+<p>Delete 就有区别了！区别在于，<code>gptr</code> 设置是很方便的，但之前可能有读者在读，所以这里涉及一个 GC 的过程。这里要「等待之前读者（pre-existing readers）完成，然后再 <code>free</code>」</p>
+<p><img src="https://image.mwish.me/blog-image/BB98CABE-1A28-4403-BFAD-196E131C327B.png" alt="BB98CABE-1A28-4403-BFAD-196E131C327B"></p>
+<p>这里有个问题：如何「等待之前读者完成」？</p>
+<ol>
+<li>首先想到的是 RC，不过我们之前介绍过了 RC 的缺点，hazptr 也有一定开销</li>
+<li>memory synchronization 比较昂贵，通常会引入 mb，所以用 register，比如查看别的线程的 PC。这种方法就太 hacking 了</li>
+<li>等待固定长度的时间，等到理论上没有 reader 了。这个在实时系统可能有用，但是太 hacking 了</li>
+<li>不释放了，leaking memory! 给我摆！这可以由 GC 来各种处理。</li>
+<li>停止程序，直到 pre-existing readers 完成…这不是回来了吗？答案是，这里相对 RC 那种读者 GC，这里需要 变更值 + 同步 + 写者 GC。当所有线程完成时，RCU 完成了 <em>grace period</em>，可以 GC 了。</li>
+</ol>
+<p>方案 (5) 和内核正好有一些地方匹配，还记得 <code>spin_lock</code> 可能会关中断吗：</p>
+<blockquote>
+<p>The spinning threads will not relinquish their CPUs until they acquire the lock, but the thread holding the lock cannot possibly release it until one of the spinning threads relinquishes a CPU. This is a classic deadlock situation, and this deadlock is avoided by forbidding blocking while holding a spinlock.</p>
+</blockquote>
+<p>这样系统就会类似一个非抢占的系统，那么，主线程要做什么呢？答案是 <code>context swtich</code> 到每个线程上，这样就能保证它们完成了，如图：</p>
+<p><img src="https://image.mwish.me/blog-image/6566C47B-B026-4AD8-823F-CA68D6695468.png" alt="6566C47B-B026-4AD8-823F-CA68D6695468"></p>
+<blockquote>
+<p>This approach is termed quiescent state based reclamation (QSBR) [HMB06].</p>
+</blockquote>
+<p>所以，最简单的实现是，进 RCU 读区域关中断，删除的时候，需要 <code>synchronize_rcu()</code>，来 context switch 到每个 CPU 上，保证度过临界区。</p>
+<p>那么，在这里，RCU 特点是，读可扩展，不用鸟写者。接口类似：</p>
+<ol>
+<li><code>rcu_read_lock</code> 和 <code>rcd_read_unlock</code>，在我们上面例子是开关中断</li>
+<li><code>synchronize_rcu</code>, 保证所有读者完成，在我们上面例子是调度</li>
+<li><code>rcu_ assign_pointer()</code> and <code>rcu_dereference()</code>, 发布指针。</li>
+</ol>
+<h4 id="RCU-Fundamentals"><a href="#RCU-Fundamentals" class="headerlink" title="RCU Fundamentals"></a>RCU Fundamentals</h4><p>这里是 RCU 需要依赖的基础：</p>
+<ol>
+<li>插入：publish-subscribe mechanism</li>
+<li>删除和内存回收：waiting for pre-existing RCU readers enabled deletion</li>
+<li>并发更新：maintaining multiple versions of recently updated objects</li>
+</ol>
+<h5 id="Publish-Subscribe-Mechanism"><a href="#Publish-Subscribe-Mechanism" class="headerlink" title="Publish-Subscribe Mechanism"></a>Publish-Subscribe Mechanism</h5><p>我们之前靠 atomic 更新指针来发布，实际上 RCU 需要这种机制，来保证「旧的版本不再被读到」。</p>
+<p><img src="https://image.mwish.me/blog-image/41DE6CA6-1269-4D58-A3A3-A8F59D013650.png" alt="41DE6CA6-1269-4D58-A3A3-A8F59D013650"></p>
+<p>这里需要保证：</p>
+<ol>
+<li>pointer 的 pusblish，即 <code>rcu_assign_pointer</code> 是原子的</li>
+<li>pointer 的 deref ，即 subscribe 是原子的，表现为<code>rcu_dereference</code></li>
+</ol>
+<p>这里可以视作是一组发布-订阅的 api。</p>
+<h5 id="Wait-For-Pre-Existing-RCU-Readers"><a href="#Wait-For-Pre-Existing-RCU-Readers" class="headerlink" title="Wait For Pre-Existing RCU Readers"></a>Wait For Pre-Existing RCU Readers</h5><p>RCU 读区域被称为 RCU read-side critical section，由 <code>rcu_read_lock</code> 和 <code>rcu_read_unlock</code>:</p>
+<p><img src="https://image.mwish.me/blog-image/48ABD729-5EBE-4CD4-A71C-AEF661EF9CF5.png" alt="48ABD729-5EBE-4CD4-A71C-AEF661EF9CF5"></p>
+<p><code>synchronize_rcu</code> 会在发布之后，等待之前的读者完成。这里我们聊到了 context switch。而 <code>DoublyBuffer</code> 可能会用 lock 和 cv 来做，语义上是差不多的。</p>
+<h5 id="Maintain-Multiple-Versions-of-Recently-Updated-Objects"><a href="#Maintain-Multiple-Versions-of-Recently-Updated-Objects" class="headerlink" title="Maintain Multiple Versions of Recently Updated Objects"></a>Maintain Multiple Versions of Recently Updated Objects</h5><p>这里之前举的例子都是单个值的例子，实际上，并发的写也是可行的，只要能维护多个版本。</p>
+<p>当然，这里可能要和别的方法结合，如图 9.15，这里 RCU 不会保证「读到一致性快照」：</p>
+<p><img src="https://image.mwish.me/blog-image/C2794F61-0FD2-4975-953C-152CEEDD10F3.png" alt="C2794F61-0FD2-4975-953C-152CEEDD10F3"></p>
+<p>当然，很多 RCU 使用的情况是 point get，在 point get 下，这种情况通常是可以容忍的，如文章所述：</p>
+<blockquote>
+<p>In summary, maintaining multiple versions is exactly what enables the extremely low overheads of RCU readers, and as noted earlier, many algorithms are unfazed by multiple versions. However, there are algorithms that absolutely cannot handle multiple versions. There are techniques for adapting such algorithms to RCU [McK04], but these are beyond the scope of this section.</p>
+</blockquote>
+<h4 id="Kernel-的-RCU-API"><a href="#Kernel-的-RCU-API" class="headerlink" title="Kernel 的 RCU API"></a>Kernel 的 RCU API</h4><p>Linux 并不是有一个 RCU API，而是有一组…Paul 在 LWN 写过：<a target="_blank" rel="noopener" href="https://lwn.net/Articles/777036/">https://lwn.net/Articles/777036/</a></p>
+<p>这里还提供了 callback 和 barrier 相关的内容，如：</p>
+<blockquote>
+<p>The asynchronous update-side primitive, call_rcu(), invokes a speciﬁed function with a speciﬁed argument after a subsequent grace period. For example, call_rcu(p,f); will result in the “RCU callback” f(p) being invoked after a subsequent grace period. There are situations, such as when unloading a Linux-kernel module that uses call_rcu(), when it is necessary to wait for all outstanding RCU callbacks to complete [McK07e]. The rcu_barrier() primitive does this job.</p>
+</blockquote>
+<p>除了经典的我们刚才介绍的一些 API，这里还有 <code>srcu</code>, <code>s</code> 即 sleepable，它使用类似 blocking api 来实现 rcu 机制。</p>
+<p>此外，RCU 还有各种 list 有关的 API。</p>
+<h4 id="RCU-Usage"><a href="#RCU-Usage" class="headerlink" title="RCU Usage"></a>RCU Usage</h4><p><a target="_blank" rel="noopener" href="https://lwn.net/Articles/263130/">https://lwn.net/Articles/263130/</a> 这里小标题特别好：</p>
+<ol>
+<li><a target="_blank" rel="noopener" href="https://lwn.net/Articles/263130/#RCU is a Reader-Writer Lock Replacement">RCU is a Reader-Writer Lock Replacement</a></li>
+<li><a target="_blank" rel="noopener" href="https://lwn.net/Articles/263130/#RCU is a Restricted Reference-Counting Mechanism">RCU is a Restricted Reference-Counting Mechanism</a></li>
+<li><a target="_blank" rel="noopener" href="https://lwn.net/Articles/263130/#RCU is a Bulk Reference-Counting Mechanism">RCU is a Bulk Reference-Counting Mechanism</a></li>
+<li><a target="_blank" rel="noopener" href="https://lwn.net/Articles/263130/#RCU is a Poor Man&#39;s Garbage Collector">RCU is a Poor Man’s Garbage Collector</a></li>
+<li><a target="_blank" rel="noopener" href="https://lwn.net/Articles/263130/#RCU is a Way of Providing Existence Guarantees">RCU is a Way of Providing Existence Guarantees</a></li>
+<li><a target="_blank" rel="noopener" href="https://lwn.net/Articles/263130/#RCU is a Way of Waiting for Things to Finish">RCU is a Way of Waiting for Things to Finish</a></li>
+</ol>
+<p>还有各种 performance 图，直接看就是了。</p>
+<h3 id="Which-to-Choose"><a href="#Which-to-Choose" class="headerlink" title="Which to Choose?"></a>Which to Choose?</h3><p><img src="https://image.mwish.me/blog-image/6567DA82-6B70-40C4-AF96-3ED5E95BBC77.png" alt="6567DA82-6B70-40C4-AF96-3ED5E95BBC77"></p>
+<p>在 folly 的 hazptr 也写了一下这些具体的区别：<a target="_blank" rel="noopener" href="https://github.com/facebook/folly/blob/main/folly/synchronization/Hazptr.h">https://github.com/facebook/folly/blob/main/folly/synchronization/Hazptr.h</a></p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Data-ownership"><span class="toc-number">1.</span> <span class="toc-text">Data ownership</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Deferred-Processing"><span class="toc-number">2.</span> <span class="toc-text">Deferred Processing</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Reference-Counting"><span class="toc-number">2.1.</span> <span class="toc-text">Reference Counting</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Hazard-Pointer"><span class="toc-number">2.2.</span> <span class="toc-text">Hazard Pointer</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Sequence-Locks"><span class="toc-number">2.3.</span> <span class="toc-text">Sequence Locks</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#RCU"><span class="toc-number">2.4.</span> <span class="toc-text">RCU</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E4%BB%8E%E4%B8%80%E4%B8%AA%E6%8C%87%E9%92%88%E5%BC%80%E5%A7%8B%E7%9A%84-RCU-Introduction"><span class="toc-number">2.4.1.</span> <span class="toc-text">从一个指针开始的 RCU Introduction</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#RCU-Fundamentals"><span class="toc-number">2.4.2.</span> <span class="toc-text">RCU Fundamentals</span></a><ol class="toc-child"><li class="toc-item toc-level-5"><a class="toc-link" href="#Publish-Subscribe-Mechanism"><span class="toc-number">2.4.2.1.</span> <span class="toc-text">Publish-Subscribe Mechanism</span></a></li><li class="toc-item toc-level-5"><a class="toc-link" href="#Wait-For-Pre-Existing-RCU-Readers"><span class="toc-number">2.4.2.2.</span> <span class="toc-text">Wait For Pre-Existing RCU Readers</span></a></li><li class="toc-item toc-level-5"><a class="toc-link" href="#Maintain-Multiple-Versions-of-Recently-Updated-Objects"><span class="toc-number">2.4.2.3.</span> <span class="toc-text">Maintain Multiple Versions of Recently Updated Objects</span></a></li></ol></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Kernel-%E7%9A%84-RCU-API"><span class="toc-number">2.4.3.</span> <span class="toc-text">Kernel 的 RCU API</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#RCU-Usage"><span class="toc-number">2.4.4.</span> <span class="toc-text">RCU Usage</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Which-to-Choose"><span class="toc-number">2.5.</span> <span class="toc-text">Which to Choose?</span></a></li></ol></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2022/05/24/perfbook-notes-defered-processing/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2022/05/24/perfbook-notes-defered-processing/&text=perfbook notes: defered processing"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2022/05/24/perfbook-notes-defered-processing/&title=perfbook notes: defered processing"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2022/05/24/perfbook-notes-defered-processing/&is_video=false&description=perfbook notes: defered processing"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=perfbook notes: defered processing&body=Check out this article: http://blog.mwish.me/2022/05/24/perfbook-notes-defered-processing/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2022/05/24/perfbook-notes-defered-processing/&title=perfbook notes: defered processing"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2022/05/24/perfbook-notes-defered-processing/&title=perfbook notes: defered processing"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2022/05/24/perfbook-notes-defered-processing/&title=perfbook notes: defered processing"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2022/05/24/perfbook-notes-defered-processing/&title=perfbook notes: defered processing"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2022/05/24/perfbook-notes-defered-processing/&name=perfbook notes: defered processing&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2022/05/24/perfbook-notes-defered-processing/&t=perfbook notes: defered processing"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="这一节我们会介绍网络的分层（老熟人了）和 End To End System Design. 计算机网络以分组的方式来提供对物理等层面的抽象。各层的所有协议被称为协议栈(protocol stack)，而 internet 提供了 物理层、链路层、网络层、运输层和应用层：  对于应用层而言，数据是 message 对于运输层而言，它们在应用 endpoint 中传输上层的 message。我们把这">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Network Layer &amp; End To End System Design">
+<meta property="og:url" content="http://blog.mwish.me/2020/09/05/Network-Layer-End-To-End-System-Design/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="这一节我们会介绍网络的分层（老熟人了）和 End To End System Design. 计算机网络以分组的方式来提供对物理等层面的抽象。各层的所有协议被称为协议栈(protocol stack)，而 internet 提供了 物理层、链路层、网络层、运输层和应用层：  对于应用层而言，数据是 message 对于运输层而言，它们在应用 endpoint 中传输上层的 message。我们把这">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/CB61FDA0-C769-4B9E-A2EF-ABDE2535C9D3.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/639D4B96-BEB7-407C-B054-22FF26A861D8.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/55771480-6AB4-4711-82FD-617C7F5F46E4.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/0FD97745-8A4A-43BE-9344-FCCF18DB4F71.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/6CA008EC-D656-423C-8619-79782173A59E.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/1E186DDA-D9B7-4241-90C8-8ED18C84818C.png">
+<meta property="article:published_time" content="2020-09-04T21:00:35.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.568Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/CB61FDA0-C769-4B9E-A2EF-ABDE2535C9D3.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>Network Layer &amp; End To End System Design</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2020/09/07/tenet-%E8%A7%82%E5%BD%B1%E7%AC%94%E8%AE%B0/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2020/08/22/Notes-Scaling-Memcache-at-Facebook/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/09/05/Network-Layer-End-To-End-System-Design/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/09/05/Network-Layer-End-To-End-System-Design/&text=Network Layer &amp; End To End System Design"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/09/05/Network-Layer-End-To-End-System-Design/&title=Network Layer &amp; End To End System Design"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/09/05/Network-Layer-End-To-End-System-Design/&is_video=false&description=Network Layer &amp; End To End System Design"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Network Layer &amp; End To End System Design&body=Check out this article: http://blog.mwish.me/2020/09/05/Network-Layer-End-To-End-System-Design/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/09/05/Network-Layer-End-To-End-System-Design/&title=Network Layer &amp; End To End System Design"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/09/05/Network-Layer-End-To-End-System-Design/&title=Network Layer &amp; End To End System Design"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/09/05/Network-Layer-End-To-End-System-Design/&title=Network Layer &amp; End To End System Design"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/09/05/Network-Layer-End-To-End-System-Design/&title=Network Layer &amp; End To End System Design"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/09/05/Network-Layer-End-To-End-System-Design/&name=Network Layer &amp; End To End System Design&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/09/05/Network-Layer-End-To-End-System-Design/&t=Network Layer &amp; End To End System Design"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%93%BE%E8%B7%AF%E5%B1%82%E5%92%8C%E7%BD%91%E7%BB%9C%E5%B1%82"><span class="toc-number">1.</span> <span class="toc-text">链路层和网络层</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#End-To-End-arguments-in-system-design"><span class="toc-number"></span> <span class="toc-text">End To End arguments in system design</span></a>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Network Layer &amp; End To End System Design
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2020-09-04T21:00:35.000Z" itemprop="datePublished">2020-09-05</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>这一节我们会介绍网络的分层（老熟人了）和 End To End System Design. 计算机网络以分组的方式来提供对物理等层面的抽象。各层的所有协议被称为协议栈(protocol stack)，而 internet 提供了 物理层、链路层、网络层、运输层和应用层：</p>
+<ol>
+<li>对于应用层而言，数据是 message</li>
+<li>对于运输层而言，它们在应用 endpoint 中传输上层的 message。我们把这一层的分组叫做 segment。这一层的协议包括 TCP 和 UDP</li>
+<li>网络层负责将 datagram 移动到另一边。这一层包括著名的 IP 协议，同时它包含一些路由选择协议, 给运输层运输 packet</li>
+<li>链路层依靠链路层的服务（还记得我们前两讲介绍的吗）讲消息传给下一个节点，链路层的分组称为 frame / packet.</li>
+<li>物理层中，我们完成了对物理信号等对程序员来说没啥影响，但是必要的电路等信息。这一层向上一层提供了光纤、铜线等提供的物理信号，给上层提供 0/1。</li>
+</ol>
+<p>应当说明的是，上面是 Internet 的网络分层，实际上你可能还听说过 OSI 7层模型等分层。</p>
+<p>在分层的网络中，对于上层而言，下层类似 api，下层提供一些封装过后的保证，上层用一定的方式和一定的保证来获得下一层的数据。</p>
+<h3 id="链路层和网络层"><a href="#链路层和网络层" class="headerlink" title="链路层和网络层"></a>链路层和网络层</h3><p>1/2/5 实际上相对来说好理解，大部分人都或多或少有印象。但是 4-5 之间有什么区别呢？我们知道网络层包括 IP 协议，实际上，情况类似下面：</p>
+<p><img src="https://image.mwish.me/blog-image/CB61FDA0-C769-4B9E-A2EF-ABDE2535C9D3.png" alt="CB61FDA0-C769-4B9E-A2EF-ABDE2535C9D3"></p>
+<p>We’ll divide the world into switches and routers</p>
+<ol>
+<li>Switches will route on your, Link Layer (L2) Addresses </li>
+<li>Routers will operate on IP (L3) Addresses</li>
+</ol>
+<p><img src="https://image.mwish.me/blog-image/639D4B96-BEB7-407C-B054-22FF26A861D8.png" alt="639D4B96-BEB7-407C-B054-22FF26A861D8"></p>
+<p>这两层使用的 Route 方式不同，这一点我们即将介绍 IP，就会了解了。</p>
+<p>实际上，IP 这个抽象相对来说相当重要，它提供了一个比较独立的网络的抽象，同时，对于异质性的网络，网络层也需要作出一定的协调和妥协：</p>
+<ul>
+<li>网络的带宽更大，发送的数据更快，而满的网络来不及接受，IP 需要丢弃来自生产快的网络的包</li>
+<li>IP 层不能保证 loss-free 和消息传递的 order （This is called best effort service.）</li>
+<li>有些网络有着更大的 packet，这个时候需要支持 fragementation 来拆分 packet</li>
+</ul>
+<p><img src="https://image.mwish.me/blog-image/55771480-6AB4-4711-82FD-617C7F5F46E4.png" alt="55771480-6AB4-4711-82FD-617C7F5F46E4"></p>
+<p>下面继续丢图：</p>
+<p><img src="https://image.mwish.me/blog-image/0FD97745-8A4A-43BE-9344-FCCF18DB4F71.png" alt="0FD97745-8A4A-43BE-9344-FCCF18DB4F71"></p>
+<p>同时，对于上层的应用而言，我们也有不同层次的信息（正如我们一开始介绍的）：</p>
+<p><img src="https://image.mwish.me/blog-image/6CA008EC-D656-423C-8619-79782173A59E.png" alt="6CA008EC-D656-423C-8619-79782173A59E"></p>
+<p>每层的信息有不同的 header, 来表示这一层承载的信息。</p>
+<h2 id="End-To-End-arguments-in-system-design"><a href="#End-To-End-arguments-in-system-design" class="headerlink" title="End To End arguments in system design"></a>End To End arguments in system design</h2><p>这是 84 年的一篇文章，介绍了那个时候互联网应用设计的一些思考。作者认为应该合理的抽象，在底层实现一些语意以优化性能，在高层实现高层真正想要的语义，因为在底层做抽象是很昂贵的，并且它们提供的语意也不一定真正可靠（当然你是金融公司或者很有钱啥的，都能自己搭海底光缆搞高频交易了，你大概也有钱在下层做优化了）。</p>
+<p>文章最开始举了个简单的例子：文件传输程序。</p>
+<blockquote>
+<p>用户从 fs 中读取一个文件，然后经过程序一定处理，发送给网络另一端，另一个用户接收并写入 fs。</p>
+</blockquote>
+<p>这个事件本身各个层次都可能出现错误。我们不仅需要底层各种保证和错误处理，实际上我们需要端到端的确认，即应用确认文件写入完成，并且 checksum 等一致。</p>
+<p><img src="https://image.mwish.me/blog-image/1E186DDA-D9B7-4241-90C8-8ED18C84818C.png" alt="1E186DDA-D9B7-4241-90C8-8ED18C84818C"></p>
+<p>同时，我们虽然有 tcp 之类的协议能保证 order 和内容可靠，但是可靠的内容不一定被处理了，从这个角度来看，仅仅 tcp 是不可靠的。但是相对更底层的协议，或者 UDP 而言，底层实现对应的语义能保证性能上的 bonus. 我们可能需要下列的方案来保证应用层次的可靠：</p>
+<ol>
+<li>Encryption</li>
+<li>First-in-first-out ordering</li>
+<li>Duplicate message surpression </li>
+<li>Multi-message transactions</li>
+</ol>
+<p>slide 给出了总结，我就不献丑翻译了：</p>
+<p>Basic argument: If you can implement functionality correctly and completely at endpoints, do it there and not at a lower layer.</p>
+<ul>
+<li>It saves on redundant work in the system, and avoids confusion later. Exceptions okay for performance optimizations.</li>
+</ul>
+<p>Strong argument: Avoid putting unneeded functionality at lower layers of your system altogether because it’s harmful!</p>
+<ul>
+<li>Extra functionality at low layers constrains how applications are designed at higher layers.</li>
+</ul>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%93%BE%E8%B7%AF%E5%B1%82%E5%92%8C%E7%BD%91%E7%BB%9C%E5%B1%82"><span class="toc-number">1.</span> <span class="toc-text">链路层和网络层</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#End-To-End-arguments-in-system-design"><span class="toc-number"></span> <span class="toc-text">End To End arguments in system design</span></a>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/09/05/Network-Layer-End-To-End-System-Design/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/09/05/Network-Layer-End-To-End-System-Design/&text=Network Layer &amp; End To End System Design"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/09/05/Network-Layer-End-To-End-System-Design/&title=Network Layer &amp; End To End System Design"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/09/05/Network-Layer-End-To-End-System-Design/&is_video=false&description=Network Layer &amp; End To End System Design"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Network Layer &amp; End To End System Design&body=Check out this article: http://blog.mwish.me/2020/09/05/Network-Layer-End-To-End-System-Design/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/09/05/Network-Layer-End-To-End-System-Design/&title=Network Layer &amp; End To End System Design"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/09/05/Network-Layer-End-To-End-System-Design/&title=Network Layer &amp; End To End System Design"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/09/05/Network-Layer-End-To-End-System-Design/&title=Network Layer &amp; End To End System Design"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/09/05/Network-Layer-End-To-End-System-Design/&title=Network Layer &amp; End To End System Design"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/09/05/Network-Layer-End-To-End-System-Design/&name=Network Layer &amp; End To End System Design&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/09/05/Network-Layer-End-To-End-System-Design/&t=Network Layer &amp; End To End System Design"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

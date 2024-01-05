@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="Velox 是 facebook 内部开源出的一套单机的向量化执行引擎，facebook 希望 Velox 能够代替各大 AP 系统的执行层，并尝试用它来做 ML 系统和 ad-hoc 分析查询甚至 batch 查询的执行引擎。同时，在执行之外，它也提供了一点小小的优化能力。暂时不考虑有人提出的 RFC 中和写入、事务有关的部分，它负责的内容如下：  IO，读取 dwio，Parquet, ORC">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Introduction to velox">
+<meta property="og:url" content="http://localhost/2022/10/09/Introduction-to-velox/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="Velox 是 facebook 内部开源出的一套单机的向量化执行引擎，facebook 希望 Velox 能够代替各大 AP 系统的执行层，并尝试用它来做 ML 系统和 ad-hoc 分析查询甚至 batch 查询的执行引擎。同时，在执行之外，它也提供了一点小小的优化能力。暂时不考虑有人提出的 RFC 中和写入、事务有关的部分，它负责的内容如下：  IO，读取 dwio，Parquet, ORC">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/3049626C-606E-40C1-8281-3C980FDD3603.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/string-views.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/string-vector.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/local-planner.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/cse.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/flatten-and.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/expression-evaluation.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/D40EF3D5-58F5-4B04-9E20-423639A128F8.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/E4BA6100-A4CF-4EF4-B41D-906E4A3EFCE1.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/7A390174-95B3-4BB9-A979-73B5F5907A34.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/aggregation-layout.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/velox-logical-planner.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/join.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/task-splits.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/hash-join-node.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/join-dynamic-filters.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/merge-join-pipelines.png">
+<meta property="article:published_time" content="2022-10-09T14:47:30.000Z">
+<meta property="article:modified_time" content="2022-11-13T15:56:40.487Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/3049626C-606E-40C1-8281-3C980FDD3603.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.jpeg">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.jpeg" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.jpeg">
+        
+      
+    
+    <!-- title -->
+    <title>Introduction to velox</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">
+    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2022/10/19/Parquet-Part3-read-rep-and-def-levels/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2022/10/04/Parquet-Part2-arrow-Parquet-code-path/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://localhost/2022/10/09/Introduction-to-velox/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://localhost/2022/10/09/Introduction-to-velox/&text=Introduction to velox"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://localhost/2022/10/09/Introduction-to-velox/&title=Introduction to velox"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://localhost/2022/10/09/Introduction-to-velox/&is_video=false&description=Introduction to velox"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Introduction to velox&body=Check out this article: http://localhost/2022/10/09/Introduction-to-velox/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://localhost/2022/10/09/Introduction-to-velox/&title=Introduction to velox"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://localhost/2022/10/09/Introduction-to-velox/&title=Introduction to velox"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://localhost/2022/10/09/Introduction-to-velox/&title=Introduction to velox"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://localhost/2022/10/09/Introduction-to-velox/&title=Introduction to velox"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://localhost/2022/10/09/Introduction-to-velox/&name=Introduction to velox&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://localhost/2022/10/09/Introduction-to-velox/&t=Introduction to velox"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Type-System"><span class="toc-number">1.</span> <span class="toc-text">Type System</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Vectors"><span class="toc-number">1.1.</span> <span class="toc-text">Vectors</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Expression-Eval"><span class="toc-number">2.</span> <span class="toc-text">Expression Eval</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Compilation"><span class="toc-number">2.1.</span> <span class="toc-text">Compilation</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Common-SubExpression-Detection"><span class="toc-number">2.1.1.</span> <span class="toc-text">Common SubExpression Detection</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Flatten-ANDs-and-ORs"><span class="toc-number">2.1.2.</span> <span class="toc-text">Flatten ANDs and ORs</span></a><ol class="toc-child"><li class="toc-item toc-level-5"><a class="toc-link" href="#flatten-concat-like-functions"><span class="toc-number">2.1.2.1.</span> <span class="toc-text">flatten concat-like functions</span></a></li></ol></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Constant-Folding"><span class="toc-number">2.1.3.</span> <span class="toc-text">Constant Folding</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Adaptive-Conjunct-Reordering-in-AND-and-OR"><span class="toc-number">2.2.</span> <span class="toc-text">Adaptive Conjunct Reordering in AND and OR</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Evaluation"><span class="toc-number">2.3.</span> <span class="toc-text">Evaluation</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Flat-No-Nulls-Fast-Path"><span class="toc-number">2.4.</span> <span class="toc-text">Flat No-Nulls Fast Path</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Evalution-If-Switch"><span class="toc-number">2.4.1.</span> <span class="toc-text">Evalution If&#x2F;Switch..</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Codegen"><span class="toc-number">2.5.</span> <span class="toc-text">Codegen</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Functions"><span class="toc-number">3.</span> <span class="toc-text">Functions</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Aggragations"><span class="toc-number">3.1.</span> <span class="toc-text">Aggragations</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Aggregations-%E7%BB%93%E6%9E%9C%E7%9A%84%E5%86%85%E5%AD%98%E7%AE%A1%E7%90%86"><span class="toc-number">3.1.1.</span> <span class="toc-text">Aggregations 结果的内存管理</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%A6%82%E4%BD%95%E6%B7%BB%E5%8A%A0%E4%B8%80%E4%B8%AA-Aggregator"><span class="toc-number">3.1.2.</span> <span class="toc-text">如何添加一个 Aggregator</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Plan-Nodes-and-Operators"><span class="toc-number">4.</span> <span class="toc-text">Plan Nodes and Operators</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Split"><span class="toc-number">4.1.</span> <span class="toc-text">Split</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#IO"><span class="toc-number">4.2.</span> <span class="toc-text">IO</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Hash-Joins"><span class="toc-number">4.3.</span> <span class="toc-text">Hash Joins</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Dynamic-Filter-Pushdown"><span class="toc-number">4.3.1.</span> <span class="toc-text">Dynamic Filter Pushdown</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%9D%82%E9%A1%B9"><span class="toc-number">4.3.2.</span> <span class="toc-text">杂项</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Memory-Management"><span class="toc-number">5.</span> <span class="toc-text">Memory Management</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BB%93%E8%AF%AD"><span class="toc-number">6.</span> <span class="toc-text">结语</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#References"><span class="toc-number">7.</span> <span class="toc-text">References</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Introduction to velox
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2022-10-09T14:47:30.000Z" itemprop="datePublished">2022-10-09</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>Velox 是 facebook 内部开源出的一套单机的向量化执行引擎，facebook 希望 Velox 能够代替各大 AP 系统的执行层，并尝试用它来做 ML 系统和 ad-hoc 分析查询甚至 batch 查询的执行引擎。同时，在执行之外，它也提供了一点小小的优化能力。暂时不考虑有人提出的 RFC 中和写入、事务有关的部分，它负责的内容如下：</p>
+<ol>
+<li>IO，读取 <em>dwio</em>，Parquet, ORC 等内容（主要是 dwio 格式），同时也包括硬件介质（s3, ssd..）和本地的 cache；和远端资源交互</li>
+<li>通用的、高性能、可扩展的 vectorize computing 算子、库实现（IO 的 Scan, Sink 也是一部分，但是我们暂且分开了）<ol>
+<li>Type system, columnar memory data, expression evaluation, operators</li>
+</ol>
+</li>
+<li>资源管理：管理 memory arenas, buffer management, tasks, drivers, CPU 线程池和线程执行 and thread execution, spilling 和缓存</li>
+</ol>
+<p>原则上，velox 接受 Query Optimizer 优化后的单机 Plan，用单机节点上的资源。上层要使用它可能要有一个转义层（例如，Presto 据说在尝试用，就起了个单独的项目 Prestissimo），用于要把转义的数据丢进来。当然，它还想处理类似 ML 等场景，这里有点类似前辈 <a href="从 Weld 论文看执行器的优化技术 - Eric Fu的文章 - 知乎 https://zhuanlan.zhihu.com/p/56138380">Weld</a></p>
+<p>Velox 比较大的贡献是提供了一套比较好的实际范本，东西算不上有什么新东西，但是在比较干净的情况下，把各点都做到了，项目也比较整洁。虽然行数比较多，但是大头还是在 <code>functions</code> 之类的很细节的东西上。部分代码虽然不算特别好（感觉是开源没开净或者留了坑），但是也算有比较高的完成度了。</p>
+<p>Meta 把 Velox 开源出来希望能够共建，目前 Ahana, Intel, Voltron Data 之类的公司在共建 Velox，看了下 commit 频率，不比国内几个明星开源公司提交频率低。他们也希望，这波能一起嫖到标准化语义和新硬件的羊毛（这么看 Influxdb-io 上 arrow-datafusion 贼船是不是有点亏）。尽管有人认为，这东西可能会因为各种 API 都要写个转义层搞得非常恶心，但是这几家现在还是比较期待 Velox 能整出一个好活的</p>
+<p>总而言之，闲扯这么多，我们还是介绍一些 Velox 的主要贡献。这里没有研究上的贡献，全都是工程上的：</p>
+<ol>
+<li>完善的各类 expression / operator / io 实现</li>
+<li>一些 adaptive 的算子选择、Lazy Eval 等</li>
+<li>实验的 codegen</li>
+</ol>
+<p>下面可以简单介绍一些，也贴一些简单的用户代码。</p>
+<h2 id="Type-System"><a href="#Type-System" class="headerlink" title="Type System"></a>Type System</h2><p>这里支持了 Scalar Type 和 Complex Type: <a target="_blank" rel="noopener" href="https://facebookincubator.github.io/velox/develop/types.html">https://facebookincubator.github.io/velox/develop/types.html</a></p>
+<p>基本上都是从需求来的，从 Spark 和 Presto 里面弄来的各个类型。值得一提的是，有些个类型就特别纠结：</p>
+<ul>
+<li>（各种编码的）字符串</li>
+<li>（各种精度的）Decimal</li>
+<li>（各种）Timestamp</li>
+</ul>
+<p>值得一提的是，对类型的检查被放到了表达式的 Compilation 阶段：<a target="_blank" rel="noopener" href="https://facebookincubator.github.io/velox/develop/expression-evaluation.html#compilation">https://facebookincubator.github.io/velox/develop/expression-evaluation.html#compilation</a> 。而执行的时候，通常都已经做好了转型，要么就直接报错了。这块本来应该在后面介绍，但是鉴于这其实是 type system 的一部分，所以应该在 type system 这节介绍。</p>
+<p>Velox 会有个 <code>resolveVectorFunction</code> 函数，它有个函数名称的 <code>map</code> 工厂，输入一个 <code>ITypedExpr</code>，然后可以拿到一个表达式里面所有的参数，然后走对应的列表，找到名称下所有的函数组，进行类型匹配，匹配通过就用，没有就找下一个，都没有就告诉用户。</p>
+<p>用户还可以添加自己的类型扩展，比如 Presto 添加了 HyperLogLog，eg: <a target="_blank" rel="noopener" href="https://github.com/facebookincubator/velox/commit/1e8e0d7c1db3f11ff322f702322070a968dab3df">https://github.com/facebookincubator/velox/commit/1e8e0d7c1db3f11ff322f702322070a968dab3df</a> 。简而言之，用户可以比较方便的在 Velox 上封装类型和对应的实现。</p>
+<h3 id="Vectors"><a href="#Vectors" class="headerlink" title="Vectors"></a>Vectors</h3><p>类似 Arrow 的 Array (这篇博客有很多不错的图：<a target="_blank" rel="noopener" href="https://blog.mwish.me/2022/10/04/Parquet-Part2-arrow-Parquet-code-path/">https://blog.mwish.me/2022/10/04/Parquet-Part2-arrow-Parquet-code-path/</a> )，Velox 也有一套表示列存的格式：Vector，内容和 arrow 差不多，我们主要关注区别：</p>
+<ol>
+<li>数据从 MemoryPool 中申请（记得 arrow 的 memory pool 吗？申请数据 64B 对齐那个），数据会被引用计数管理，只有一个 owner 的数据才可更改，否则要拷贝，不过允许 cow。</li>
+<li>提供了 encoding 支持，类似 abadi 论文的 expression on compressed data:<ol>
+<li>支持 flat, dictionary, constant  (前几种 arrow 也支持), Sequence(RLE), bias(FOR) 的编码</li>
+<li>提供了 <code>DecodedVector</code> 的抽象，来避免写一些 <code>if (XXEncoding) then ComputeOnEncoded() else if (encoding ) flatten</code> 的面条代码</li>
+</ol>
+</li>
+<li>支持 Lazy Evaluation。这个类似我们在 Presto 论文提到的，可以减少一定的 filter 量，同时甚至可能减少 IO ，比如（减少 io 是个很 hack 的事情，尤其是你如果做了 prefetch…我对论文的态度抱有苦笑般的怀疑）<ol>
+<li>这里还支持 pushdown，这个感觉像是和上面 encoding 有点重复，相当于把计算下推来避免 materialize 的开销</li>
+</ol>
+</li>
+<li>在字符串处理上，参考了 TUM 的 Umbra，如下面的读。这里相当于在数据库方面做了短路负载，让大部分操作熔断在短字符串处。此外，arrow 的 string 本身要求是在一个 buffer 中连续的，处理方式类似 array。Velox 认为这也能加速 substr 之类的操作，让对应长字符串减少 copy。</li>
+<li>Out-of-order write: 对于 switch case 或者 if else，在向量化中，会算出一组位置或者 true/false 向量，然后让对应的地方写。这个对一般的类型优化不大，但是对变长类型可以有一定的优化。比如说，有一组 if else 向量，然后写 string 类型。对于 arrow 来说，因为内容在 buffer </li>
+<li>Velox 还提供了转成 arrow 的 api，我觉得这用来拉屎非常方便</li>
+</ol>
+<p><img src="https://image.mwish.me/blog-image/3049626C-606E-40C1-8281-3C980FDD3603.png" alt="3049626C-606E-40C1-8281-3C980FDD3603"></p>
+<p><img src="https://image.mwish.me/blog-image/string-views.png" alt="string-views"></p>
+<p><img src="https://image.mwish.me/blog-image/string-vector.png" alt="string-vector"></p>
+<h2 id="Expression-Eval"><a href="#Expression-Eval" class="headerlink" title="Expression Eval"></a>Expression Eval</h2><p>Velox 的查询最早会是一个 Plan Node 组成的树，经过 Planner 成为一个 Pipeline + Operator 的结构。</p>
+<p><img src="https://image.mwish.me/blog-image/local-planner.png" alt="local-planner"></p>
+<p>而在 <code>FilterNode</code>, <code>ProjectNode</code>, <code>AggregationNode</code>, 各种 Join 的 Node 和 OrderBy 的 Node 中，会有各种 Expressions。在 Velox 中，处理前的 Expression <code>core::ITypedExpr</code> 会在 compile 后绑定执行需要的 <code>core::Expr</code>. Expressions 包含：</p>
+<ul>
+<li>FieldAccessTypedExpr</li>
+<li>ConstantTypedExpr</li>
+<li>CallTypedExpr<ul>
+<li>前几个都比较简单，这个包含了 and, or, if, switch, cast, try(try 一个表达式，有问题返回 null）, coalesce (返回第一个非 null 的表达式)</li>
+</ul>
+</li>
+<li>CastTypedExpr</li>
+<li>LambdaTypedExpr</li>
+</ul>
+<p>这些 <code>ITypedExpr</code> 会组织成一个表达式树的关系，从 root 连接到子节点，可能是个 AND 树之类的。同时，表达式也会有一些 metadata 作为标记，比如是否 <code>determinstic</code>、<code>null propagation</code> 的性质，见：<a target="_blank" rel="noopener" href="https://facebookincubator.github.io/velox/develop/expression-evaluation.html#expression-metadata">https://facebookincubator.github.io/velox/develop/expression-evaluation.html#expression-metadata</a></p>
+<p>表达式树的执行不是 push / pull 的单向流，而是每个 batch 自 root 到叶节点的求值，然后根据下层节点的结果，最后产生一组某个类型的 Vector。</p>
+<ol>
+<li>表达式是否是 <em>deterministic</em> 的（rand, shuffle 外的大部分函数都是）</li>
+<li><em>propagatesNulls</em>: 输入为 null 的时候，输出是否为 null，可以在输入为 null 的时候免去一些计算</li>
+<li>…</li>
+</ol>
+<p>这些 attributes 能在执行端在表达式上给出很大的优化的空间。举个例子，如果输入被发现，虽然有很多行，但是限定在字典内等，就会有很大的优化空间。或者发现会 propagate null 的话，是 null 的表达式就不用再被折腾一茬子，直接 null set 传递。</p>
+<h3 id="Compilation"><a href="#Compilation" class="headerlink" title="Compilation"></a>Compilation</h3><p>Compile 阶段会拿到一个或多个表达式树，首先会进行类型匹配的计算（详见之前的 Type System 一节），然后会进行一些简单的表达式优化。这一点其实有那么点点怪，有的优化是执行上的，因为 Velox 自己执行的时候可以抽出很多上面所说的 attributes，然后利用里面的特性来优化。感觉一般的系统中，因为没有这种 plan - plan 之间的 gap，所以没有这么一个「再优化」的转换层。</p>
+<p>这里他会把 <code>TypedExpr</code> 转成具体的 expr，具体链路如下：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">- compileExpressions // 处理多组 (vector&lt;ITypedExpr&gt;)</span><br><span class="line">  - compileExpression // 处理单个 ITypedExpr 树</span><br><span class="line">    走表达式编译缓存, 尝试从 scope 捞到相同的子表达式</span><br><span class="line">    compileInput, 先从输入数据的类型开始编译, 对子表达式可能做一些常量折叠，表达式折叠</span><br><span class="line">    根据 root 表达式的类型, 分发处理</span><br><span class="line">    根据类型和函数名称(字符串) 拿到 candidate 函数</span><br><span class="line">    完成</span><br></pre></td></tr></table></figure>
+<p>在这个流程中，还有一些特殊的优化：</p>
+<h4 id="Common-SubExpression-Detection"><a href="#Common-SubExpression-Detection" class="headerlink" title="Common SubExpression Detection"></a>Common SubExpression Detection</h4><p><img src="https://image.mwish.me/blog-image/cse.png" alt="cse"></p>
+<p>在 Expression 编译的时候，会有一个 <code>Scope</code> 做上下文。Scope 间也有父级关系。这里它会把编译好的表达式丢到 Scope 中，当表达式生成了两遍 <code>upper(a)</code> 的时候，他们会被用同一个表达式进行计算。</p>
+<h4 id="Flatten-ANDs-and-ORs"><a href="#Flatten-ANDs-and-ORs" class="headerlink" title="Flatten ANDs and ORs"></a>Flatten ANDs and ORs</h4><p>表达式会标注可否 fold。velox 会尝试去 fold 这些表达式树，这一部分发生于 Compile 阶段</p>
+<p><img src="https://image.mwish.me/blog-image/flatten-and.png" alt="flatten-and"></p>
+<h5 id="flatten-concat-like-functions"><a href="#flatten-concat-like-functions" class="headerlink" title="flatten concat-like functions"></a>flatten concat-like functions</h5><p>这里和上面类似，比如 <code>f(x1, f(x2, f(x3, x4))) == f(x1, x2, x3, x4)</code>，这里会尝试折叠，避免深栈</p>
+<h4 id="Constant-Folding"><a href="#Constant-Folding" class="headerlink" title="Constant Folding"></a>Constant Folding</h4><p>做一些常量折叠，相当于提前计算。</p>
+<h3 id="Adaptive-Conjunct-Reordering-in-AND-and-OR"><a href="#Adaptive-Conjunct-Reordering-in-AND-and-OR" class="headerlink" title="Adaptive Conjunct Reordering in AND and OR"></a>Adaptive Conjunct Reordering in AND and OR</h3><p>这个在官网上是一个执行端策略，而在代码里…我在 compile 没看到，在 <code>ConjunctExpr::evalSpecialForm</code> 里面，发现了相关的方法 <code>maybeReorderInputs()</code>。看来论文也存在吹牛逼成分？还是后面被移走了？</p>
+<p>这里会根据 and or 的 selectivity 选择，计算的时候，这里会统计 selectivity，<code>and</code> 会尽量前置 <code>false</code> 的表达式，<code>or</code> 会尽量前置 <code>true</code> 的表达式，来动态适应性熔断表达式计算。</p>
+<h3 id="Evaluation"><a href="#Evaluation" class="headerlink" title="Evaluation"></a>Evaluation</h3><p>在执行端，<code>FilterProject</code> 的 operator 会一次性完成 <code>Filter + Project</code> 的执行，输入是 <code>EvalCtx</code>，包含 <code>RowVector</code> 和 <code>SelectivityVector</code>. <code>::eval</code> 方法用来评估表达式。</p>
+<p><code>ExprSet</code> 包含一个或者多个 <code>Expr</code>, 它会调用 <code>Expr::eval</code>。执行的时候，这里会判断是否是一个重复的子表达式，如果是。这里会缓存计算结果。</p>
+<p>当输入是字典编码的时候，确定性的表达式可以只算字典中的 distinct value。文章举了个例子，<code>UPPER(colors)</code>, 然后 colors 只有 <code>red, blue, yellow</code> 三种，但有很多值的时候，算这三种就行了。这种技术具体执行大概如下：</p>
+<p><code>Expr::peelEncodings ()</code>: <code>f(g(input))</code> 中，进入表达式，表达式发现这一点，然后把输入换成字典的 distinct 输入了</p>
+<p>这里还有字典的 memorizing，结果就比较简单：字典没变更就一直用同一个字典对象。</p>
+<p>会 propagate null 的话，是 null 的表达式就不用再被折腾一茬子，直接 null set 传递，如果是字典的话，允许把字典里一些东西设置成 null。</p>
+<p>Velox 官网有个一图速通，我看了下，和代码是对的上的：</p>
+<p><img src="https://image.mwish.me/blog-image/expression-evaluation.png" alt="expression-evaluation"></p>
+<h3 id="Flat-No-Nulls-Fast-Path"><a href="#Flat-No-Nulls-Fast-Path" class="headerlink" title="Flat No-Nulls Fast Path"></a>Flat No-Nulls Fast Path</h3><p>和我们刚才的 <code>propagateNulls_</code> 和处理相对，这里如果全部非空，那么可以 skip 一些 null handling，根据原文，在小于 1000 rows 的短表达式中，这种优化相对能起到比较好的效果。在 Velox 中，Vector functions (后面会介绍) 会提供一个 <code>supportsFlatNoNullsFastPath()</code> 的语义，来帮助评估走 fastPath</p>
+<h4 id="Evalution-If-Switch"><a href="#Evalution-If-Switch" class="headerlink" title="Evalution If/Switch.."></a>Evalution If/Switch..</h4><p>先执行 condition，然后去按序执行 cases： <a target="_blank" rel="noopener" href="https://facebookincubator.github.io/velox/develop/expression-evaluation.html#evaluation-of-if-switch">https://facebookincubator.github.io/velox/develop/expression-evaluation.html#evaluation-of-if-switch</a></p>
+<h3 id="Codegen"><a href="#Codegen" class="headerlink" title="Codegen"></a>Codegen</h3><p>在论文写作的时候，Velox 会讲表达式生成 C++ 代码，然后动态链接到程序中。日前，Velox 采用的还是直接用编译器编译，而没有用时髦的 LLVM-codegen。文章认为 codegen 对 ETL 这种大 job 可能效果好一些，因为表达式整体都不会变，而 ETL job 反正会很大。</p>
+<p>目前，Velox 基本还是全部向量化的方式，codegen 代码在 <code>experimental</code> 下面。</p>
+<h2 id="Functions"><a href="#Functions" class="headerlink" title="Functions"></a>Functions</h2><p>用户可以认为，某种程度上 functions 是 expr 的一个小部分(<code>Call</code> 有关的 Expr)。Velox 内部提供了不少该有的函数，同时，用户也可以相对方便的添加函数。比较恶心的是，这帮人感觉没那么那么懂 C++，所以…加起来也有点小蛋疼。这体现在什么地方呢？一来 Velox 区分了 Vector 的函数和 Simple Functions，然后还有之前我们提到的各种 determine 等等，这些东西叠起来，加上类型系统做的比较糙，总的来说加东西也没有那么方便。当然，相对自己从头开始写，肯定是很丝滑的。</p>
+<p>对于接收单个输入返回单个输出，确定类型的函数，即 Scalar Functions。 Velox 认为，Simple Function 不是那么好优化，而且向量化也容易出错的情况下，可以使用 Simple Functions + 向量化的方式来处理问题。Velox 会使用一套框架来包装 Simple Functions，然后尽量让其能自动向量化。</p>
+<p><img src="https://image.mwish.me/blog-image/D40EF3D5-58F5-4B04-9E20-423639A128F8.png" alt="D40EF3D5-58F5-4B04-9E20-423639A128F8"></p>
+<p>Velox 在编程框架上也做了很多优化，比如标注是否 nullable，使用 zero-copy，处理 deterministic。论文还提到了一项关于编码的优化：让用户指定 ASCii, Utf8 等编码，同时可以尽量优化其中的拷贝，可以 ref 原内容的地方不需要拷贝。</p>
+<p><img src="https://image.mwish.me/blog-image/E4BA6100-A4CF-4EF4-B41D-906E4A3EFCE1.png" alt="E4BA6100-A4CF-4EF4-B41D-906E4A3EFCE1"></p>
+<p>（越写我觉得越像 TiKV Coprocessor 了，想起我的青春年华和失败记忆了）</p>
+<p>（论文甚至没怎么提 Vectorize functions，估计是觉得跟用户介绍最简单的就行，不过我觉得 Vectorize 的部分也挺有意思的：<a target="_blank" rel="noopener" href="https://facebookincubator.github.io/velox/develop/scalar-functions.html#vector-functions">https://facebookincubator.github.io/velox/develop/scalar-functions.html#vector-functions</a> ）</p>
+<h3 id="Aggragations"><a href="#Aggragations" class="headerlink" title="Aggragations"></a>Aggragations</h3><p>Aggragations 在 Agg 相关的 Operator 下头，使用 <code>HashAggregation</code> 进行相关的计算</p>
+<p><img src="https://image.mwish.me/blog-image/7A390174-95B3-4BB9-A979-73B5F5907A34.png" alt="7A390174-95B3-4BB9-A979-73B5F5907A34"></p>
+<ul>
+<li>Partial: 类似 shuffle 中使用的，根据数据生成一些中间结果</li>
+<li>Final: 处理 <code>Partial</code> 的结果</li>
+<li>Single: 数据很小不用 shuffle，或者数据已经被按照 group key 来做 partition</li>
+<li>Intermediate: 类似 MR 中的 shuffle，从中间数据生成中间数据，在 Partial 和 Final 之间</li>
+</ul>
+<p>Sum, min, max 中，partial 和 final 做的是同一种计算，而有的操作则不同。比如：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">SELECT a, b, count(c) FROM t GROUP BY 1, 2</span><br></pre></td></tr></table></figure>
+<p>partial 会做一些分区操作，Final 则是将 partial 数据合并起来。</p>
+<h4 id="Aggregations-结果的内存管理"><a href="#Aggregations-结果的内存管理" class="headerlink" title="Aggregations 结果的内存管理"></a>Aggregations 结果的内存管理</h4><p>这里类似行存的数据库，会有如下的格式：</p>
+<p><img src="https://image.mwish.me/blog-image/aggregation-layout.png" alt="aggregation-layout"></p>
+<p>Velox 会识别出操作是否是定长操作，然后做处理。</p>
+<h4 id="如何添加一个-Aggregator"><a href="#如何添加一个-Aggregator" class="headerlink" title="如何添加一个 Aggregator"></a>如何添加一个 Aggregator</h4><p>为啥这个要专门写呢？因为这个我们可以考虑一下，Agg 很多时候是带一些上下文的，比如对列的 map。论文里面连 function 都只介绍了 simple…</p>
+<p>（这个地方我又想起了 TiKV Coprocessor 那堆 proc macro 和我那失败的青春）</p>
+<p>参考：<a target="_blank" rel="noopener" href="https://facebookincubator.github.io/velox/develop/aggregate-functions.html#aggregate-class">https://facebookincubator.github.io/velox/develop/aggregate-functions.html#aggregate-class</a></p>
+<p>这里会考虑几种 agg:</p>
+<p>Global aggregation, two aggregates: “count” and “sum”:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">SELECT</span> <span class="built_in">count</span>(<span class="operator">*</span>), <span class="built_in">sum</span>(b) <span class="keyword">FROM</span> t</span><br></pre></td></tr></table></figure>
+<p>Aggregation with three aggregates: “count” and two “sum”s.</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">SELECT</span> a, <span class="built_in">count</span>(<span class="operator">*</span>), <span class="built_in">sum</span>(b), <span class="built_in">sum</span>(c) <span class="keyword">FROM</span> t <span class="keyword">GROUP</span> <span class="keyword">BY</span> <span class="number">1</span></span><br></pre></td></tr></table></figure>
+<p>首先，需要考虑各个阶段，比如 <code>Prepare</code>阶段的数据准备，其次考虑中间数据是否是定长的，这个会影响行相关的访问和写入（Accumulator size）。然后可以分别实现对应 global aggregation 和 groupby aggregation 相关的内容了。</p>
+<h2 id="Plan-Nodes-and-Operators"><a href="#Plan-Nodes-and-Operators" class="headerlink" title="Plan Nodes and Operators"></a>Plan Nodes and Operators</h2><p><img src="https://image.mwish.me/blog-image/velox-logical-planner.png" alt="velox-logical-planner"></p>
+<p>Plan Node 和 Operator 的映射几乎是一对一的，当然有几个例外：</p>
+<ol>
+<li>Filter node + Project node 会被折叠成 <code>FilterProject</code> ( 我们之前还提到过它，嘿 )</li>
+<li>多于两个子节点的会被拆分，比如说 HashJoin 会拆成 HashBuild 和 HashProbe</li>
+</ol>
+<p>有一些特殊的地方可以参考：<a target="_blank" rel="noopener" href="https://facebookincubator.github.io/velox/develop/operators.html">https://facebookincubator.github.io/velox/develop/operators.html</a></p>
+<p>类似 Presto 的概念，里面的执行单元上层概念叫 Top ( Presto 的 Job 是一个带点分布式意味的单元，而 Velox 则是单机的)。Task 数据可能来源于 TableScan 或者 Exchange，然后可能以另一个 Exchange 结尾。这里会有 Pipeline 来驱动执行，每个 Pipeline 可能有一到多个执行的 Driver，Driver 可能 bound 在一个线程上，并管理执行的状态。这部分类似 Presto 了，感兴趣可以回头看看。我们就专门挑一些 Velox 介绍细一点的概念图来贴吧，都读到这了，高低得学点新东西是不。</p>
+<p>这里举了一些 HashJoin 和 Local Exchange 的例子，这些都是为了扩大并发，注意，下文为例子，不代表实现一定会这样：</p>
+<p><img src="https://image.mwish.me/blog-image/join.png" alt="join"></p>
+<p>这里 Build 和 Probe 都是并发的，Build 有三个线程，Probe 有两个线程去执行。然后结果被放到 <code>JoinBridge</code> 中。</p>
+<p>在 Velox 中，Local Exchange 可以从多个线程/一个线程 &lt;-&gt; 多个线程/一个线程中转换，帮忙完成这个工作。</p>
+<h3 id="Split"><a href="#Split" class="headerlink" title="Split"></a>Split</h3><p>在 Velox 中，系统也有 Split，Velox 不负责分布式，但是外部可以通过<code>Task::addSplit(planNodeId, split)</code> api 来添加 Split，Split 被组织在队列中消费：</p>
+<p><img src="https://image.mwish.me/blog-image/task-splits.png" alt="task-splits"></p>
+<p>Local Exchange 等操作也会被从 Queue 中消费</p>
+<h3 id="IO"><a href="#IO" class="headerlink" title="IO"></a>IO</h3><p>读取算子和 FilterProject 可以和 IO 整合在一起。Presto 侧重去读远端的数据源和开放的接口，Velox 则是有一套 IO。它默认使用 dwio 格式可以很好的去做算子下推等操作，同时，这里也有 adaptive 调整算子顺序的操作（如前文所述）。</p>
+<p>最近 Velox 也在做一些 Parquet Native 的优化，见：<a target="_blank" rel="noopener" href="https://github.com/facebookincubator/velox/discussions/2411">https://github.com/facebookincubator/velox/discussions/2411</a></p>
+<h3 id="Hash-Joins"><a href="#Hash-Joins" class="headerlink" title="Hash Joins"></a>Hash Joins</h3><p>对于 HashJoin，Velox 有 kInner, kLeft, kRight, kFull, kLeftSemi, kRightSemi, kAnti 这几种。</p>
+<p><img src="https://image.mwish.me/blog-image/hash-join-node.png" alt="hash-join-node"></p>
+<p>Velox 在 Agg 和 HashJoin 中，都使用 <code>velox::exec::HashTable</code>. 它根据是否忽略 null keys 做了一些特化，JOIN KEY 等会呗存成一个行存的 <code>RowContainer</code> 来处理</p>
+<p>Velox 会使用 <code>velox::exec::VectorHasher</code> 来 hash 对应的 key，当 key 空间可以被简单整理到 u64 中时，Velox 会使用这些优化，来避免嗯算哈希。</p>
+<p> <code>velox::exec::HashTable</code> 是一个单线程的哈希表，这里有一些下面的策略：</p>
+<ol>
+<li><a target="_blank" rel="noopener" href="https://github.com/facebookincubator/velox/commit/765cc2d793cc194f5f44b97ad011e29666ceed70">https://github.com/facebookincubator/velox/commit/765cc2d793cc194f5f44b97ad011e29666ceed70</a> (每个 executor 去处理不同的部分)</li>
+<li><a target="_blank" rel="noopener" href="https://github.com/facebookincubator/velox/commit/0d38da85bae9c6e87a4bbdbc42d428c6c3cd4d87">https://github.com/facebookincubator/velox/commit/0d38da85bae9c6e87a4bbdbc42d428c6c3cd4d87</a> (合并多组 hash build)</li>
+</ol>
+<p>题外话，folly 这里说实现参考了 F14，这里使用行存的 hashtable，作者认为这里 hash 相关的 attributes 还是存一起好，然后会使用 <code>prefetch</code> 等方式交错内存读取。Databend 最近实现了字符串特攻的 SAHA，优化效果贼好，感觉这种就是特化场景特化实现一定是无敌的。</p>
+<h4 id="Dynamic-Filter-Pushdown"><a href="#Dynamic-Filter-Pushdown" class="headerlink" title="Dynamic Filter Pushdown"></a>Dynamic Filter Pushdown</h4><p>对于 inner, left semi, right semi 这几种 JOIN，Velox 允许使用 Dynamic Filter Pushdown:</p>
+<p><img src="https://image.mwish.me/blog-image/join-dynamic-filters.png" alt="join-dynamic-filters"></p>
+<p>HashProbe 中，VectorHasher 如果发现对象集合很少，可以把信息推到存储上，来做相关的优化。</p>
+<h4 id="杂项"><a href="#杂项" class="headerlink" title="杂项"></a>杂项</h4><p>这里还实现了 broadcast join, anti joins 等，此外，这里还有 statistics 相关的数据，防止做负优化：<a target="_blank" rel="noopener" href="https://facebookincubator.github.io/velox/develop/joins.html#execution-statistics">https://facebookincubator.github.io/velox/develop/joins.html#execution-statistics</a></p>
+<p>这里还实现了 merge join，不过感觉篇幅不长：</p>
+<p><img src="https://image.mwish.me/blog-image/merge-join-pipelines.png" alt="merge-join-pipelines"></p>
+<h2 id="Memory-Management"><a href="#Memory-Management" class="headerlink" title="Memory Management"></a>Memory Management</h2><p>Velox 的 caching 的内存管理有点类似 umbra。它表示：</p>
+<ol>
+<li>小对象会从 heap 上申请</li>
+<li>data cache, hash table, 读数据的 buffer 会使用 mmap 和 madvise 来管理</li>
+</ol>
+<p>这里会有层级的 MemoryTracker，来管理这些内存，然后上层可以通过 <code>spilling</code> 来让内存写出。Spill 相关的部分和 Presto 论文描述的差不多，没有什么特别的，都要在 Drive / Operator 上开洞.</p>
+<p>值得一提的是缓存部分，Velox 写了一套稍稍复杂的大对象缓存（没用 CacheLib，感觉是没啥小对象需求？我不懂啊）。类似 Umbra，它会有不同大小的 mmap 空间做内存池，当没有人 pin 这些内存的时候，这部分可以换出。</p>
+<p>Velox 还能够合并 IO，读取 S3，HDFS，然后丢到内存/SSD 缓存。Velox 读取远端的时候，会合并相邻读，对 SSD 会合并读到 20K ，对 SSD 会合并读到 500K。这几个感觉可以参考 arrow 去玄学调参。</p>
+<p>Velox 还会做 Prefetch，这里，访问列存对象的方式如下：</p>
+<ol>
+<li>读 metadata，这个通常不会很大，通过 metadata 可以拿到对象大概的大小</li>
+<li>读具体的 buffer</li>
+</ol>
+<p>Velox 这里会记录各列的 selectivity，然后尝试去 prefetch selectivity 高的，来降低延迟。</p>
+<h2 id="结语"><a href="#结语" class="headerlink" title="结语"></a>结语</h2><p>尽管 Velox 这个项目的未来尚不明晰，同时没有数据写和事务相关的部分，但是它给我们展现了一个单机测的完整查询引擎，包括 IO, Executor, Operator, Driver, Pipeline 和各个算子。</p>
+<p>Velox 代码注释算不得好，感觉作者们也没有那么懂 C++，我看的时候非常蛋疼的一点是，这些人传参数感觉都是瞎几把写的，一点都不管读者的感觉，但是 fb 相关的经验确实很丰富，虽然待完善，但确实给他们搞出来了，还搞的不错。还是要虚心学习，看看他们是咋搞的。</p>
+<h2 id="References"><a href="#References" class="headerlink" title="References"></a>References</h2><ul>
+<li><a target="_blank" rel="noopener" href="https://facebookincubator.github.io/velox/develop">https://facebookincubator.github.io/velox/develop</a></li>
+<li>Facebook Velox源码浅读 - 不要叫醒我的文章 - 知乎 <a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/438656081">https://zhuanlan.zhihu.com/p/438656081</a></li>
+</ul>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Type-System"><span class="toc-number">1.</span> <span class="toc-text">Type System</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Vectors"><span class="toc-number">1.1.</span> <span class="toc-text">Vectors</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Expression-Eval"><span class="toc-number">2.</span> <span class="toc-text">Expression Eval</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Compilation"><span class="toc-number">2.1.</span> <span class="toc-text">Compilation</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Common-SubExpression-Detection"><span class="toc-number">2.1.1.</span> <span class="toc-text">Common SubExpression Detection</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Flatten-ANDs-and-ORs"><span class="toc-number">2.1.2.</span> <span class="toc-text">Flatten ANDs and ORs</span></a><ol class="toc-child"><li class="toc-item toc-level-5"><a class="toc-link" href="#flatten-concat-like-functions"><span class="toc-number">2.1.2.1.</span> <span class="toc-text">flatten concat-like functions</span></a></li></ol></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Constant-Folding"><span class="toc-number">2.1.3.</span> <span class="toc-text">Constant Folding</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Adaptive-Conjunct-Reordering-in-AND-and-OR"><span class="toc-number">2.2.</span> <span class="toc-text">Adaptive Conjunct Reordering in AND and OR</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Evaluation"><span class="toc-number">2.3.</span> <span class="toc-text">Evaluation</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Flat-No-Nulls-Fast-Path"><span class="toc-number">2.4.</span> <span class="toc-text">Flat No-Nulls Fast Path</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Evalution-If-Switch"><span class="toc-number">2.4.1.</span> <span class="toc-text">Evalution If&#x2F;Switch..</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Codegen"><span class="toc-number">2.5.</span> <span class="toc-text">Codegen</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Functions"><span class="toc-number">3.</span> <span class="toc-text">Functions</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Aggragations"><span class="toc-number">3.1.</span> <span class="toc-text">Aggragations</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Aggregations-%E7%BB%93%E6%9E%9C%E7%9A%84%E5%86%85%E5%AD%98%E7%AE%A1%E7%90%86"><span class="toc-number">3.1.1.</span> <span class="toc-text">Aggregations 结果的内存管理</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%A6%82%E4%BD%95%E6%B7%BB%E5%8A%A0%E4%B8%80%E4%B8%AA-Aggregator"><span class="toc-number">3.1.2.</span> <span class="toc-text">如何添加一个 Aggregator</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Plan-Nodes-and-Operators"><span class="toc-number">4.</span> <span class="toc-text">Plan Nodes and Operators</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Split"><span class="toc-number">4.1.</span> <span class="toc-text">Split</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#IO"><span class="toc-number">4.2.</span> <span class="toc-text">IO</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Hash-Joins"><span class="toc-number">4.3.</span> <span class="toc-text">Hash Joins</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Dynamic-Filter-Pushdown"><span class="toc-number">4.3.1.</span> <span class="toc-text">Dynamic Filter Pushdown</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%9D%82%E9%A1%B9"><span class="toc-number">4.3.2.</span> <span class="toc-text">杂项</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Memory-Management"><span class="toc-number">5.</span> <span class="toc-text">Memory Management</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BB%93%E8%AF%AD"><span class="toc-number">6.</span> <span class="toc-text">结语</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#References"><span class="toc-number">7.</span> <span class="toc-text">References</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://localhost/2022/10/09/Introduction-to-velox/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://localhost/2022/10/09/Introduction-to-velox/&text=Introduction to velox"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://localhost/2022/10/09/Introduction-to-velox/&title=Introduction to velox"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://localhost/2022/10/09/Introduction-to-velox/&is_video=false&description=Introduction to velox"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Introduction to velox&body=Check out this article: http://localhost/2022/10/09/Introduction-to-velox/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://localhost/2022/10/09/Introduction-to-velox/&title=Introduction to velox"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://localhost/2022/10/09/Introduction-to-velox/&title=Introduction to velox"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://localhost/2022/10/09/Introduction-to-velox/&title=Introduction to velox"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://localhost/2022/10/09/Introduction-to-velox/&title=Introduction to velox"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://localhost/2022/10/09/Introduction-to-velox/&name=Introduction to velox&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://localhost/2022/10/09/Introduction-to-velox/&t=Introduction to velox"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+</body>
+</html>

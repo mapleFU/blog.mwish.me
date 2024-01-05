@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="Perfbook 全称是 Is Parallel Programming Hard, And, If So, What Can You Do About It? 作者是 Paul E. McKenney，也是 RCU 的发明者。这本书相对来说语法有点点难，我个人看的有那么点小吃力，但是作者能够非常形象的描述并发数据结构是怎么设计的，并且从 scalable-counter、partition、lo">
+<meta property="og:type" content="article">
+<meta property="og:title" content="perfbook notes: Hardware">
+<meta property="og:url" content="http://blog.mwish.me/2022/05/04/perfbook-notes-hardware/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="Perfbook 全称是 Is Parallel Programming Hard, And, If So, What Can You Do About It? 作者是 Paul E. McKenney，也是 RCU 的发明者。这本书相对来说语法有点点难，我个人看的有那么点小吃力，但是作者能够非常形象的描述并发数据结构是怎么设计的，并且从 scalable-counter、partition、lo">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/7BF7E021-3D1F-4F27-9BAB-EC772C386339.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/77B09222-65ED-4732-B215-09355B46E7A6.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/CE768DAC-77B4-4D12-8878-B0BF058C4302.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/4C310521-6C51-4748-8D82-672D94AC3D52.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/F373D15D-0CE9-4427-80BE-B4545FAA35BE.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/734E9D9B-1488-432F-B534-2817C6FD327A.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/3DB734F8-B806-4A45-91AA-97DBA2E3B272.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/0D78679C-E152-4396-AE71-8A643D8F7770.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/FG9cf5AaIAAxxUI.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/FGkZD2DVgAAW6Ij.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/2D9BD427-C39E-43B2-AA69-C37BF71341B6.png">
+<meta property="article:published_time" content="2022-05-04T08:16:07.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.556Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/7BF7E021-3D1F-4F27-9BAB-EC772C386339.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>perfbook notes: Hardware</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2022/05/04/perfbook-notes-parallel-mutex-fastpath/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2022/05/02/Arch-Blog-Overviews/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2022/05/04/perfbook-notes-hardware/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2022/05/04/perfbook-notes-hardware/&text=perfbook notes: Hardware"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2022/05/04/perfbook-notes-hardware/&title=perfbook notes: Hardware"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2022/05/04/perfbook-notes-hardware/&is_video=false&description=perfbook notes: Hardware"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=perfbook notes: Hardware&body=Check out this article: http://blog.mwish.me/2022/05/04/perfbook-notes-hardware/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2022/05/04/perfbook-notes-hardware/&title=perfbook notes: Hardware"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2022/05/04/perfbook-notes-hardware/&title=perfbook notes: Hardware"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2022/05/04/perfbook-notes-hardware/&title=perfbook notes: Hardware"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2022/05/04/perfbook-notes-hardware/&title=perfbook notes: Hardware"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2022/05/04/perfbook-notes-hardware/&name=perfbook notes: Hardware&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2022/05/04/perfbook-notes-hardware/&t=perfbook notes: Hardware"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%B9%B6%E8%A1%8C%E7%BC%96%E7%A8%8B%E7%9A%84%E9%9C%80%E6%B1%82%E3%80%81%E5%9F%BA%E6%9C%AC%E6%80%A7%E8%83%BD%E4%B8%8E%E5%8E%9F%E8%AF%AD"><span class="toc-number">1.</span> <span class="toc-text">并行编程的需求、基本性能与原语</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Alternatives-to-Parallel-Programming"><span class="toc-number">1.1.</span> <span class="toc-text">Alternatives to Parallel Programming</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#What-Makes-Parallel-Programming-Hard"><span class="toc-number">1.2.</span> <span class="toc-text">What Makes Parallel Programming Hard?</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Hardware-and-its-Habits"><span class="toc-number">2.</span> <span class="toc-text">Hardware and its Habits</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%A1%AC%E4%BB%B6%E5%8F%8A%E5%85%B6%E5%81%87%E8%AE%BE"><span class="toc-number">2.1.</span> <span class="toc-text">硬件及其假设</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Tools"><span class="toc-number">3.</span> <span class="toc-text">Tools</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#References"><span class="toc-number">4.</span> <span class="toc-text">References</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        perfbook notes: Hardware
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2022-05-04T08:16:07.000Z" itemprop="datePublished">2022-05-04</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>Perfbook 全称是 <em>Is Parallel Programming Hard, And, If So, What Can You Do About It?</em> 作者是 Paul E. McKenney，也是 RCU 的发明者。这本书相对来说语法有点点难，我个人看的有那么点小吃力，但是作者能够非常形象的描述并发数据结构是怎么设计的，并且从 scalable-counter、partition、lock、data-ownership 介绍到 RCU。书具体内容很好，也值得我做一些笔记以便未来回顾。</p>
+<p>书的编写会包括一些 Quiz，有的还是比较有难度的，帮助自己理解问题。我的笔记只供自己做一个回顾和一些工业界实现的参考，所以不会完全参考原书的布局。</p>
+<p>Chap2-4 描述了一些 smp 的原语和性能</p>
+<h2 id="并行编程的需求、基本性能与原语"><a href="#并行编程的需求、基本性能与原语" class="headerlink" title="并行编程的需求、基本性能与原语"></a>并行编程的需求、基本性能与原语</h2><p>并行编程在上世纪是个非常小众的领域，只有专业人士会写。但是随着 CPU 撞上功耗墙，这一小众领域现在已经成了大众卷 b 之地。现在有 <code>tbb</code>、<code>folly</code> 等库，也有 <code>thread</code> <code>atomic</code> 等编程工具/原语。此外，还有一些用户态线程、协程也在近年重新受到关注，它们可以减少线程调度和切栈或者申请栈的开销、和 <code>async</code> 等语法结合，用于优化代码和改善性能。</p>
+<p><img src="https://image.mwish.me/blog-image/7BF7E021-3D1F-4F27-9BAB-EC772C386339.png" alt="7BF7E021-3D1F-4F27-9BAB-EC772C386339"></p>
+<p>并行化的优势在于：</p>
+<ol>
+<li><p>Performance: 包括 scalability( performance per CPU) 和 efficiency (performance per watt), 这两个东西都重要，一起才能拼出个不错的最终结果。同时如果你的程序够快、没有性能问题，那串行就串行吧。</p>
+</li>
+<li><p>Productivity:  通过你的东西，实现内容的生产力</p>
+</li>
+<li><p>Generality: 方法的通用性。事实上我们之前讨论的 RCU 什么的 api 相对来说性能好，但是通用性确实差不少。</p>
+</li>
+</ol>
+<p>这里考察了 C++ POSIX Thread API(Performance、Generality)，Java （相较 C++ 牺牲了一点性能）、SQL (不太泛用、领域专一，但有着好的性能和 Productivity)。</p>
+<p>然后作者整了张图，再讲了下 OS/硬件 层面是如何对上述内容取舍和抽象的。因为 OS 本身是一个很「通用」的东西，所以它的 Performance/Generality 的要求是很高的，而越上层的应用可能对 Productivity 要求越高。</p>
+<p><img src="https://image.mwish.me/blog-image/77B09222-65ED-4732-B215-09355B46E7A6.png" alt="77B09222-65ED-4732-B215-09355B46E7A6"></p>
+<h3 id="Alternatives-to-Parallel-Programming"><a href="#Alternatives-to-Parallel-Programming" class="headerlink" title="Alternatives to Parallel Programming"></a>Alternatives to Parallel Programming</h3><p>这一节的内容非常的工程师智慧，介绍了如何「不编写一个并行的系统，又用上硬件这些功能」：</p>
+<ol>
+<li>运行多个串行系统的 instance，并能够对 workload partition</li>
+<li>用已有的并行系统</li>
+<li>串行上进行优化，优化到不用并行也运行的挺好</li>
+</ol>
+<h3 id="What-Makes-Parallel-Programming-Hard"><a href="#What-Makes-Parallel-Programming-Hard" class="headerlink" title="What Makes Parallel Programming Hard?"></a>What Makes Parallel Programming Hard?</h3><p><img src="https://image.mwish.me/blog-image/CE768DAC-77B4-4D12-8878-B0BF058C4302.png" alt="CE768DAC-77B4-4D12-8878-B0BF058C4302"></p>
+<p>因为这个地方要成功的切分任务，然后既然有切分，那运行之类的还有通信的事情要考虑，同时还要考虑资源管理、回收 etc… 本身这些任务都有相对的复杂性。</p>
+<p>这一节相当于介绍了「并发编程为什么这么难」。其实可以看到，跟我个人的想象不同，这个领域是</p>
+<h2 id="Hardware-and-its-Habits"><a href="#Hardware-and-its-Habits" class="headerlink" title="Hardware and its Habits"></a>Hardware and its Habits</h2><p>一个现代的 CPU 大概在执行的时候会有：</p>
+<ol>
+<li>pipelines</li>
+<li>Superscalar</li>
+<li>Speculative execution</li>
+<li>…</li>
+</ol>
+<p>具体我感觉 15-418 给的材料比较好。</p>
+<p><img src="https://image.mwish.me/blog-image/4C310521-6C51-4748-8D82-672D94AC3D52.png" alt="4C310521-6C51-4748-8D82-672D94AC3D52"></p>
+<p>关于现代 CPU，本身性能下降的原因，perfbook 列了：</p>
+<ol>
+<li>Pipeline 相关，比如 branch mispredict/structural hazard: <a href="https://blog.mwish.me/2020/10/21/SDS-Intro-RISC-V-Datapath-4-Pipeline/">https://blog.mwish.me/2020/10/21/SDS-Intro-RISC-V-Datapath-4-Pipeline/</a></li>
+<li>Memory Reference: 这里不光是访问内存的开销，更多的是，给出一个地址，然后访问其内存的开销。</li>
+<li>Atomic Operations: 这个地方不涉及 memory barrier, 应该指的就是对某段内存的 atomic 操作。原子操作有的地方是违背 CPU 假设的。atomic op 的操作经常要：<ol>
+<li>保证数据是这个 cacheline 所有的</li>
+<li>操作完后数据还归属于这个 cacheline</li>
+<li>pipeline must be delayed or even ﬂushed in order to perform the setup operations that permit a given atomic operation to complete correctly.</li>
+</ol>
+</li>
+<li>Memory Barriers: memory barriers 在语言层面上经常和 atomic op 放在一起讨论，但是这个可能需要对 Writer Buffer 之类的东西做特殊处理，可能会影响应能</li>
+<li>Cache Miss: 懂得都懂。</li>
+<li>I/O Operations: 懂得都懂。可惜我不懂 io_uring，令人唏嘘。</li>
+</ol>
+<p>按照我偷来的图：</p>
+<p><img src="https://image.mwish.me/blog-image/F373D15D-0CE9-4427-80BE-B4545FAA35BE.png" alt="F373D15D-0CE9-4427-80BE-B4545FAA35BE"></p>
+<h3 id="硬件及其假设"><a href="#硬件及其假设" class="headerlink" title="硬件及其假设"></a>硬件及其假设</h3><p><img src="https://image.mwish.me/blog-image/734E9D9B-1488-432F-B534-2817C6FD327A.png" alt="734E9D9B-1488-432F-B534-2817C6FD327A"></p>
+<p>上面是 perfbook 的图，我从 15-418 偷了几张图：</p>
+<p><img src="https://image.mwish.me/blog-image/3DB734F8-B806-4A45-91AA-97DBA2E3B272.png" alt="3DB734F8-B806-4A45-91AA-97DBA2E3B272"></p>
+<p><img src="https://image.mwish.me/blog-image/0D78679C-E152-4396-AE71-8A643D8F7770.png" alt="0D78679C-E152-4396-AE71-8A643D8F7770"></p>
+<p>这几张图应该概述了 NUMA、SIMD 之类的。</p>
+<p>perfbook 举了个例子，在某个架构中，如果 CPU (CPU0) 想要写一个跨 Socket 的 mem 地址，可能会：</p>
+<ol>
+<li>check local cache(L1, L2)</li>
+<li>走目录协议，给 CPU0 或者别的 CPU 发送指令，然后让这个 Cacheline 搞到自己上头</li>
+<li>cacheline 到自己上，真正可写</li>
+<li>具体写</li>
+</ol>
+<p>下面一张图介绍了各种操作的开销：</p>
+<p><img src="https://image.mwish.me/blog-image/FG9cf5AaIAAxxUI.png" alt="FG9cf5AaIAAxxUI"></p>
+<p><img src="https://image.mwish.me/blog-image/FGkZD2DVgAAW6Ij.png" alt="FGkZD2DVgAAW6Ij"></p>
+<ol>
+<li>同一个 CPU 的 CAS 可以几 ns 内完成，流程基本上相当于在 cacheline 做标记。这里 cas 是 x86 的 <code>lock;cmpxchg</code></li>
+<li>In-core 表示在同一个核心上，共享同一个 cache hierarchy；blind cas 表示「不读旧值，直接 CAS」，而 CAS 是「读旧值 + CAS」。后者可能访存两次</li>
+</ol>
+<p><img src="https://image.mwish.me/blog-image/2D9BD427-C39E-43B2-AA69-C37BF71341B6.png" alt="2D9BD427-C39E-43B2-AA69-C37BF71341B6"></p>
+<p>这里还有些 dark side 优化：</p>
+<ol>
+<li>large cacheline</li>
+<li>cache prefetching</li>
+<li>store buffer</li>
+<li>speculative execution</li>
+<li>large caches</li>
+<li>read-mostly replication（想下 MESI）</li>
+</ol>
+<p>上面这些策略其实软件也是很常用的。</p>
+<h2 id="Tools"><a href="#Tools" class="headerlink" title="Tools"></a>Tools</h2><p>本节内容比较难，但我不太打算写。这里用的工具不太是 user-level 的 C++11 atomic 之类的，本节介绍了 Linux 常用的 <code>WRITE_ONCE</code> <code>READ_ONCE</code>，和 <code>volatile</code> 的语义。然后介绍了一下各种并发。</p>
+<p>在这之前，chap4 介绍了一些不用上面方式的工具，比如 bash 脚本这一著名、经典的并发程序。详细内容我觉得可以参考 6.null。</p>
+<p><code>POSIX</code> 提供了 <code>fork</code> <code>wait</code> 等进程接口，但这些接口的使用通常和 shm、signal 结合。在 <code>nptl</code> 没实现的时候，PostgreSQL 这些只能依赖这套东西做。</p>
+<p>下面介绍了一下 POSIX mutex、GNU 的 atomic 和<code>__sync_</code>。然后着重介绍了 <code>volatile</code> 的语义。我觉得别的地方介绍都没这里好。但是我感觉这段不如直接 atomic，所以感兴趣的自己回头看吧。</p>
+<p>这里基本还可以参考一些 futex are trickey 什么的，看看对应接口的实现。<code>webkit</code> 实现了一套并发库：<a target="_blank" rel="noopener" href="https://webkit.org/blog/6161/locking-in-webkit/">https://webkit.org/blog/6161/locking-in-webkit/</a> ，可以作为参考（不完全是 futex，相当于在用户态包装了一层 futex）</p>
+<p>或者也可以看我 rsy 爹的 blog: <a target="_blank" rel="noopener" href="https://github.com/rsy56640/triviality/tree/master/content/%E8%B0%88%E8%B0%88%E5%B9%B6%E5%8F%91">https://github.com/rsy56640/triviality/tree/master/content/%E8%B0%88%E8%B0%88%E5%B9%B6%E5%8F%91</a></p>
+<h2 id="References"><a href="#References" class="headerlink" title="References"></a>References</h2><ol>
+<li><a target="_blank" rel="noopener" href="https://www.quora.com/What-is-robust-mutex-in-Linux-What-are-some-use-cases-of-robust-mutex">https://www.quora.com/What-is-robust-mutex-in-Linux-What-are-some-use-cases-of-robust-mutex</a></li>
+<li>CMU 15-418</li>
+</ol>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%B9%B6%E8%A1%8C%E7%BC%96%E7%A8%8B%E7%9A%84%E9%9C%80%E6%B1%82%E3%80%81%E5%9F%BA%E6%9C%AC%E6%80%A7%E8%83%BD%E4%B8%8E%E5%8E%9F%E8%AF%AD"><span class="toc-number">1.</span> <span class="toc-text">并行编程的需求、基本性能与原语</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Alternatives-to-Parallel-Programming"><span class="toc-number">1.1.</span> <span class="toc-text">Alternatives to Parallel Programming</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#What-Makes-Parallel-Programming-Hard"><span class="toc-number">1.2.</span> <span class="toc-text">What Makes Parallel Programming Hard?</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Hardware-and-its-Habits"><span class="toc-number">2.</span> <span class="toc-text">Hardware and its Habits</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%A1%AC%E4%BB%B6%E5%8F%8A%E5%85%B6%E5%81%87%E8%AE%BE"><span class="toc-number">2.1.</span> <span class="toc-text">硬件及其假设</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Tools"><span class="toc-number">3.</span> <span class="toc-text">Tools</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#References"><span class="toc-number">4.</span> <span class="toc-text">References</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2022/05/04/perfbook-notes-hardware/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2022/05/04/perfbook-notes-hardware/&text=perfbook notes: Hardware"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2022/05/04/perfbook-notes-hardware/&title=perfbook notes: Hardware"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2022/05/04/perfbook-notes-hardware/&is_video=false&description=perfbook notes: Hardware"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=perfbook notes: Hardware&body=Check out this article: http://blog.mwish.me/2022/05/04/perfbook-notes-hardware/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2022/05/04/perfbook-notes-hardware/&title=perfbook notes: Hardware"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2022/05/04/perfbook-notes-hardware/&title=perfbook notes: Hardware"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2022/05/04/perfbook-notes-hardware/&title=perfbook notes: Hardware"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2022/05/04/perfbook-notes-hardware/&title=perfbook notes: Hardware"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2022/05/04/perfbook-notes-hardware/&name=perfbook notes: Hardware&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2022/05/04/perfbook-notes-hardware/&t=perfbook notes: Hardware"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

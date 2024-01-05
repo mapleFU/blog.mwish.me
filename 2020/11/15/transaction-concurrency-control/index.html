@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="并发控制是事务的重要成分，他们会决定事务的调度、处理、abort 顺序。 事务的并发控制可以大致分为：  乐观的并发控制 OCC  TS   悲观的并发控制 2PL    乐观的并发控制假设冲突比较少的情况发生，出现冲突就会选择事务 abort；悲观的并发控制则是假设事务冲突经常发生，会避免冲突。 2PL首先 2PL 的 Lock 和“读写锁” “自旋锁”这些同步操作不是一回事，后者在 DB 层被">
+<meta property="og:type" content="article">
+<meta property="og:title" content="事务: 并发控制协议: 2PL &amp;&amp; TS">
+<meta property="og:url" content="http://blog.mwish.me/2020/11/15/transaction-concurrency-control/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="并发控制是事务的重要成分，他们会决定事务的调度、处理、abort 顺序。 事务的并发控制可以大致分为：  乐观的并发控制 OCC  TS   悲观的并发控制 2PL    乐观的并发控制假设冲突比较少的情况发生，出现冲突就会选择事务 abort；悲观的并发控制则是假设事务冲突经常发生，会避免冲突。 2PL首先 2PL 的 Lock 和“读写锁” “自旋锁”这些同步操作不是一回事，后者在 DB 层被">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/1895A50B-B8EC-4C4A-8D81-F8034A2F9BF9.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/70612C78-F305-444C-8918-B7FEC410BF55.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/C7506976-D338-406A-BCDF-94246279E1DD.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/D2AC199C-DD0C-47B8-9BBD-2B67BD4357FD.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/A863B4B2-7871-4E03-8D5C-1B2EC2F46CAB.png">
+<meta property="article:published_time" content="2020-11-14T18:32:54.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.572Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/1895A50B-B8EC-4C4A-8D81-F8034A2F9BF9.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>事务: 并发控制协议: 2PL &amp;&amp; TS</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2020/11/17/MVCC-SI/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2020/11/14/%E4%BA%8B%E5%8A%A1-%E5%8D%8F%E8%AE%AE%E5%92%8C%E9%9A%94%E7%A6%BB/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/11/15/transaction-concurrency-control/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/11/15/transaction-concurrency-control/&text=事务: 并发控制协议: 2PL &amp;&amp; TS"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/11/15/transaction-concurrency-control/&title=事务: 并发控制协议: 2PL &amp;&amp; TS"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/11/15/transaction-concurrency-control/&is_video=false&description=事务: 并发控制协议: 2PL &amp;&amp; TS"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=事务: 并发控制协议: 2PL &amp;&amp; TS&body=Check out this article: http://blog.mwish.me/2020/11/15/transaction-concurrency-control/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/11/15/transaction-concurrency-control/&title=事务: 并发控制协议: 2PL &amp;&amp; TS"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/11/15/transaction-concurrency-control/&title=事务: 并发控制协议: 2PL &amp;&amp; TS"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/11/15/transaction-concurrency-control/&title=事务: 并发控制协议: 2PL &amp;&amp; TS"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/11/15/transaction-concurrency-control/&title=事务: 并发控制协议: 2PL &amp;&amp; TS"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/11/15/transaction-concurrency-control/&name=事务: 并发控制协议: 2PL &amp;&amp; TS&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/11/15/transaction-concurrency-control/&t=事务: 并发控制协议: 2PL &amp;&amp; TS"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#2PL"><span class="toc-number">1.</span> <span class="toc-text">2PL</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%AD%A3%E7%A1%AE%E6%80%A7%E8%AF%81%E6%98%8E"><span class="toc-number">1.1.</span> <span class="toc-text">正确性证明</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2PL-%E7%9A%84%E9%BA%BB%E7%83%A6"><span class="toc-number">1.2.</span> <span class="toc-text">2PL 的麻烦</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#CASCADING-ABORTS"><span class="toc-number">1.2.1.</span> <span class="toc-text">CASCADING ABORTS</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Upgrade-Lock"><span class="toc-number">1.2.2.</span> <span class="toc-text">Upgrade Lock</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Deadlock"><span class="toc-number">1.2.3.</span> <span class="toc-text">Deadlock</span></a><ol class="toc-child"><li class="toc-item toc-level-5"><a class="toc-link" href="#Deadlock-Prevention"><span class="toc-number">1.2.3.1.</span> <span class="toc-text">Deadlock Prevention</span></a></li><li class="toc-item toc-level-5"><a class="toc-link" href="#Deadlock-Detection"><span class="toc-number">1.2.3.2.</span> <span class="toc-text">Deadlock Detection</span></a></li></ol></li><li class="toc-item toc-level-4"><a class="toc-link" href="#LockTable"><span class="toc-number">1.2.4.</span> <span class="toc-text">LockTable</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Multiple-Granularity-amp-amp-intention-locks"><span class="toc-number">1.3.</span> <span class="toc-text">Multiple Granularity &amp;&amp; intention locks</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Predicate"><span class="toc-number">1.3.1.</span> <span class="toc-text">Predicate</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%8F%92%E5%85%A5%E5%92%8C%E5%88%A0%E9%99%A4"><span class="toc-number">1.3.2.</span> <span class="toc-text">插入和删除</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%9D%82%E9%A1%B9"><span class="toc-number">1.3.3.</span> <span class="toc-text">杂项</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#TS"><span class="toc-number">2.</span> <span class="toc-text">TS</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Thomas-Write-Rule"><span class="toc-number">2.1.</span> <span class="toc-text">Thomas-Write Rule</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#OCC-%E5%9F%BA%E4%BA%8E%E6%A3%80%E6%9F%A5%E7%9A%84%E6%96%B9%E6%B3%95"><span class="toc-number">3.</span> <span class="toc-text">OCC: 基于检查的方法</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%A7%E8%83%BD%E8%AF%84%E4%BC%B0"><span class="toc-number">4.</span> <span class="toc-text">性能评估</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Reference"><span class="toc-number">5.</span> <span class="toc-text">Reference</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        事务: 并发控制协议: 2PL &amp;&amp; TS
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2020-11-14T18:32:54.000Z" itemprop="datePublished">2020-11-15</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>并发控制是事务的重要成分，他们会决定事务的调度、处理、abort 顺序。</p>
+<p>事务的并发控制可以大致分为：</p>
+<ul>
+<li>乐观的并发控制<ul>
+<li>OCC </li>
+<li>TS</li>
+</ul>
+</li>
+<li>悲观的并发控制<ul>
+<li>2PL</li>
+</ul>
+</li>
+</ul>
+<p>乐观的并发控制假设冲突比较少的情况发生，出现冲突就会选择事务 abort；悲观的并发控制则是假设事务冲突经常发生，会避免冲突。</p>
+<h2 id="2PL"><a href="#2PL" class="headerlink" title="2PL"></a>2PL</h2><p>首先 2PL 的 Lock 和“读写锁” “自旋锁”这些同步操作不是一回事，后者在 DB 层被称为 Latch。</p>
+<p>基础的锁可以简单分为：</p>
+<ul>
+<li>S-LOCK：Shared Lock，读获取 S-Lock</li>
+<li>X-Lock: Exclusive Lock，写获取 X-Lock</li>
+</ul>
+<p>2PL 分为两个阶段：</p>
+<ol>
+<li>Growing：仅获取锁或者拒绝获取锁的请求</li>
+<li>Shrinking：只允许释放锁</li>
+</ol>
+<h3 id="正确性证明"><a href="#正确性证明" class="headerlink" title="正确性证明"></a>正确性证明</h3><p>数据库系统概念对这个有一个很棒的证明，用的是归纳法：<a target="_blank" rel="noopener" href="http://www.mathcs.emory.edu/~cheung/Courses/554/Syllabus/7-serializability/2PL.html">http://www.mathcs.emory.edu/~cheung/Courses/554/Syllabus/7-serializability/2PL.html</a></p>
+<p>（大意是 1个事务中，已经是串行的。然后 n 个事务中，假设 n-1 个事务是串行的，满足 2PL 条件下，无法找到一种调度，让他满足非串行化调度）</p>
+<p><a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/59535337">https://zhuanlan.zhihu.com/p/59535337</a> 这篇文章也给了一个反证法来证明。大意也如上，不过用了成环的角度来描述。</p>
+<p>此外，关于 2PL 的 order, 还有一个很有趣的概念：2PL 可以当成提出第一个解锁请求的时候，瞬时执行的。这个在下面有一个反证法证明（在 claim 那）：<a target="_blank" rel="noopener" href="http://www.mathcs.emory.edu/~cheung/Courses/554/Syllabus/7-serializability/2PL.html">http://www.mathcs.emory.edu/~cheung/Courses/554/Syllabus/7-serializability/2PL.html</a></p>
+<h3 id="2PL-的麻烦"><a href="#2PL-的麻烦" class="headerlink" title="2PL 的麻烦"></a>2PL 的麻烦</h3><h4 id="CASCADING-ABORTS"><a href="#CASCADING-ABORTS" class="headerlink" title="CASCADING ABORTS"></a>CASCADING ABORTS</h4><p><img src="https://image.mwish.me/blog-image/1895A50B-B8EC-4C4A-8D81-F8034A2F9BF9.png" alt="1895A50B-B8EC-4C4A-8D81-F8034A2F9BF9"></p>
+<p>上述调度发生的时候，T1 unlock 了，T2 获取锁读 T1，然后 T1 abort 了，为了防止 G1a，T2 也应该 abort。</p>
+<p>那么这个时候，依赖 T2 写入的也都会 abort ，哈，雪崩！</p>
+<p>为了防止这种现象，会有 strict 2PL:</p>
+<blockquote>
+<p>A schedule is <strong>strict</strong> if a value written by a txn is not read or overwritten by other txns until that txn finishes.</p>
+</blockquote>
+<p>在 S2PL 下，不仅能防止上述 cascading abort, 还能靠存储原来的值来恢复 abort。</p>
+<p>此外，还有另一种模式：</p>
+<blockquote>
+<p>Another variant of two-phase locking is the <strong>rigorous two-phase locking protocol</strong>, which requires that all locks be held until the transaction commits. We can easily verify that, with rigorous two-phase locking, transactions can be serialized in the order in which they commit.</p>
+</blockquote>
+<h4 id="Upgrade-Lock"><a href="#Upgrade-Lock" class="headerlink" title="Upgrade Lock"></a>Upgrade Lock</h4><p>如果 txn 先读 object a, 再写 object a。那么它需要进行 upgrade, 把 S-LOCK 变成 X-LOCK。</p>
+<p>升级只能在 growing phase 中进行。</p>
+<h4 id="Deadlock"><a href="#Deadlock" class="headerlink" title="Deadlock"></a>Deadlock</h4><p>在实现上，通常2PL会引入 LockTable 来记录锁的信息。同时向 LockTable 申请锁定。所以与 OS 不一样，数据库可以高度介入这些行为。</p>
+<p>有两种处理死锁的方案：deadlock detection 和 deadlock prevention。</p>
+<h5 id="Deadlock-Prevention"><a href="#Deadlock-Prevention" class="headerlink" title="Deadlock Prevention"></a>Deadlock Prevention</h5><p>deadlock prevention 可以用某种方式，比如开始的时间，来控制优先级。有了优先级，当事务申请 Lock，同时这个 object 上已经有 lock 的时候，有两种策略：wait-die 和 wound-wait，这些策略本身暗示了一个事务序号或者时间戳的存在：</p>
+<ul>
+<li>wait-die: 如果请求的事务有更高的优先级，那么等待，否则会 abort</li>
+<li>wound-wait: 如果请求的事务有更高的优先级，那么 abort 掉持锁的事务，否则会等待事务完成。</li>
+</ul>
+<p>这两种方式让事务抢占锁的时候，有了一个单调的 total order。所以本身是 work 的。同时，为了避免冲突，被 abort 的事务会要求一定程度上用原有的优先级。</p>
+<p>还有一种混合的策略是锁超时，一定时间事务没有推进下去之后，会被判定为超时。</p>
+<h5 id="Deadlock-Detection"><a href="#Deadlock-Detection" class="headerlink" title="Deadlock Detection"></a>Deadlock Detection</h5><p>deadlock detection 通常采取 wait-for graph 的形式来实现，它构建一个 DAG，然后在申请锁的时候，构建 Transaction 的 direct 依赖。unlock 的时候，释放相关的依赖。当 wait-for graph 出现环的时候，说明有冲突. 需要挑选一个 victim 事务 abort 掉。</p>
+<p>当然，这个 wait-for graph 也可以在定时或者其他的时机构建，比如在定期检查的时候构建。</p>
+<p>Abort 事务本身也是有讲究的，这里可能会在 wait-for graph 里面成环，我们需要 abort 掉环中的一个事务。</p>
+<ol>
+<li>事务执行了多久，还需要执行多久</li>
+<li>回滚时牵涉的事务</li>
+<li>这个事务是否重复了很多遍，再 abort 就饿死了。</li>
+</ol>
+<h4 id="LockTable"><a href="#LockTable" class="headerlink" title="LockTable"></a>LockTable</h4><p>综上，上述的内容需要一个 LockTable 来实现。这里采取了一个 HashTable + Chain 的结构：</p>
+<p><img src="https://image.mwish.me/blog-image/70612C78-F305-444C-8918-B7FEC410BF55.png" alt="70612C78-F305-444C-8918-B7FEC410BF55"></p>
+<ul>
+<li>当有 LOCK 请求时，请求排队处理；共享的请求可能被同时 grant</li>
+<li>有 unlock 请求时，释放元素，并且处理下一个</li>
+<li>有 abort 请求时，clear，并进行恢复工作。</li>
+</ul>
+<h3 id="Multiple-Granularity-amp-amp-intention-locks"><a href="#Multiple-Granularity-amp-amp-intention-locks" class="headerlink" title="Multiple Granularity &amp;&amp; intention locks"></a>Multiple Granularity &amp;&amp; intention locks</h3><p>关系型数据库有不同的层次：</p>
+<ul>
+<li>Database</li>
+<li>table</li>
+<li>Page</li>
+<li>Tuple/Row</li>
+<li>Column</li>
+</ul>
+<p>当 Txn 申请 Lock 的时候，DBMS 会面临分配的层次问题：</p>
+<ul>
+<li>层次低的话，分配更多低层次锁，允许更高的并行度，但是 LockTable 会面临更大的时空开销（主要是内存/CPU）。</li>
+<li>分配高层次锁，可能的并行度会降低，但是 LockTable 面临的时空开销减小。</li>
+</ul>
+<p>同时，实现者在 LockTable 维护 Lock 的时候，会发现，协调不同层次的锁是困难的，而且从 Root 开始锁定开销过大，因此有了 intention locks.</p>
+<ul>
+<li>IS: Intention-Shared，希望更细粒度的获得 shared lock</li>
+<li>IX: Intention-Exclusive: 希望获得更细粒度的 exclusive lock</li>
+<li>SIX: S + IX</li>
+</ul>
+<p><img src="https://image.mwish.me/blog-image/C7506976-D338-406A-BCDF-94246279E1DD.png" alt="C7506976-D338-406A-BCDF-94246279E1DD"></p>
+<p>这个应该横坐标是 holding lock, 纵着的是过来的请求。事务给下层上 S/X 锁，父节点必须有对应的锁或者意向锁。</p>
+<p>发现行锁过多可能会进行锁的升级(escalation) ，来更新父级别的锁. 不过 InnoDB 没有，因为它自称自己上锁很便宜（虽然被何登成老师吐槽过 orz）：<a target="_blank" rel="noopener" href="https://dev.mysql.com/doc/refman/5.6/en/innodb-transaction-model.html">https://dev.mysql.com/doc/refman/5.6/en/innodb-transaction-model.html</a></p>
+<h4 id="Predicate"><a href="#Predicate" class="headerlink" title="Predicate"></a>Predicate</h4><p>S2PL 很大程度上能防止 G0 G1 G2-Item 了，但是无法保证 G2 不发生，所以需要处理 predicate。这里可以：</p>
+<ol>
+<li>整个 Lock 住信息：添加一个 information object, 读会对他上 S-LOCK，写会 X-LOCK，导致产生冲突。这种方式的缺点是并行能力太差，需要把整个对应的 index 锁住。</li>
+<li>采用 index-locking：读/写之前对对应 B+tree index 的 leaf node 锁定，更新的时候锁定 index 的 <code>(old)</code> <code>(new)</code></li>
+<li>predicate-locking: 对 Predicate 上锁，比较复杂、性能低下而一般不采用。</li>
+</ol>
+<p>MySQL 采用了 next-key locking 的实现，来解决 predicate 和 phantom 的问题。为什么是 Next-Key Locking? 这个策略貌似是上世纪 ARIES/KVL 搞出来的，将谓词锁转化为记录的锁，这种方式相对来说直观又节省空间。</p>
+<h4 id="插入和删除"><a href="#插入和删除" class="headerlink" title="插入和删除"></a>插入和删除</h4><p>插入本身需要注意锁相关的信息。比方说插入的时候本身要对记录上锁，删除的时候也要注意上锁。MySQL 会有插入意向锁，具体可见隐式锁相关的描述：<a target="_blank" rel="noopener" href="http://mysql.taobao.org/monthly/2020/09/06/">http://mysql.taobao.org/monthly/2020/09/06/</a> 。</p>
+<h4 id="杂项"><a href="#杂项" class="headerlink" title="杂项"></a>杂项</h4><p>更低级的一致性，比如二级一致性(degree-two consistency)可以靠提前释放读锁之类的方式来实现. 有一种方式被称为游标一致性，这里会在 cursor 读期间上读锁，读完之后释放。</p>
+<p>increment lock 是一种特殊的锁。为了保证在某些 inc/dec 操作上的高效而使用:</p>
+<p><img src="https://image.mwish.me/blog-image/D2AC199C-DD0C-47B8-9BBD-2B67BD4357FD.png" alt="D2AC199C-DD0C-47B8-9BBD-2B67BD4357FD"></p>
+<h2 id="TS"><a href="#TS" class="headerlink" title="TS"></a>TS</h2><p>对于 2PL 而言，如果要定序，事务本身会在第一个 lock 释放的时候作为 commit 时间。2PL 本身有这个依赖，其实就简单实现一下是不需要 commit_ts start_ts 的。</p>
+<p>Basic-TS 协议则不然，它会在事务开始的时候，给事务一个 TS，对于事务 T，记作 <code>TS(T)</code>，而 ts 是尽量单调递增的（可以是系统时间或者是一个 counter），某种意义上，这给了所有事务一个 total order。</p>
+<p>那么，我们在事务开始的时候就获得了“如果 commit 应该有的 ts”, 所以，实现上会需要每个 object 的读/写 时间，来完成相关的验证，一旦发现违背了隔离级别的需求，就要进行一定的恢复处理：</p>
+<p>To implement this scheme, we associate with each data item <em>Q</em> two timestamp values:</p>
+<ol>
+<li><strong>W-timestamp</strong>(<em>Q</em>) denotes the largest timestamp of any transaction that executed write(<em>Q</em>) successfully.</li>
+<li><strong>R-timestamp</strong>(<em>Q</em>) denotes the largest timestamp of any transaction that executed read(<em>Q</em>) successfully.</li>
+</ol>
+<p>然后，有一些对应的读写规则：</p>
+<p><img src="https://image.mwish.me/blog-image/A863B4B2-7871-4E03-8D5C-1B2EC2F46CAB.png" alt="A863B4B2-7871-4E03-8D5C-1B2EC2F46CAB"></p>
+<p>上面比较复杂，不过简单说大概思路就是：</p>
+<ol>
+<li>欲写 <code>X</code>，不可以写 <code>TS(T) &lt; W-TS(X)</code> 的数据，不能被定序的后来写入的事务写了。</li>
+<li>欲写 <code>X</code>，不可以写 <code>TS(T) &lt; R-TS(X)</code> 的数据，不能被定序的后来写入的事务读了。</li>
+<li>欲读 , 不能读到定序的事务之后的写入。</li>
+</ol>
+<p>我们下面来考虑 Recoverable 和 Cascadeless:</p>
+<p>TS 协议本身不是 recoverable 的，需要一定的更改，有下面这些参考方案：</p>
+<ol>
+<li>Recoverability and cascadelessness can be ensured by performing all writes together at the end of the transaction. The writes must be atomic in the following sense: While the writes are in progress, no transaction is permitted to access any of the data items that have been written.</li>
+<li>Recoverability and cascadelessness can also be guaranteed by using a limited form of locking, whereby reads of uncommitted items are postponed until the transaction that updated the item commits.</li>
+<li>Recoverability alone can be ensured by tracking uncommitted writes and allowing a transaction <em>T**i</em> to commit only after the commit of any transaction that wrote a value that <em>T**i</em> read. Commit dependencies, outlined in Section 18.1.5, can be used for this purpose.</li>
+</ol>
+<p>TS 不会产生死锁，因为有冲突都 abort 了。但是 Basic-TS 有一些 performance 上的问题：</p>
+<ol>
+<li>本身不是 recoverable 的，需要一定的更改。</li>
+<li>更新 timestamp 开销比较大。</li>
+<li>长时间运行的事务碰见冲突概率比较大，可能会饿死。</li>
+</ol>
+<p>关于 ts 协议有一些批评，就是即使读也要更新相关的数据，造成额外的写开销。</p>
+<h3 id="Thomas-Write-Rule"><a href="#Thomas-Write-Rule" class="headerlink" title="Thomas-Write Rule"></a>Thomas-Write Rule</h3><p>回顾一下规则：欲写 <code>X</code>，不可以写 <code>TS(T) &lt; R-TS(X)</code> 的数据，不能被定序的后来写入的事务读了。</p>
+<p>Thomas-Write Rule 允许你跳过这个规则，因为你可以视作“写入被后来的覆盖了”。</p>
+<h2 id="OCC-基于检查的方法"><a href="#OCC-基于检查的方法" class="headerlink" title="OCC: 基于检查的方法"></a>OCC: 基于检查的方法</h2><p>对于一个事务而言，如果大部分事务是只读事务，冲突较少，那么应该减轻各种处理的开销。OCC 大致分为三个阶段：</p>
+<ol>
+<li>Read Phase: 读对象，把对象 copy 到事务内写</li>
+<li>Validation Phase: txn commit 的时候, 检查事务是否和别的事务产生冲突</li>
+<li>Write Phase: 把记录写入</li>
+</ol>
+<p>我们引入几个时间点（不一定要分配时间戳）来帮助理解这个流程：</p>
+<ol>
+<li><code>StartTs(T)</code>: 事务开始执行的时间</li>
+<li><code>ValidationTS(T)</code>:  完成 Read Phase, 开始进入 <code>StartTs</code> 的时间戳</li>
+<li><code>FinishTs(T)</code>: 完成写阶段的时间戳</li>
+</ol>
+<p>这里可以尝试在 Validation Phase 中分配时间戳，然后 trace 读写的对应时间戳：</p>
+<ol>
+<li>两个事务没有冲突，且 <code>TS(Tk) &lt; TS(Ti)</code>, 当且仅当：<ol>
+<li><code>FinishTS(Tk) &lt; StarTs(Ti)</code>. 这点是显而易见的</li>
+<li><code>ValidationTS(Ti) &gt; FinishTS(Tk)</code> 且 <code>WriteSet(Tk)</code> 和 <code>ReadSet(Ti)</code> 没有相交</li>
+</ol>
+</li>
+</ol>
+<p>这个方法是 Cascadeless 的，因为 Write 阶段之后才能读到正确数据。</p>
+<p>CMU 15-445 描述了一个 validation 的基本策略，他的大致逻辑如下：</p>
+<ol>
+<li>检查与 StartTS 至 ValidationTS 间的提交事务有无冲突，即验证是否读取了 FinishTS 事务的写集合</li>
+<li>发现进入 ValidationTS 的事务中，更旧的事务的时候，进行下列验证：<ol>
+<li>验证阶段的时候（准确说是开始写的时候），对方已完成写。那新事务的读集和旧事务写集不冲突即可。</li>
+<li>验证阶段的时候，对方没完成写，那要求旧事务的写集不和新事务的读写集冲突。</li>
+</ol>
+</li>
+</ol>
+<p>进入 ValidationTS 的时候，TS 是递增的。如果用 StartTS 作事务的时间戳，本身协议上是满足序列化的，但是问题在于验证的时间戳可能不是递增的，这个情况下可能出现：</p>
+<ol>
+<li>两个事务差不多时候开始，<code>TS(i) &lt; TS(j)</code></li>
+<li><code>j</code> 比 <code>i</code> 更早进入验证阶段</li>
+</ol>
+<p>这个时候肯定就有问题了，所以倾向于在 Validation 阶段分配。</p>
+<h2 id="性能评估"><a href="#性能评估" class="headerlink" title="性能评估"></a>性能评估</h2><p>这里不考虑 MVCC 的部分，对他们的性能进行评估. <code>&lt;Staring into the Abyss: An Evaluation of Concurrency Control with One Thousand Cores&gt;</code> 给了一个评估，但我不是很信任它的结果，感觉作者对 scalable counter 没啥经验。</p>
+<h2 id="Reference"><a href="#Reference" class="headerlink" title="Reference"></a>Reference</h2><p>2PL 部分：</p>
+<ul>
+<li>InnoDB 的 Locking <a target="_blank" rel="noopener" href="https://dev.mysql.com/doc/refman/8.0/en/innodb-locking.html">https://dev.mysql.com/doc/refman/8.0/en/innodb-locking.html</a></li>
+<li>InnoDB存储引擎(第2版) <a target="_blank" rel="noopener" href="https://book.douban.com/subject/24708143/">https://book.douban.com/subject/24708143/</a></li>
+<li>CMU 15-445</li>
+<li>数据库系统概念(第七版)</li>
+</ul>
+<p>TS 部分：</p>
+<ul>
+<li>CMU 15-445</li>
+<li>数据库系统概念(第七版)</li>
+</ul>
+<p>OCC 部分：</p>
+<ul>
+<li>CMU 15-445</li>
+<li>Microsoft Hekaton</li>
+<li>数据库系统概念(第七版)</li>
+</ul>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#2PL"><span class="toc-number">1.</span> <span class="toc-text">2PL</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%AD%A3%E7%A1%AE%E6%80%A7%E8%AF%81%E6%98%8E"><span class="toc-number">1.1.</span> <span class="toc-text">正确性证明</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2PL-%E7%9A%84%E9%BA%BB%E7%83%A6"><span class="toc-number">1.2.</span> <span class="toc-text">2PL 的麻烦</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#CASCADING-ABORTS"><span class="toc-number">1.2.1.</span> <span class="toc-text">CASCADING ABORTS</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Upgrade-Lock"><span class="toc-number">1.2.2.</span> <span class="toc-text">Upgrade Lock</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Deadlock"><span class="toc-number">1.2.3.</span> <span class="toc-text">Deadlock</span></a><ol class="toc-child"><li class="toc-item toc-level-5"><a class="toc-link" href="#Deadlock-Prevention"><span class="toc-number">1.2.3.1.</span> <span class="toc-text">Deadlock Prevention</span></a></li><li class="toc-item toc-level-5"><a class="toc-link" href="#Deadlock-Detection"><span class="toc-number">1.2.3.2.</span> <span class="toc-text">Deadlock Detection</span></a></li></ol></li><li class="toc-item toc-level-4"><a class="toc-link" href="#LockTable"><span class="toc-number">1.2.4.</span> <span class="toc-text">LockTable</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Multiple-Granularity-amp-amp-intention-locks"><span class="toc-number">1.3.</span> <span class="toc-text">Multiple Granularity &amp;&amp; intention locks</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Predicate"><span class="toc-number">1.3.1.</span> <span class="toc-text">Predicate</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%8F%92%E5%85%A5%E5%92%8C%E5%88%A0%E9%99%A4"><span class="toc-number">1.3.2.</span> <span class="toc-text">插入和删除</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%9D%82%E9%A1%B9"><span class="toc-number">1.3.3.</span> <span class="toc-text">杂项</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#TS"><span class="toc-number">2.</span> <span class="toc-text">TS</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Thomas-Write-Rule"><span class="toc-number">2.1.</span> <span class="toc-text">Thomas-Write Rule</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#OCC-%E5%9F%BA%E4%BA%8E%E6%A3%80%E6%9F%A5%E7%9A%84%E6%96%B9%E6%B3%95"><span class="toc-number">3.</span> <span class="toc-text">OCC: 基于检查的方法</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%A7%E8%83%BD%E8%AF%84%E4%BC%B0"><span class="toc-number">4.</span> <span class="toc-text">性能评估</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Reference"><span class="toc-number">5.</span> <span class="toc-text">Reference</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/11/15/transaction-concurrency-control/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/11/15/transaction-concurrency-control/&text=事务: 并发控制协议: 2PL &amp;&amp; TS"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/11/15/transaction-concurrency-control/&title=事务: 并发控制协议: 2PL &amp;&amp; TS"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/11/15/transaction-concurrency-control/&is_video=false&description=事务: 并发控制协议: 2PL &amp;&amp; TS"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=事务: 并发控制协议: 2PL &amp;&amp; TS&body=Check out this article: http://blog.mwish.me/2020/11/15/transaction-concurrency-control/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/11/15/transaction-concurrency-control/&title=事务: 并发控制协议: 2PL &amp;&amp; TS"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/11/15/transaction-concurrency-control/&title=事务: 并发控制协议: 2PL &amp;&amp; TS"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/11/15/transaction-concurrency-control/&title=事务: 并发控制协议: 2PL &amp;&amp; TS"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/11/15/transaction-concurrency-control/&title=事务: 并发控制协议: 2PL &amp;&amp; TS"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/11/15/transaction-concurrency-control/&name=事务: 并发控制协议: 2PL &amp;&amp; TS&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/11/15/transaction-concurrency-control/&t=事务: 并发控制协议: 2PL &amp;&amp; TS"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

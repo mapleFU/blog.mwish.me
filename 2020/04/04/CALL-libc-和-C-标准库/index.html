@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="CALL 是 (Compiler&#x2F;Assembler&#x2F;Linker&#x2F;Loader)的简称。如果你和 C&#x2F;C++ 打过交道的话，没有理由会对这几个词太陌生。所以今天这是一篇水文。 Levels of Representation&#x2F;Interpretation  “XX 是一门 解释型语言” “XX 是编译型语言”  抛开正确性，一定程度上我们可以尝试填空（Python &#x2F; C++、Go）并且知道：">
+<meta property="og:type" content="article">
+<meta property="og:title" content="CALL: libc 和 C++ 标准库">
+<meta property="og:url" content="http://blog.mwish.me/2020/04/04/CALL-libc-%E5%92%8C-C-%E6%A0%87%E5%87%86%E5%BA%93/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="CALL 是 (Compiler&#x2F;Assembler&#x2F;Linker&#x2F;Loader)的简称。如果你和 C&#x2F;C++ 打过交道的话，没有理由会对这几个词太陌生。所以今天这是一篇水文。 Levels of Representation&#x2F;Interpretation  “XX 是一门 解释型语言” “XX 是编译型语言”  抛开正确性，一定程度上我们可以尝试填空（Python &#x2F; C++、Go）并且知道：">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/level.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/A6642C36-5B8D-4168-877C-9D3FCCD84A44.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/8009A6B1-A4E5-46A4-A40F-BD41F4E01D34.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/顺便.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/5B0267D5-78CF-4CB7-97B7-69D4D5D1DF88.png">
+<meta property="article:published_time" content="2020-04-04T14:08:54.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.554Z">
+<meta property="article:author" content="mwish">
+<meta property="article:tag" content="system">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/level.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>CALL: libc 和 C++ 标准库</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2020/04/06/Distribute-Transaction-basic-of-2PC/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2020/03/28/RISC-V-GetStart/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/04/04/CALL-libc-%E5%92%8C-C-%E6%A0%87%E5%87%86%E5%BA%93/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/04/04/CALL-libc-%E5%92%8C-C-%E6%A0%87%E5%87%86%E5%BA%93/&text=CALL: libc 和 C++ 标准库"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/04/04/CALL-libc-%E5%92%8C-C-%E6%A0%87%E5%87%86%E5%BA%93/&title=CALL: libc 和 C++ 标准库"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/04/04/CALL-libc-%E5%92%8C-C-%E6%A0%87%E5%87%86%E5%BA%93/&is_video=false&description=CALL: libc 和 C++ 标准库"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=CALL: libc 和 C++ 标准库&body=Check out this article: http://blog.mwish.me/2020/04/04/CALL-libc-%E5%92%8C-C-%E6%A0%87%E5%87%86%E5%BA%93/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/04/04/CALL-libc-%E5%92%8C-C-%E6%A0%87%E5%87%86%E5%BA%93/&title=CALL: libc 和 C++ 标准库"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/04/04/CALL-libc-%E5%92%8C-C-%E6%A0%87%E5%87%86%E5%BA%93/&title=CALL: libc 和 C++ 标准库"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/04/04/CALL-libc-%E5%92%8C-C-%E6%A0%87%E5%87%86%E5%BA%93/&title=CALL: libc 和 C++ 标准库"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/04/04/CALL-libc-%E5%92%8C-C-%E6%A0%87%E5%87%86%E5%BA%93/&title=CALL: libc 和 C++ 标准库"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/04/04/CALL-libc-%E5%92%8C-C-%E6%A0%87%E5%87%86%E5%BA%93/&name=CALL: libc 和 C++ 标准库&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/04/04/CALL-libc-%E5%92%8C-C-%E6%A0%87%E5%87%86%E5%BA%93/&t=CALL: libc 和 C++ 标准库"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Levels-of-Representation-Interpretation"><span class="toc-number">1.</span> <span class="toc-text">Levels of Representation&#x2F;Interpretation</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#CALL-chain"><span class="toc-number">2.</span> <span class="toc-text">CALL chain</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Compile"><span class="toc-number">2.1.</span> <span class="toc-text">Compile</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Assembler"><span class="toc-number">2.2.</span> <span class="toc-text">Assembler</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#ELF"><span class="toc-number">2.2.1.</span> <span class="toc-text">ELF</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Linker"><span class="toc-number">2.3.</span> <span class="toc-text">Linker</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Loader"><span class="toc-number">2.4.</span> <span class="toc-text">Loader</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#libc-libc"><span class="toc-number">2.5.</span> <span class="toc-text">libc&#x2F;libc++</span></a></li></ol></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        CALL: libc 和 C++ 标准库
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2020-04-04T14:08:54.000Z" itemprop="datePublished">2020-04-04</time>
+        
+      
+    </div>
+
+
+      
+
+      
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/system/" rel="tag">system</a>
+    </div>
+
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>CALL 是 <strong>(Compiler/Assembler/Linker/Loader)</strong>的简称。如果你和 C/C++ 打过交道的话，没有理由会对这几个词太陌生。所以今天这是一篇水文。</p>
+<h2 id="Levels-of-Representation-Interpretation"><a href="#Levels-of-Representation-Interpretation" class="headerlink" title="Levels of Representation/Interpretation"></a>Levels of Representation/Interpretation</h2><p><img src="https://image.mwish.me/blog-image/level.png" alt="level"></p>
+<ul>
+<li>“XX 是一门 解释型语言”</li>
+<li>“XX 是编译型语言”</li>
+</ul>
+<p>抛开正确性，一定程度上我们可以尝试填空（Python / C++、Go）并且知道：</p>
+<ul>
+<li>Python 可能会运行一个解释器（官方是 CPython, 可能有 Pypy 这样的），然后解释 Python 的字节码</li>
+<li>C++、Go 会编译成 binary, 就我理解，这是“机器上的字节码”(这是跟 Python 字节码对应的，实际情况可能手是反过来的), 然后执行。这其中 Go 可能会有 Runtime、GC 这样的开销。</li>
+</ul>
+<p>但是同时，Python 也能通过一些方式打包成 exe （虽然很巨大），同时 LLVM 这些层次的引入让我们的理解模糊了起来。所以我们要明确一下这个 Level。</p>
+<p><img src="https://image.mwish.me/blog-image/A6642C36-5B8D-4168-877C-9D3FCCD84A44.png" alt="A6642C36-5B8D-4168-877C-9D3FCCD84A44"></p>
+<blockquote>
+<ul>
+<li>Language translation gives us another option</li>
+<li>In general, we interpret a high-level language when efficiency is not critical and translate to a lower-level language to increase performance</li>
+<li>Although this is becoming a “distinction without a difference”  Many intepreters do a “just in time” runtime compilation to bytecode that either is emulated or directly compiled to machine code (e.g. LLVM)</li>
+</ul>
+</blockquote>
+<p>所以这个问题实际上是很含糊不清的，第三点里面 JIT 等的引入更让事情扑朔迷离了起来。具体其实可以参考这个链接里的说法：<a target="_blank" rel="noopener" href="https://www.zhihu.com/question/19608553。">https://www.zhihu.com/question/19608553。</a></p>
+<blockquote>
+<p>一般被称为“解释型语言”的是主流实现为解释器的语言，但并不是说它就无法编译。例如说经常被认为是“解释型语言”的<a target="_blank" rel="noopener" href="http://schemers.org/">Scheme</a>就有好几种编译器实现，其中率先支持<a target="_blank" rel="noopener" href="http://www.r6rs.org/">R6RS</a>规范的大部分内容的是<a target="_blank" rel="noopener" href="http://ikarus-scheme.org/">Ikarus</a>，支持在x86上编译Scheme；它最终不是生成某种虚拟机的字节码，而是直接生成x86机器码。</p>
+</blockquote>
+<p>实际上解释器的性能劣势也不一定是一种坏事，像我去年去 PyCon 听的“慢解释是一种优势”，虽然有点破罐子破摔的味道，但是如果你在 C/C++ 下开 asan/valgrind 或者带 <code>gcc -g</code>, 和 Go 这种带 Runtime 的、V8这些可以提供的debug比较，难免会有羡慕的想法。</p>
+<blockquote>
+<p>Interpreter provides instruction set independence: run on any machine</p>
+</blockquote>
+<p>就是这样。</p>
+<h2 id="CALL-chain"><a href="#CALL-chain" class="headerlink" title="CALL chain"></a>CALL chain</h2><p><img src="https://image.mwish.me/blog-image/8009A6B1-A4E5-46A4-A40F-BD41F4E01D34.png" alt="8009A6B1-A4E5-46A4-A40F-BD41F4E01D34"></p>
+<p>这是一张水图。可能还要处理一下预处理之类的过程，但是大概流程是这样没错。</p>
+<h3 id="Compile"><a href="#Compile" class="headerlink" title="Compile"></a>Compile</h3><p>Compile 的过程大概是</p>
+<ul>
+<li>Lexer</li>
+<li>Parser</li>
+<li>Semantic Analysis and Optimization</li>
+<li>Code generation</li>
+</ul>
+<p>不过看上面转的那篇文章，似乎形式有变，这方面我不是很了解。Lexer/Parser 的部分可以参考我之前的 Lex/Yacc 入门。总之，我们现在把源代码编译后可以转化为一种对应的 IR, 即 <code>nmsl.c</code> -&gt; <code>nmsl.S</code>.</p>
+<h3 id="Assembler"><a href="#Assembler" class="headerlink" title="Assembler"></a>Assembler</h3><p>Assembler 接下来会<code>nmsl.s</code> -&gt; <code>nmsl.o</code>.</p>
+<ul>
+<li>Reads and Uses Directives</li>
+<li>Replace Pseudo-instructions</li>
+<li>Produce <strong>Machine Language</strong> rather than just <strong>Assembly Language</strong></li>
+<li>Creates Object File</li>
+</ul>
+<p>顺便给出这个 part 一个很有意思的 slide:</p>
+<p><img src="https://image.mwish.me/blog-image/顺便.png" alt="顺便"></p>
+<h4 id="ELF"><a href="#ELF" class="headerlink" title="ELF"></a>ELF</h4><blockquote>
+<ul>
+<li>object file header: size and position of the other pieces of the object file</li>
+<li>text segment: the machine code</li>
+<li>data segment: binary representation of the static data in the source file</li>
+<li><p>relocation information: identifies lines of code that need to be fixed up later</p>
+</li>
+<li><p>symbol table: list of this file’s labels and static data that can be referenced</p>
+</li>
+<li>debugging information</li>
+<li>A standard format is ELF (except Microsoft)  <a target="_blank" rel="noopener" href="http://www.skyfree.org/linux/references/ELF_Format.pdf">http://www.skyfree.org/linux/references/ELF_Format.pdf</a></li>
+</ul>
+</blockquote>
+<p>这个我觉得还是 csapp 写得好…总之生成的目标文件会满足这样的形式。</p>
+<h3 id="Linker"><a href="#Linker" class="headerlink" title="Linker"></a>Linker</h3><blockquote>
+<p> Combines several object (.o) files into a single executable (“linking”)</p>
+</blockquote>
+<p><img src="https://image.mwish.me/blog-image/5B0267D5-78CF-4CB7-97B7-69D4D5D1DF88.png" alt="5B0267D5-78CF-4CB7-97B7-69D4D5D1DF88"></p>
+<blockquote>
+<ul>
+<li>Step 1: Take text segment from each .o file and put them together</li>
+<li>Step 2: Take data segment from each .o file, put them together, and concatenate this onto end of text segments</li>
+<li>Step 3: Resolve references<ul>
+<li>Go through Relocation Table; handle each entry</li>
+<li>That is, fill in all absolute addresses</li>
+</ul>
+</li>
+</ul>
+</blockquote>
+<p>这段我感觉 CSAPP 讲的稍微详细一些。</p>
+<p>在应用层面上，这里其实还涉及（不一定是这里引入的）name mangling，calling convention这种 C/C++ 相关的问题，所以可能 <code>extern &quot;C&quot;</code> 在这种情况下就相对很好理解了。</p>
+<h3 id="Loader"><a href="#Loader" class="headerlink" title="Loader"></a>Loader</h3><blockquote>
+<p>When one is run, loader’s job is to load it into memory and start it running</p>
+<p>In reality, loader is the operating system (OS)</p>
+<ul>
+<li>loading is one of the OS tasks</li>
+<li>And these days, the loader actually does a lot of the linking:  Linker’s ‘executable’ is actually only partially linked, instead still having external references</li>
+</ul>
+</blockquote>
+<p>这里可以参考 CSAPP 里面链接的时机相关的概念。</p>
+<h3 id="libc-libc"><a href="#libc-libc" class="headerlink" title="libc/libc++"></a>libc/libc++</h3><p><code>qsort</code> 是一个 <code>&lt;cstdlib&gt;</code> 下的函数，如果你去 libc++ 找的话，会发现事情好像不太对：</p>
+<p><a target="_blank" rel="noopener" href="https://github.com/llvm-mirror/libcxx/blob/7c3769df62c0b3820130aa868397a80a042e0232/include/cstdlib">https://github.com/llvm-mirror/libcxx/blob/7c3769df62c0b3820130aa868397a80a042e0232/include/cstdlib</a></p>
+<p>这里只有 <code>using</code> 和函数声明，没有对应的实现。</p>
+<p>实际上 C++ 的标准库（以 libc++） 为例，可能会根据模版生成需要的函数/类。所以我们可以看到对应的一些源代码。</p>
+<p>C语言的库函数实际上通常以链接库的形式在 libc 中提供，链接的时候我们找到：<a target="_blank" rel="noopener" href="https://stackoverflow.com/questions/26277283/gcc-linking-libc-static-and-some-other-library-dynamically-revisited">https://stackoverflow.com/questions/26277283/gcc-linking-libc-static-and-some-other-library-dynamically-revisited</a></p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Levels-of-Representation-Interpretation"><span class="toc-number">1.</span> <span class="toc-text">Levels of Representation&#x2F;Interpretation</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#CALL-chain"><span class="toc-number">2.</span> <span class="toc-text">CALL chain</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Compile"><span class="toc-number">2.1.</span> <span class="toc-text">Compile</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Assembler"><span class="toc-number">2.2.</span> <span class="toc-text">Assembler</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#ELF"><span class="toc-number">2.2.1.</span> <span class="toc-text">ELF</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Linker"><span class="toc-number">2.3.</span> <span class="toc-text">Linker</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Loader"><span class="toc-number">2.4.</span> <span class="toc-text">Loader</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#libc-libc"><span class="toc-number">2.5.</span> <span class="toc-text">libc&#x2F;libc++</span></a></li></ol></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/04/04/CALL-libc-%E5%92%8C-C-%E6%A0%87%E5%87%86%E5%BA%93/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/04/04/CALL-libc-%E5%92%8C-C-%E6%A0%87%E5%87%86%E5%BA%93/&text=CALL: libc 和 C++ 标准库"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/04/04/CALL-libc-%E5%92%8C-C-%E6%A0%87%E5%87%86%E5%BA%93/&title=CALL: libc 和 C++ 标准库"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/04/04/CALL-libc-%E5%92%8C-C-%E6%A0%87%E5%87%86%E5%BA%93/&is_video=false&description=CALL: libc 和 C++ 标准库"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=CALL: libc 和 C++ 标准库&body=Check out this article: http://blog.mwish.me/2020/04/04/CALL-libc-%E5%92%8C-C-%E6%A0%87%E5%87%86%E5%BA%93/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/04/04/CALL-libc-%E5%92%8C-C-%E6%A0%87%E5%87%86%E5%BA%93/&title=CALL: libc 和 C++ 标准库"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/04/04/CALL-libc-%E5%92%8C-C-%E6%A0%87%E5%87%86%E5%BA%93/&title=CALL: libc 和 C++ 标准库"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/04/04/CALL-libc-%E5%92%8C-C-%E6%A0%87%E5%87%86%E5%BA%93/&title=CALL: libc 和 C++ 标准库"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/04/04/CALL-libc-%E5%92%8C-C-%E6%A0%87%E5%87%86%E5%BA%93/&title=CALL: libc 和 C++ 标准库"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/04/04/CALL-libc-%E5%92%8C-C-%E6%A0%87%E5%87%86%E5%BA%93/&name=CALL: libc 和 C++ 标准库&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/04/04/CALL-libc-%E5%92%8C-C-%E6%A0%87%E5%87%86%E5%BA%93/&t=CALL: libc 和 C++ 标准库"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

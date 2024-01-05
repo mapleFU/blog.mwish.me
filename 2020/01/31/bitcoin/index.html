@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="Bitcoinbitcoin 主要解决的问题（我相信你们在各种地方看过一万遍了）：  forgery: 伪造 double spending  theft  我们需要考量的问题是：  区块链是怎么存储的，Transaction Block 这些结构的关系是什么 如何防止错误 如何防止distributed system 经常出现的问题  TransactionBitcoin 的 idea 是把数据">
+<meta property="og:type" content="article">
+<meta property="og:title" content="bitcoin">
+<meta property="og:url" content="http://blog.mwish.me/2020/01/31/bitcoin/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="Bitcoinbitcoin 主要解决的问题（我相信你们在各种地方看过一万遍了）：  forgery: 伪造 double spending  theft  我们需要考量的问题是：  区块链是怎么存储的，Transaction Block 这些结构的关系是什么 如何防止错误 如何防止distributed system 经常出现的问题  TransactionBitcoin 的 idea 是把数据">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2020-01-31T05:01:49.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.571Z">
+<meta property="article:author" content="mwish">
+<meta property="article:tag" content="distributed">
+<meta name="twitter:card" content="summary">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>bitcoin</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2020/02/19/Go-Concurrency-Patterns-Pipeline/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2020/01/28/MapReduce-%E7%AE%80%E8%AF%BB/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/01/31/bitcoin/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/01/31/bitcoin/&text=bitcoin"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/01/31/bitcoin/&title=bitcoin"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/01/31/bitcoin/&is_video=false&description=bitcoin"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=bitcoin&body=Check out this article: http://blog.mwish.me/2020/01/31/bitcoin/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/01/31/bitcoin/&title=bitcoin"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/01/31/bitcoin/&title=bitcoin"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/01/31/bitcoin/&title=bitcoin"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/01/31/bitcoin/&title=bitcoin"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/01/31/bitcoin/&name=bitcoin&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/01/31/bitcoin/&t=bitcoin"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Bitcoin"><span class="toc-number">1.</span> <span class="toc-text">Bitcoin</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Transaction"><span class="toc-number">1.1.</span> <span class="toc-text">Transaction</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Block-Chain"><span class="toc-number">1.2.</span> <span class="toc-text">Block Chain</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%BF%80%E5%8A%B1"><span class="toc-number">1.3.</span> <span class="toc-text">激励</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Reclaiming-Disk-Space"><span class="toc-number">1.4.</span> <span class="toc-text">Reclaiming Disk Space</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#FAQ"><span class="toc-number">2.</span> <span class="toc-text">FAQ</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%98%AF%E4%B8%8D%E6%98%AF-signature-%E5%B0%B1%E8%B6%B3%E5%A4%9F%E4%BA%86"><span class="toc-number">2.0.1.</span> <span class="toc-text">是不是 signature 就足够了</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Proof-of-work-%E7%9A%84-purpose"><span class="toc-number">2.0.2.</span> <span class="toc-text">Proof-of-work 的 purpose</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%9C%89%E6%AF%94-pow-%E6%9B%B4%E8%8A%82%E7%9C%81%E8%B5%84%E6%BA%90%E7%9A%84%E7%AE%97%E6%B3%95%E4%B9%88"><span class="toc-number">2.0.3.</span> <span class="toc-text">有比 pow 更节省资源的算法么</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E4%BC%A0%E6%92%AD%E5%BE%88%E5%A4%9A%E6%B6%88%E6%81%AF%E7%9A%84%E5%A4%84%E7%90%86"><span class="toc-number">2.0.4.</span> <span class="toc-text">传播很多消息的处理</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E9%9A%8F%E7%9D%80%E5%8C%BA%E5%9D%97%E9%93%BE%E7%9A%84%E5%A2%9E%E9%95%BF%EF%BC%8C%E6%96%B0%E5%8A%A0%E5%85%A5%E4%B8%80%E4%B8%AA%E8%8A%82%E7%82%B9%E4%BC%9A%E4%B8%8D%E4%BC%9A%E8%80%97%E6%97%B6%E5%BE%88%E4%B9%85"><span class="toc-number">2.0.5.</span> <span class="toc-text">随着区块链的增长，新加入一个节点会不会耗时很久</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#51-%E6%94%BB%E5%87%BB"><span class="toc-number">2.0.6.</span> <span class="toc-text">51 攻击</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#SHA-256-%E4%B9%8B%E5%A4%96%E7%9A%84%E6%96%B9%E6%A1%88"><span class="toc-number">2.0.7.</span> <span class="toc-text">SHA-256 之外的方案</span></a></li></ol></li></ol></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        bitcoin
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2020-01-31T05:01:49.000Z" itemprop="datePublished">2020-01-31</time>
+        
+      
+    </div>
+
+
+      
+
+      
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/distributed/" rel="tag">distributed</a>
+    </div>
+
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <h2 id="Bitcoin"><a href="#Bitcoin" class="headerlink" title="Bitcoin"></a>Bitcoin</h2><p>bitcoin 主要解决的问题（我相信你们在各种地方看过一万遍了）：</p>
+<ul>
+<li>forgery: 伪造</li>
+<li>double spending </li>
+<li>theft</li>
+</ul>
+<p>我们需要考量的问题是：</p>
+<ul>
+<li>区块链是怎么存储的，Transaction Block 这些结构的关系是什么</li>
+<li>如何防止错误</li>
+<li>如何防止distributed system 经常出现的问题</li>
+</ul>
+<h3 id="Transaction"><a href="#Transaction" class="headerlink" title="Transaction"></a>Transaction</h3><p>Bitcoin 的 idea 是把数据当成是 signed sequence of transactions</p>
+<blockquote>
+<p>every coin has a sequence of transaction records one for each time this coin was transferred as payment a coin’s latest transaction indicates who owns it now</p>
+</blockquote>
+<p>在论文中， txn 格式是：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">pub(user1): public key of new owner</span><br><span class="line">hash(prev): hash of this coin&#x27;s previous transaction record</span><br><span class="line">sig(user2): signature over transaction by previous owner&#x27;s private key</span><br><span class="line">(BitCoin is much more complex: amount (fractional), multiple in/out, ...)</span><br></pre></td></tr></table></figure>
+<p>可以看看他的 Transaction Example</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">Y owns a coin, previously given to it by X: </span><br><span class="line">// X-&gt;Y coin, T7: pub(Y), hash(T6) 前一次交易, sig(X) X 用 private key 签名出的唯一值</span><br><span class="line">    T7: pub(Y), hash(T6), sig(X)</span><br></pre></td></tr></table></figure>
+<p>跟着上面的</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">Y buys a hamburger from Z and pays with this coin</span><br><span class="line">	// Y 拿到 Z 的 pub key</span><br><span class="line">  Z sends public key to Y</span><br><span class="line">  // pub key 可以用于加密，Y 创建记录</span><br><span class="line">  Y creates a new transaction and signs it</span><br><span class="line">  T8: pub(Z), hash(T7), sig(Y)</span><br></pre></td></tr></table></figure>
+<p>验证：T8 的 sig 和 T7 的 pub 是一样的</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">Y sends transaction record to Z</span><br><span class="line">Z verifies:</span><br><span class="line">  T8&#x27;s sig() corresponds to T7&#x27;s pub()</span><br><span class="line">Z gives hamburger to Y</span><br></pre></td></tr></table></figure>
+<p>Z 的余额是 Z 知道的没有花费的 transaction 记录（感觉这个过程类似于从 log 中读）</p>
+<blockquote>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Z &quot;owns&quot; a coin = Z knows private key for &quot;new owner&quot; public key in latest xaction</span><br></pre></td></tr></table></figure>
+</blockquote>
+<p>也就是说，Z 有一个币，表示 Z 知道 T8 的 pub(Z) 可以解析出来多少 （xaction == Transaction）</p>
+<p>如何防止一个签名的 double-spending</p>
+<blockquote>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">what do we need?</span><br><span class="line">  publish log of all transactions to everyone, in same order</span><br><span class="line">    so Q knows about Y-&gt;Z, and will reject Y-&gt;Q</span><br><span class="line">    a &quot;public ledger&quot;</span><br><span class="line">  ensure Y can&#x27;t un-publish a transaction</span><br></pre></td></tr></table></figure>
+</blockquote>
+<p>在事实上要求对方广播 下面这段介绍了和 raft 之类 consensus 的区别</p>
+<blockquote>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line">why not publish transactions like this:</span><br><span class="line">  1000s of peers, run by anybody, no trust required in any one peer</span><br><span class="line">  peers flood new transactions over &quot;overlay&quot;</span><br><span class="line">  transaction Y-&gt;Z only acceptable if majority of peers think it is valid</span><br><span class="line">    i.e. they don&#x27;t know of any Y-&gt;Q</span><br><span class="line">    hopefully majority overlap ensures double-spend is detected</span><br><span class="line">  how to count votes?</span><br><span class="line">    how to even count peers so you know what a majority is?</span><br><span class="line">    perhaps distinct IP addresses?</span><br><span class="line">  problem: &quot;sybil attack&quot; // 女巫攻击，制造大量节点加入系统</span><br><span class="line">    IP addresses are not secure -- easy to forge</span><br><span class="line">    attacker pretends to have 10,000 computers -- majority</span><br><span class="line">    when Z asks, attacker&#x27;s majority says &quot;we only know of Y-&gt;Z&quot;</span><br><span class="line">    when Q asks, attacker&#x27;s majority says &quot;we only know of Y-&gt;Q&quot;</span><br><span class="line">  voting is hard in &quot;open&quot; p2p schemes</span><br></pre></td></tr></table></figure>
+</blockquote>
+<h3 id="Block-Chain"><a href="#Block-Chain" class="headerlink" title="Block Chain"></a>Block Chain</h3><p>是一个 agreement on transaction log to prevent double-spending</p>
+<p>包含了 transaction 的整个记录，然后有很多 replica (论文中叫 peers, 这里指的是别的区块链系统，叫 replica 也不太合适)</p>
+<ul>
+<li>每个包含完整的备份（太 tm 浪费了吧）</li>
+<li>new block / transaction 需要广播给其他的 peers</li>
+</ul>
+<p>每个 block 包含：</p>
+<ul>
+<li>hash(prev_block) // 注意是 block</li>
+<li>一个 transaction 的顺序集合 </li>
+<li>“nonce” (not quite a nonce in the usual cryptographic sense)</li>
+<li>current time: 现在的时间戳</li>
+</ul>
+<p>尽量每10分钟产生一个 block chain, 同时记录只有被放在 block chain 上才会被信任</p>
+<blockquote>
+<p>在进行随机散列运算时，工作量证明机制引入了对某一个特定值的扫描工作，比方说 SHA‐256 下，随机散列值以一个或多个 0 开始。那么随着 0 的数目的上升, 找到这个解所需要的工作量 将呈指数增长，而对结果进行检验则仅需要一次随机散列运算。</p>
+</blockquote>
+<p>block 的创建是由 mining 来做的，多个 cpu 尝试很多次，来挖出新的 block. 在这个系统中可能会有几个问题，我记得我们在 Raft 中也有类似的问题</p>
+<ul>
+<li>顺序提交：消息的提交要求是顺序的，这个在 Raft 中由单个 master 来处理</li>
+<li>blockchain fork: 由于网络分区或者两个peer 同时算出了新的block等原因， blockchain 被分成没有共识的多个。</li>
+</ul>
+<p>先介绍第二个问题，bitcoin 解决的方案是：</p>
+<ul>
+<li>同样长度、新 block 不同的 chain 都会被保持, 直到新的最长纪录覆盖</li>
+<li>假设新产生了 BZ/BQ 两条链，有更多被观测到的一方，有更多机器，<em>更大概率</em>找到新的节点，然后更长的 block-chain 会被 apply</li>
+<li>在一个系统（分区内部）会下载被 apply 的区块链</li>
+</ul>
+<p>第二个问题还会有变体：Y 用同一个 hash 给不同 block chain 发送，会造成分裂；给同一个发送的时候，不会容许这种顺序出现。</p>
+<h3 id="激励"><a href="#激励" class="headerlink" title="激励"></a>激励</h3><p>前文介绍了 mining, 挖矿的过程中, 新区块会附带一个由创造者拥有的电子货币。</p>
+<p>同时，也有交易费。输出小于输入时，差额是交易费</p>
+<h3 id="Reclaiming-Disk-Space"><a href="#Reclaiming-Disk-Space" class="headerlink" title="Reclaiming Disk Space"></a><strong>Reclaiming Disk Space</strong></h3><p>Once the latest transaction in a coin is buried under enough blocks, the spent transactions before it can be discarded to save disk space.</p>
+<h2 id="FAQ"><a href="#FAQ" class="headerlink" title="FAQ"></a>FAQ</h2><h4 id="是不是-signature-就足够了"><a href="#是不是-signature-就足够了" class="headerlink" title="是不是 signature 就足够了"></a>是不是 signature 就足够了</h4><p>答：不是，可能会有人把这个 signature copy 一份，然后重复转账交易行为</p>
+<h4 id="Proof-of-work-的-purpose"><a href="#Proof-of-work-的-purpose" class="headerlink" title="Proof-of-work 的 purpose"></a>Proof-of-work 的 purpose</h4><p>攻击者需要 51% 攻击</p>
+<h4 id="有比-pow-更节省资源的算法么"><a href="#有比-pow-更节省资源的算法么" class="headerlink" title="有比 pow 更节省资源的算法么"></a>有比 pow 更节省资源的算法么</h4><blockquote>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">A: Proof-of-work is hard to fake or simulate, a nice property in a</span><br><span class="line">totally open system like Bitcoin where you cannot trust anyone to</span><br><span class="line">follow rules. There are some alternate schemes; search the web for</span><br><span class="line">proof-of-stake or look at Algorand and Byzcoin, for example. In a</span><br><span class="line">smallish closed system, in which the participants are known though</span><br><span class="line">not entirely trusted, Byzantine agreement protocols could be used, as</span><br><span class="line">in Hyperledger.</span><br></pre></td></tr></table></figure>
+</blockquote>
+<h4 id="传播很多消息的处理"><a href="#传播很多消息的处理" class="headerlink" title="传播很多消息的处理"></a>传播很多消息的处理</h4><blockquote>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">There&#x27;s a small chance that two miners find blocks at the same time,</span><br><span class="line">perhaps B50&#x27; containing &quot;pay Bob&quot; and B50&#x27;&#x27; containing &quot;pay Charlie&quot;. At</span><br><span class="line">this point there&#x27;s a fork in the block chain. These two blocks will be</span><br><span class="line">flooded to all the nodes. Each node will start mining a successor to one</span><br><span class="line">of them (the first it hears). Again the most likely outcome is that a</span><br><span class="line">single miner will finish significantly before any other miner, and flood</span><br><span class="line">the successor, and most peers will switch that winning fork. The chance</span><br><span class="line">of repeatedly having two miners simultaneously find blocks gets very</span><br><span class="line">small as the forks get longer. So eventually all the peers will switch</span><br><span class="line">to the same fork, and in fork there will be only one spend of the coin.</span><br><span class="line"></span><br><span class="line">The possibility of accidentally having a short-lived fork is the reason</span><br><span class="line">that careful clients will wait until there are a few successor blocks</span><br><span class="line">before believing a transaction.</span><br></pre></td></tr></table></figure>
+</blockquote>
+<h4 id="随着区块链的增长，新加入一个节点会不会耗时很久"><a href="#随着区块链的增长，新加入一个节点会不会耗时很久" class="headerlink" title="随着区块链的增长，新加入一个节点会不会耗时很久"></a>随着区块链的增长，新加入一个节点会不会耗时很久</h4><ul>
+<li>一旦下载完了就不再需要了</li>
+<li>一些 user 可以信任身边有完整的 chain 的用户（或者矿工？）</li>
+</ul>
+<h4 id="51-攻击"><a href="#51-攻击" class="headerlink" title="51 攻击"></a>51 攻击</h4><p>对于 51% 攻击：<a target="_blank" rel="noopener" href="https://www.coindesk.com/51-attacks-real-threat-bitcoin">https://www.coindesk.com/51-attacks-real-threat-bitcoin</a> 实际上出现 51% 这个系统就 GG 了</p>
+<h4 id="SHA-256-之外的方案"><a href="#SHA-256-之外的方案" class="headerlink" title="SHA-256 之外的方案"></a>SHA-256 之外的方案</h4><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">Q: Are there any ways for Bitcoin mining to do useful work, beyond simply</span><br><span class="line">brute-force calculating SHA-256 hashes?</span><br><span class="line"></span><br><span class="line">A: Maybe -- here are two attempts to do what you suggest:</span><br><span class="line">https://www.cs.umd.edu/~elaine/docs/permacoin.pdf</span><br><span class="line">http://primecoin.io/</span><br></pre></td></tr></table></figure>
+<p>阅读比特币论文有感：</p>
+<ul>
+<li>嗯，每个区块会存所有的信息…所有信息？什么几把？哦有个 merkle tree, 等等你又没有 snapshot 或者 compaction, 在这有鬼用啊，难道你跟 buddy 算法一样 coin 有新纪录就 mark as delete 然后把 sibling 一起删掉么</li>
+<li>嗯，处理脑裂…哦这个叫 fork… 等会儿，也就是说这个系统只有最终一致性，不能保证读到正确的数据？网络分区怎么办？哦多等几个 block 验证…什么几把</li>
+<li>嗯，一个链要保证所有的记录是有序的…fuck…这代价太高了吧</li>
+</ul>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Bitcoin"><span class="toc-number">1.</span> <span class="toc-text">Bitcoin</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Transaction"><span class="toc-number">1.1.</span> <span class="toc-text">Transaction</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Block-Chain"><span class="toc-number">1.2.</span> <span class="toc-text">Block Chain</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%BF%80%E5%8A%B1"><span class="toc-number">1.3.</span> <span class="toc-text">激励</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Reclaiming-Disk-Space"><span class="toc-number">1.4.</span> <span class="toc-text">Reclaiming Disk Space</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#FAQ"><span class="toc-number">2.</span> <span class="toc-text">FAQ</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%98%AF%E4%B8%8D%E6%98%AF-signature-%E5%B0%B1%E8%B6%B3%E5%A4%9F%E4%BA%86"><span class="toc-number">2.0.1.</span> <span class="toc-text">是不是 signature 就足够了</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Proof-of-work-%E7%9A%84-purpose"><span class="toc-number">2.0.2.</span> <span class="toc-text">Proof-of-work 的 purpose</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%9C%89%E6%AF%94-pow-%E6%9B%B4%E8%8A%82%E7%9C%81%E8%B5%84%E6%BA%90%E7%9A%84%E7%AE%97%E6%B3%95%E4%B9%88"><span class="toc-number">2.0.3.</span> <span class="toc-text">有比 pow 更节省资源的算法么</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E4%BC%A0%E6%92%AD%E5%BE%88%E5%A4%9A%E6%B6%88%E6%81%AF%E7%9A%84%E5%A4%84%E7%90%86"><span class="toc-number">2.0.4.</span> <span class="toc-text">传播很多消息的处理</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E9%9A%8F%E7%9D%80%E5%8C%BA%E5%9D%97%E9%93%BE%E7%9A%84%E5%A2%9E%E9%95%BF%EF%BC%8C%E6%96%B0%E5%8A%A0%E5%85%A5%E4%B8%80%E4%B8%AA%E8%8A%82%E7%82%B9%E4%BC%9A%E4%B8%8D%E4%BC%9A%E8%80%97%E6%97%B6%E5%BE%88%E4%B9%85"><span class="toc-number">2.0.5.</span> <span class="toc-text">随着区块链的增长，新加入一个节点会不会耗时很久</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#51-%E6%94%BB%E5%87%BB"><span class="toc-number">2.0.6.</span> <span class="toc-text">51 攻击</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#SHA-256-%E4%B9%8B%E5%A4%96%E7%9A%84%E6%96%B9%E6%A1%88"><span class="toc-number">2.0.7.</span> <span class="toc-text">SHA-256 之外的方案</span></a></li></ol></li></ol></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/01/31/bitcoin/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/01/31/bitcoin/&text=bitcoin"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/01/31/bitcoin/&title=bitcoin"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/01/31/bitcoin/&is_video=false&description=bitcoin"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=bitcoin&body=Check out this article: http://blog.mwish.me/2020/01/31/bitcoin/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/01/31/bitcoin/&title=bitcoin"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/01/31/bitcoin/&title=bitcoin"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/01/31/bitcoin/&title=bitcoin"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/01/31/bitcoin/&title=bitcoin"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/01/31/bitcoin/&name=bitcoin&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/01/31/bitcoin/&t=bitcoin"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="如果对 WAL 这个名词陌生的话…我想这篇文章的读者应该不会真的没听过 WAL 吧… 实际上数据库的 WAL 还是比较难阅读的，以 B+Tree + Undo&#x2F;Redo Log 为例，Log 的 Undo&#x2F;Redo 和 checkout point, GC 本身有比较大的复杂性，这给阅读带来了很大的困难。 LevelDB 的结构是 LSMTree, LSMTree 原论文中，它的结构如下：  这是">
+<meta property="og:type" content="article">
+<meta property="og:title" content="LevelDB Log: WAL of LSMTree C0">
+<meta property="og:url" content="http://blog.mwish.me/2020/05/29/LevelDB-Log-WAL-of-LSMTree-C0/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="如果对 WAL 这个名词陌生的话…我想这篇文章的读者应该不会真的没听过 WAL 吧… 实际上数据库的 WAL 还是比较难阅读的，以 B+Tree + Undo&#x2F;Redo Log 为例，Log 的 Undo&#x2F;Redo 和 checkout point, GC 本身有比较大的复杂性，这给阅读带来了很大的困难。 LevelDB 的结构是 LSMTree, LSMTree 原论文中，它的结构如下：  这是">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/9F1865E8-603E-4385-B237-C776166512E8.png">
+<meta property="article:published_time" content="2020-05-28T19:49:55.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.564Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/9F1865E8-603E-4385-B237-C776166512E8.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>LevelDB Log: WAL of LSMTree C0</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2020/06/02/LevelDB-memtable/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2020/05/25/LevelDB-Arena-memory-of-skiplist/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/05/29/LevelDB-Log-WAL-of-LSMTree-C0/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/05/29/LevelDB-Log-WAL-of-LSMTree-C0/&text=LevelDB Log: WAL of LSMTree C0"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/05/29/LevelDB-Log-WAL-of-LSMTree-C0/&title=LevelDB Log: WAL of LSMTree C0"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/05/29/LevelDB-Log-WAL-of-LSMTree-C0/&is_video=false&description=LevelDB Log: WAL of LSMTree C0"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=LevelDB Log: WAL of LSMTree C0&body=Check out this article: http://blog.mwish.me/2020/05/29/LevelDB-Log-WAL-of-LSMTree-C0/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/05/29/LevelDB-Log-WAL-of-LSMTree-C0/&title=LevelDB Log: WAL of LSMTree C0"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/05/29/LevelDB-Log-WAL-of-LSMTree-C0/&title=LevelDB Log: WAL of LSMTree C0"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/05/29/LevelDB-Log-WAL-of-LSMTree-C0/&title=LevelDB Log: WAL of LSMTree C0"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/05/29/LevelDB-Log-WAL-of-LSMTree-C0/&title=LevelDB Log: WAL of LSMTree C0"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/05/29/LevelDB-Log-WAL-of-LSMTree-C0/&name=LevelDB Log: WAL of LSMTree C0&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/05/29/LevelDB-Log-WAL-of-LSMTree-C0/&t=LevelDB Log: WAL of LSMTree C0"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%97%A5%E5%BF%97%E7%9A%84%E7%BB%93%E6%9E%84"><span class="toc-number">1.</span> <span class="toc-text">日志的结构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#filename"><span class="toc-number">2.</span> <span class="toc-text">filename</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Log-%E4%B8%8E-Writer"><span class="toc-number">3.</span> <span class="toc-text">Log 与 Writer</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Reader"><span class="toc-number">4.</span> <span class="toc-text">Reader</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%97%A5%E5%BF%97%E4%B8%8E%E9%94%99%E8%AF%AF%E5%A4%84%E7%90%86"><span class="toc-number">5.</span> <span class="toc-text">日志与错误处理</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        LevelDB Log: WAL of LSMTree C0
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2020-05-28T19:49:55.000Z" itemprop="datePublished">2020-05-29</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>如果对 WAL 这个名词陌生的话…我想这篇文章的读者应该不会真的没听过 WAL 吧…</p>
+<p>实际上数据库的 WAL 还是比较难阅读的，以 B+Tree + Undo/Redo Log 为例，Log 的 Undo/Redo 和 checkout point, GC 本身有比较大的复杂性，这给阅读带来了很大的困难。</p>
+<p>LevelDB 的结构是 LSMTree, LSMTree 原论文中，它的结构如下：</p>
+<p><img src="https://image.mwish.me/blog-image/9F1865E8-603E-4385-B237-C776166512E8.png" alt="9F1865E8-603E-4385-B237-C776166512E8"></p>
+<p>这是论文中的 figure 2.1, 我们可以看到C0 是在内存中的。也就是说，LevelDB 有相对简单的 WAL，作为写 memtable 之前写入的日志。</p>
+<p>我们需要关注的是：</p>
+<ol>
+<li>日志的结构是什么样的</li>
+<li>日志是什么时候开始写，有什么时候删除的</li>
+<li>对于盘的故障，日志怎么处理</li>
+<li>日志命名策略是什么</li>
+</ol>
+<hr>
+<h3 id="日志的结构"><a href="#日志的结构" class="headerlink" title="日志的结构"></a>日志的结构</h3><p>关于问题1，最好的阅读地点是：<a target="_blank" rel="noopener" href="https://github.com/google/leveldb/blob/master/doc/log_format.md">https://github.com/google/leveldb/blob/master/doc/log_format.md</a></p>
+<p>大概有这样的逻辑关系：</p>
+<ol>
+<li>The <strong>log file</strong> contents are a sequence of <em>32KB</em> blocks. The only exception is that the tail of the file may contain a partial block.</li>
+<li>Each block consists of a sequence of records:</li>
+</ol>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">block := record* trailer?</span><br><span class="line">record :=</span><br><span class="line">  checksum: uint32     // crc32c of type and data[] ; little-endian</span><br><span class="line">  length: uint16       // little-endian</span><br><span class="line">  type: uint8          // One of FULL, FIRST, MIDDLE, LAST</span><br><span class="line">  data: uint8[length]</span><br></pre></td></tr></table></figure>
+<p>总结一下：</p>
+<ul>
+<li>日志文件是可能的一个 header 加上若干个 block</li>
+<li>每个 block 结构这个有点像正则表达式，包含 <code>*</code> 个 record 和可能存在的 trailer</li>
+<li>每个 record 包含 crc32, little-endian 的 length, 一个类型和具体的 byte 数据</li>
+</ul>
+<blockquote>
+<p>A record never starts within the last six bytes of a block (since it won’t fit). Any leftover bytes here form the trailer, which must consist entirely of zero bytes and must be skipped by readers.</p>
+</blockquote>
+<ul>
+<li><code>trailer</code> 如上述内容，相当于是尾部的 padding，上一块的内容小于6即可跳过这些 padding。</li>
+</ul>
+<blockquote>
+<p> 为什么是 7byte</p>
+</blockquote>
+<p>可以贴一下<code>db/log_format.h</code> 的代码：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// Copyright (c) 2011 The LevelDB Authors. All rights reserved.</span></span><br><span class="line"><span class="comment">// Use of this source code is governed by a BSD-style license that can be</span></span><br><span class="line"><span class="comment">// found in the LICENSE file. See the AUTHORS file for names of contributors.</span></span><br><span class="line"><span class="comment">//</span></span><br><span class="line"><span class="comment">// Log format information shared by reader and writer.</span></span><br><span class="line"><span class="comment">// See ../doc/log_format.md for more detail.</span></span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="keyword">ifndef</span> STORAGE_LEVELDB_DB_LOG_FORMAT_H_</span></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> STORAGE_LEVELDB_DB_LOG_FORMAT_H_</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">namespace</span> leveldb &#123;</span><br><span class="line"><span class="keyword">namespace</span> log &#123;</span><br><span class="line"></span><br><span class="line"><span class="keyword">enum</span> <span class="title class_">RecordType</span> &#123;</span><br><span class="line">  <span class="comment">// Zero is reserved for preallocated files</span></span><br><span class="line">  kZeroType = <span class="number">0</span>,</span><br><span class="line"></span><br><span class="line">  kFullType = <span class="number">1</span>,</span><br><span class="line"></span><br><span class="line">  <span class="comment">// For fragments</span></span><br><span class="line">  kFirstType = <span class="number">2</span>,</span><br><span class="line">  kMiddleType = <span class="number">3</span>,</span><br><span class="line">  kLastType = <span class="number">4</span></span><br><span class="line">&#125;;</span><br><span class="line"><span class="type">static</span> <span class="type">const</span> <span class="type">int</span> kMaxRecordType = kLastType;</span><br><span class="line"></span><br><span class="line"><span class="type">static</span> <span class="type">const</span> <span class="type">int</span> kBlockSize = <span class="number">32768</span>;</span><br><span class="line"></span><br><span class="line"><span class="comment">// Header is checksum (4 bytes), length (2 bytes), type (1 byte).</span></span><br><span class="line"><span class="type">static</span> <span class="type">const</span> <span class="type">int</span> kHeaderSize = <span class="number">4</span> + <span class="number">2</span> + <span class="number">1</span>;</span><br><span class="line"></span><br><span class="line">&#125;  <span class="comment">// namespace log</span></span><br><span class="line">&#125;  <span class="comment">// namespace leveldb</span></span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="keyword">endif</span>  <span class="comment">// STORAGE_LEVELDB_DB_LOG_FORMAT_H_</span></span></span><br></pre></td></tr></table></figure>
+<ul>
+<li><code>kBlockSize</code> 是 32k, 即<code>32 * 1024 = 32768</code></li>
+<li><code>RecordType</code> 是个 <code>enum</code>, 有下列几种类型。<code>enum</code> 在 C++ 默认是 int, 不过似乎它就用了一位<ul>
+<li><code>kFullType</code> 全记录</li>
+<li><code>kFirstType</code> <code>kMiddleType</code> <code>kLastType</code>: 截断的记录的 <code>first, middle..., last</code></li>
+<li><code>kZeroType</code> 不了解</li>
+</ul>
+</li>
+<li><code>kHeaderSize</code> 包含 checksum, length, type。长度如前文所述。</li>
+</ul>
+<p>关于 first middle last 还可以参考文档：</p>
+<blockquote>
+<p>Example: consider a sequence of user records:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">A: length 1000</span><br><span class="line">B: length 97270</span><br><span class="line">C: length 8000</span><br></pre></td></tr></table></figure>
+<p><strong>A</strong> will be stored as a FULL record in the first block.</p>
+<p><strong>B</strong> will be split into three fragments: first fragment occupies the rest of the first block, second fragment occupies the entirety of the second block, and the third fragment occupies a prefix of the third block. This will leave six bytes free in the third block, which will be left empty as the trailer.</p>
+<p><strong>C</strong> will be stored as a FULL record in the fourth block.</p>
+</blockquote>
+<p>（吐槽一下，这么大的 kv，内存肯定一次分配了hhh）</p>
+<h3 id="filename"><a href="#filename" class="headerlink" title="filename"></a>filename</h3><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">std::string <span class="title">LogFileName</span><span class="params">(<span class="type">const</span> std::string&amp; dbname, <span class="type">uint64_t</span> number)</span> </span>&#123;</span><br><span class="line">  <span class="built_in">assert</span>(number &gt; <span class="number">0</span>);</span><br><span class="line">  <span class="keyword">return</span> <span class="built_in">MakeFileName</span>(dbname, number, <span class="string">&quot;log&quot;</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>接着看</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">static</span> std::string <span class="title">MakeFileName</span><span class="params">(<span class="type">const</span> std::string&amp; dbname, <span class="type">uint64_t</span> number,</span></span></span><br><span class="line"><span class="params"><span class="function">                                <span class="type">const</span> <span class="type">char</span>* suffix)</span> </span>&#123;</span><br><span class="line">  <span class="type">char</span> buf[<span class="number">100</span>];</span><br><span class="line">  std::<span class="built_in">snprintf</span>(buf, <span class="built_in">sizeof</span>(buf), <span class="string">&quot;/%06llu.%s&quot;</span>,</span><br><span class="line">                <span class="built_in">static_cast</span>&lt;<span class="type">unsigned</span> <span class="type">long</span> <span class="type">long</span>&gt;(number), suffix);</span><br><span class="line">  <span class="keyword">return</span> dbname + buf;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>以 <code>dbname_number.log</code> 形式保存文件</p>
+<h3 id="Log-与-Writer"><a href="#Log-与-Writer" class="headerlink" title="Log 与 Writer"></a>Log 与 Writer</h3><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">namespace</span> leveldb &#123;</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">WritableFile</span>;</span><br><span class="line"></span><br><span class="line"><span class="keyword">namespace</span> log &#123;</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">Writer</span> &#123;</span><br><span class="line"> <span class="keyword">public</span>:</span><br><span class="line">  <span class="comment">// Create a writer that will append data to &quot;*dest&quot;.</span></span><br><span class="line">  <span class="comment">// &quot;*dest&quot; must be initially empty.</span></span><br><span class="line">  <span class="comment">// &quot;*dest&quot; must remain live while this Writer is in use.</span></span><br><span class="line">  <span class="function"><span class="keyword">explicit</span> <span class="title">Writer</span><span class="params">(WritableFile* dest)</span></span>;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// Create a writer that will append data to &quot;*dest&quot;.</span></span><br><span class="line">  <span class="comment">// &quot;*dest&quot; must have initial length &quot;dest_length&quot;.</span></span><br><span class="line">  <span class="comment">// &quot;*dest&quot; must remain live while this Writer is in use.</span></span><br><span class="line">  <span class="built_in">Writer</span>(WritableFile* dest, <span class="type">uint64_t</span> dest_length);</span><br><span class="line"></span><br><span class="line">  <span class="built_in">Writer</span>(<span class="type">const</span> Writer&amp;) = <span class="keyword">delete</span>;</span><br><span class="line">  Writer&amp; <span class="keyword">operator</span>=(<span class="type">const</span> Writer&amp;) = <span class="keyword">delete</span>;</span><br><span class="line"></span><br><span class="line">  ~<span class="built_in">Writer</span>();</span><br><span class="line"></span><br><span class="line">  <span class="function">Status <span class="title">AddRecord</span><span class="params">(<span class="type">const</span> Slice&amp; slice)</span></span>;</span><br><span class="line"></span><br><span class="line"> <span class="keyword">private</span>:</span><br><span class="line">  <span class="function">Status <span class="title">EmitPhysicalRecord</span><span class="params">(RecordType type, <span class="type">const</span> <span class="type">char</span>* ptr, <span class="type">size_t</span> length)</span></span>;</span><br><span class="line"></span><br><span class="line">  WritableFile* dest_;</span><br><span class="line">  <span class="type">int</span> block_offset_;  <span class="comment">// Current offset in block</span></span><br><span class="line"></span><br><span class="line">  <span class="comment">// crc32c values for all supported record types.  These are</span></span><br><span class="line">  <span class="comment">// pre-computed to reduce the overhead of computing the crc of the</span></span><br><span class="line">  <span class="comment">// record type stored in the header.</span></span><br><span class="line">  <span class="type">uint32_t</span> type_crc_[kMaxRecordType + <span class="number">1</span>];</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line">&#125;  <span class="comment">// namespace log</span></span><br><span class="line">&#125;  <span class="comment">// namespace leveldb</span></span><br></pre></td></tr></table></figure>
+<ul>
+<li>带 <code>dest_length</code> 的相当于对 file 自带一定的 <code>offset</code></li>
+<li><code>AddRecord</code> 是 public 的，外部交给它添加日志</li>
+<li><code>EmitPhysicalRecord</code> 是实际写入的函数</li>
+</ul>
+<p>添加日志代码如下：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">Status <span class="title">Writer::AddRecord</span><span class="params">(<span class="type">const</span> Slice&amp; slice)</span> </span>&#123;</span><br><span class="line">  <span class="comment">// left is for slice.</span></span><br><span class="line">  <span class="type">const</span> <span class="type">char</span>* ptr = slice.<span class="built_in">data</span>();</span><br><span class="line">  <span class="type">size_t</span> left = slice.<span class="built_in">size</span>();</span><br><span class="line"></span><br><span class="line">  <span class="comment">// Fragment the record if necessary and emit it.  Note that if slice</span></span><br><span class="line">  <span class="comment">// is empty, we still want to iterate once to emit a single</span></span><br><span class="line">  <span class="comment">// zero-length record</span></span><br><span class="line">  Status s;</span><br><span class="line">  <span class="type">bool</span> begin = <span class="literal">true</span>;</span><br><span class="line">  <span class="keyword">do</span> &#123;</span><br><span class="line">    <span class="type">const</span> <span class="type">int</span> leftover = kBlockSize - block_offset_;</span><br><span class="line">    <span class="built_in">assert</span>(leftover &gt;= <span class="number">0</span>);</span><br><span class="line">    <span class="comment">// &lt; 7 byte, just padding it.</span></span><br><span class="line">    <span class="keyword">if</span> (leftover &lt; kHeaderSize) &#123;</span><br><span class="line">      <span class="comment">// Switch to a new block</span></span><br><span class="line">      <span class="keyword">if</span> (leftover &gt; <span class="number">0</span>) &#123;</span><br><span class="line">        <span class="comment">// Fill the trailer (literal below relies on kHeaderSize being 7)</span></span><br><span class="line">        <span class="built_in">static_assert</span>(kHeaderSize == <span class="number">7</span>, <span class="string">&quot;&quot;</span>);</span><br><span class="line">        dest_-&gt;<span class="built_in">Append</span>(<span class="built_in">Slice</span>(<span class="string">&quot;\x00\x00\x00\x00\x00\x00&quot;</span>, leftover));</span><br><span class="line">      &#125;</span><br><span class="line">      <span class="comment">// to a new block.</span></span><br><span class="line">      block_offset_ = <span class="number">0</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// Invariant: we never leave &lt; kHeaderSize bytes in a block.</span></span><br><span class="line">    <span class="built_in">assert</span>(kBlockSize - block_offset_ - kHeaderSize &gt;= <span class="number">0</span>);</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 目前 block 中可写入的量</span></span><br><span class="line">    <span class="type">const</span> <span class="type">size_t</span> avail = kBlockSize - block_offset_ - kHeaderSize;</span><br><span class="line">    <span class="comment">// 目前这个 block 中需要写入的数据量</span></span><br><span class="line">    <span class="type">const</span> <span class="type">size_t</span> fragment_length = (left &lt; avail) ? left : avail;</span><br><span class="line"></span><br><span class="line">    RecordType type;</span><br><span class="line">    <span class="comment">// end 表示在这个 block 内能否写完</span></span><br><span class="line">    <span class="type">const</span> <span class="type">bool</span> end = (left == fragment_length);</span><br><span class="line">    <span class="keyword">if</span> (begin &amp;&amp; end) &#123;</span><br><span class="line">      type = kFullType;</span><br><span class="line">    &#125; <span class="keyword">else</span> <span class="keyword">if</span> (begin) &#123;</span><br><span class="line">      type = kFirstType;</span><br><span class="line">    &#125; <span class="keyword">else</span> <span class="keyword">if</span> (end) &#123;</span><br><span class="line">      type = kLastType;</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">      type = kMiddleType;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    s = <span class="built_in">EmitPhysicalRecord</span>(type, ptr, fragment_length);</span><br><span class="line">    ptr += fragment_length;</span><br><span class="line">    left -= fragment_length;</span><br><span class="line">    begin = <span class="literal">false</span>;</span><br><span class="line">  &#125; <span class="keyword">while</span> (s.<span class="built_in">ok</span>() &amp;&amp; left &gt; <span class="number">0</span>);</span><br><span class="line">  <span class="keyword">return</span> s;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function">Status <span class="title">Writer::EmitPhysicalRecord</span><span class="params">(RecordType t, <span class="type">const</span> <span class="type">char</span>* ptr,</span></span></span><br><span class="line"><span class="params"><span class="function">                                  <span class="type">size_t</span> length)</span> </span>&#123;</span><br><span class="line">  <span class="built_in">assert</span>(length &lt;= <span class="number">0xffff</span>);  <span class="comment">// Must fit in two bytes</span></span><br><span class="line">  <span class="built_in">assert</span>(block_offset_ + kHeaderSize + length &lt;= kBlockSize);</span><br><span class="line"></span><br><span class="line">  <span class="comment">// Format the header</span></span><br><span class="line">  <span class="type">char</span> buf[kHeaderSize];</span><br><span class="line">  buf[<span class="number">4</span>] = <span class="built_in">static_cast</span>&lt;<span class="type">char</span>&gt;(length &amp; <span class="number">0xff</span>);</span><br><span class="line">  buf[<span class="number">5</span>] = <span class="built_in">static_cast</span>&lt;<span class="type">char</span>&gt;(length &gt;&gt; <span class="number">8</span>);</span><br><span class="line">  buf[<span class="number">6</span>] = <span class="built_in">static_cast</span>&lt;<span class="type">char</span>&gt;(t);</span><br><span class="line"></span><br><span class="line">  <span class="comment">// Compute the crc of the record type and the payload.</span></span><br><span class="line">  <span class="type">uint32_t</span> crc = crc32c::<span class="built_in">Extend</span>(type_crc_[t], ptr, length);</span><br><span class="line">  crc = crc32c::<span class="built_in">Mask</span>(crc);  <span class="comment">// Adjust for storage</span></span><br><span class="line">  <span class="built_in">EncodeFixed32</span>(buf, crc);</span><br><span class="line"></span><br><span class="line">  <span class="comment">// Write the header and the payload</span></span><br><span class="line">  Status s = dest_-&gt;<span class="built_in">Append</span>(<span class="built_in">Slice</span>(buf, kHeaderSize));</span><br><span class="line">  <span class="keyword">if</span> (s.<span class="built_in">ok</span>()) &#123;</span><br><span class="line">    s = dest_-&gt;<span class="built_in">Append</span>(<span class="built_in">Slice</span>(ptr, length));</span><br><span class="line">    <span class="keyword">if</span> (s.<span class="built_in">ok</span>()) &#123;</span><br><span class="line">      s = dest_-&gt;<span class="built_in">Flush</span>();</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">  block_offset_ += kHeaderSize + length;</span><br><span class="line">  <span class="keyword">return</span> s;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>我感觉没啥好说的，这代码真的很好理解，我加的注释都感觉很多余…</p>
+<p><code>EmitPhysicalRecord</code>如果写坏了（即 <code>s.ok</code> 不满足），会直接跳过这条记录</p>
+<h3 id="Reader"><a href="#Reader" class="headerlink" title="Reader"></a>Reader</h3><p><code>Reader</code> 代码相对会复杂很多，这里简单介绍一下：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">class</span> <span class="title class_">Reader</span> &#123;</span><br><span class="line"> <span class="keyword">public</span>:</span><br><span class="line">  <span class="comment">// Interface for reporting errors.</span></span><br><span class="line">  <span class="keyword">class</span> <span class="title class_">Reporter</span> &#123;</span><br><span class="line">   <span class="keyword">public</span>:</span><br><span class="line">    <span class="keyword">virtual</span> ~<span class="built_in">Reporter</span>();</span><br><span class="line"></span><br><span class="line">    <span class="comment">// Some corruption was detected.  &quot;size&quot; is the approximate number</span></span><br><span class="line">    <span class="comment">// of bytes dropped due to the corruption.</span></span><br><span class="line">    <span class="function"><span class="keyword">virtual</span> <span class="type">void</span> <span class="title">Corruption</span><span class="params">(<span class="type">size_t</span> bytes, <span class="type">const</span> Status&amp; status)</span> </span>= <span class="number">0</span>;</span><br><span class="line">  &#125;;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// Create a reader that will return log records from &quot;*file&quot;.</span></span><br><span class="line">  <span class="comment">// &quot;*file&quot; must remain live while this Reader is in use.</span></span><br><span class="line">  <span class="comment">//</span></span><br><span class="line">  <span class="comment">// If &quot;reporter&quot; is non-null, it is notified whenever some data is</span></span><br><span class="line">  <span class="comment">// dropped due to a detected corruption.  &quot;*reporter&quot; must remain</span></span><br><span class="line">  <span class="comment">// live while this Reader is in use.</span></span><br><span class="line">  <span class="comment">//</span></span><br><span class="line">  <span class="comment">// If &quot;checksum&quot; is true, verify checksums if available.</span></span><br><span class="line">  <span class="comment">//</span></span><br><span class="line">  <span class="comment">// The Reader will start reading at the first record located at physical</span></span><br><span class="line">  <span class="comment">// position &gt;= initial_offset within the file.</span></span><br><span class="line">  <span class="built_in">Reader</span>(SequentialFile* file, Reporter* reporter, <span class="type">bool</span> checksum,</span><br><span class="line">         <span class="type">uint64_t</span> initial_offset);</span><br><span class="line"></span><br><span class="line">  <span class="built_in">Reader</span>(<span class="type">const</span> Reader&amp;) = <span class="keyword">delete</span>;</span><br><span class="line">  Reader&amp; <span class="keyword">operator</span>=(<span class="type">const</span> Reader&amp;) = <span class="keyword">delete</span>;</span><br><span class="line"></span><br><span class="line">  ~<span class="built_in">Reader</span>();</span><br><span class="line"></span><br><span class="line">  <span class="comment">// Read the next record into *record.  Returns true if read</span></span><br><span class="line">  <span class="comment">// successfully, false if we hit end of the input.  May use</span></span><br><span class="line">  <span class="comment">// &quot;*scratch&quot; as temporary storage.  The contents filled in *record</span></span><br><span class="line">  <span class="comment">// will only be valid until the next mutating operation on this</span></span><br><span class="line">  <span class="comment">// reader or the next mutation to *scratch.</span></span><br><span class="line">  <span class="function"><span class="type">bool</span> <span class="title">ReadRecord</span><span class="params">(Slice* record, std::string* scratch)</span></span>;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// Returns the physical offset of the last record returned by ReadRecord.</span></span><br><span class="line">  <span class="comment">//</span></span><br><span class="line">  <span class="comment">// Undefined before the first call to ReadRecord.</span></span><br><span class="line">  <span class="function"><span class="type">uint64_t</span> <span class="title">LastRecordOffset</span><span class="params">()</span></span>;</span><br><span class="line"></span><br><span class="line"> <span class="keyword">private</span>:</span><br><span class="line">  <span class="comment">// Extend record types with the following special values</span></span><br><span class="line">  <span class="keyword">enum</span> &#123;</span><br><span class="line">    kEof = kMaxRecordType + <span class="number">1</span>,</span><br><span class="line">    <span class="comment">// Returned whenever we find an invalid physical record.</span></span><br><span class="line">    <span class="comment">// Currently there are three situations in which this happens:</span></span><br><span class="line">    <span class="comment">// * The record has an invalid CRC (ReadPhysicalRecord reports a drop)</span></span><br><span class="line">    <span class="comment">// * The record is a 0-length record (No drop is reported)</span></span><br><span class="line">    <span class="comment">// * The record is below constructor&#x27;s initial_offset (No drop is reported)</span></span><br><span class="line">    kBadRecord = kMaxRecordType + <span class="number">2</span></span><br><span class="line">  &#125;;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// Skips all blocks that are completely before &quot;initial_offset_&quot;.</span></span><br><span class="line">  <span class="comment">//</span></span><br><span class="line">  <span class="comment">// Returns true on success. Handles reporting.</span></span><br><span class="line">  <span class="function"><span class="type">bool</span> <span class="title">SkipToInitialBlock</span><span class="params">()</span></span>;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// 返回 kMaxRecordType 定义的 type 或者 eof</span></span><br><span class="line">  <span class="comment">// Return type, or one of the preceding special values</span></span><br><span class="line">  <span class="function"><span class="type">unsigned</span> <span class="type">int</span> <span class="title">ReadPhysicalRecord</span><span class="params">(Slice* result)</span></span>;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// Reports dropped bytes to the reporter.</span></span><br><span class="line">  <span class="comment">// buffer_ must be updated to remove the dropped bytes prior to invocation.</span></span><br><span class="line">  <span class="function"><span class="type">void</span> <span class="title">ReportCorruption</span><span class="params">(<span class="type">uint64_t</span> bytes, <span class="type">const</span> <span class="type">char</span>* reason)</span></span>;</span><br><span class="line">  <span class="function"><span class="type">void</span> <span class="title">ReportDrop</span><span class="params">(<span class="type">uint64_t</span> bytes, <span class="type">const</span> Status&amp; reason)</span></span>;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// SequentialFile,  * const 即不会指向别的对象</span></span><br><span class="line">  SequentialFile* <span class="type">const</span> file_;</span><br><span class="line">  <span class="comment">// Reporter 上报事件</span></span><br><span class="line">  Reporter* <span class="type">const</span> reporter_;</span><br><span class="line">  <span class="comment">// 是否使用 checksum</span></span><br><span class="line">  <span class="type">bool</span> <span class="type">const</span> checksum_;</span><br><span class="line">  <span class="comment">// 感觉上 backing_store_ 是一个 kBlockSize 大小的数组</span></span><br><span class="line">  <span class="comment">// 用来存放读到的信息。</span></span><br><span class="line">  <span class="type">char</span>* <span class="type">const</span> backing_store_;</span><br><span class="line">  <span class="comment">// 读 buffer, 指向 backing_store</span></span><br><span class="line">  Slice buffer_;</span><br><span class="line">  <span class="comment">// EOF 处理</span></span><br><span class="line">  <span class="type">bool</span> eof_;  <span class="comment">// Last Read() indicated EOF by returning &lt; kBlockSize</span></span><br><span class="line"></span><br><span class="line">  <span class="comment">// 文件中 last_record 读的 offset</span></span><br><span class="line">  <span class="comment">// Offset of the last record returned by ReadRecord.</span></span><br><span class="line">  <span class="type">uint64_t</span> last_record_offset_;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// 维护的 buffer 的 offset</span></span><br><span class="line">  <span class="comment">// Offset of the first location past the end of buffer_.</span></span><br><span class="line">  <span class="type">uint64_t</span> end_of_buffer_offset_;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// The Reader will start reading at the first record located at physical</span></span><br><span class="line">  <span class="comment">//   position &gt;= initial_offset within the file.</span></span><br><span class="line">  <span class="comment">// Offset at which to start looking for the first record to return</span></span><br><span class="line">  <span class="type">uint64_t</span> <span class="type">const</span> initial_offset_;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// True if we are resynchronizing after a seek (initial_offset_ &gt; 0). In</span></span><br><span class="line">  <span class="comment">// particular, a run of kMiddleType and kLastType records can be silently</span></span><br><span class="line">  <span class="comment">// skipped in this mode</span></span><br><span class="line">  <span class="comment">// 是否需要重新同步，通常因为 initial_offset_ seek 之后导致</span></span><br><span class="line">  <span class="type">bool</span> resyncing_;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<ul>
+<li>外部调用 read-offset 来读取信息</li>
+<li><code>backing_store_</code> 和 <code>buffer_</code> 用来管理读到的信息，<code>end_of_buffer_offset_</code> 是标注<code>buffer_</code> 读到的信息的 length 的</li>
+<li><code>eof_</code> 表示读取是否是 <code>eof</code> 状态</li>
+<li><code>initial_offset_</code> 表示最初跳过的 offset, 实现的时候为了对齐之类的理由不会直接 seek 到对应位置，而是 seek 到 block 的开头，然后 <code>resyncing_</code> 。</li>
+</ul>
+<p>reader 构造函数如下：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">Reader::<span class="built_in">Reader</span>(SequentialFile* file, Reporter* reporter, <span class="type">bool</span> checksum,</span><br><span class="line">               <span class="type">uint64_t</span> initial_offset)</span><br><span class="line">    : <span class="built_in">file_</span>(file),</span><br><span class="line">      <span class="built_in">reporter_</span>(reporter),</span><br><span class="line">      <span class="built_in">checksum_</span>(checksum),</span><br><span class="line">      <span class="built_in">backing_store_</span>(<span class="keyword">new</span> <span class="type">char</span>[kBlockSize]),</span><br><span class="line">      <span class="built_in">buffer_</span>(),</span><br><span class="line">      <span class="built_in">eof_</span>(<span class="literal">false</span>),</span><br><span class="line">      <span class="built_in">last_record_offset_</span>(<span class="number">0</span>),</span><br><span class="line">      <span class="built_in">end_of_buffer_offset_</span>(<span class="number">0</span>),</span><br><span class="line">      <span class="built_in">initial_offset_</span>(initial_offset),</span><br><span class="line">      <span class="built_in">resyncing_</span>(initial_offset &gt; <span class="number">0</span>) &#123;&#125;</span><br></pre></td></tr></table></figure>
+<p>其实比较有意思的是 <code>backing_store_</code> 的初始化，为什么要在堆上捏=，=我也不太了解</p>
+<p>读流程大致如下，可以参考 <code>ReadRecord</code> 和 <code>ReadPhysicalRecord</code>：</p>
+<ul>
+<li>尝试seek到 block 的开头，然后每次读取的时候，读取一个 block。数据会被读取到 <code>backing_store_</code> 里，并以 <code>buffer_</code> 的形式访问</li>
+<li>在<code>buffer_</code> 中还有足够内容的时候，从里面读取 <code>record</code></li>
+<li>读取不完整的话会写入到 <code>scratch</code> 里，<code>ReadRecord</code> 实现了一个类似状态机的模型，最后会把 <code>record</code> 完整吐出来。</li>
+</ul>
+<h3 id="日志与错误处理"><a href="#日志与错误处理" class="headerlink" title="日志与错误处理"></a>日志与错误处理</h3><p>大部分错误处理我觉得看 reader 代码能学到不少。</p>
+<p>文档里还提到了和 <code>RecordIO Data Format</code> 的对比：<a target="_blank" rel="noopener" href="http://mesos.apache.org/documentation/latest/recordio/">http://mesos.apache.org/documentation/latest/recordio/</a></p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%97%A5%E5%BF%97%E7%9A%84%E7%BB%93%E6%9E%84"><span class="toc-number">1.</span> <span class="toc-text">日志的结构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#filename"><span class="toc-number">2.</span> <span class="toc-text">filename</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Log-%E4%B8%8E-Writer"><span class="toc-number">3.</span> <span class="toc-text">Log 与 Writer</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Reader"><span class="toc-number">4.</span> <span class="toc-text">Reader</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%97%A5%E5%BF%97%E4%B8%8E%E9%94%99%E8%AF%AF%E5%A4%84%E7%90%86"><span class="toc-number">5.</span> <span class="toc-text">日志与错误处理</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/05/29/LevelDB-Log-WAL-of-LSMTree-C0/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/05/29/LevelDB-Log-WAL-of-LSMTree-C0/&text=LevelDB Log: WAL of LSMTree C0"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/05/29/LevelDB-Log-WAL-of-LSMTree-C0/&title=LevelDB Log: WAL of LSMTree C0"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/05/29/LevelDB-Log-WAL-of-LSMTree-C0/&is_video=false&description=LevelDB Log: WAL of LSMTree C0"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=LevelDB Log: WAL of LSMTree C0&body=Check out this article: http://blog.mwish.me/2020/05/29/LevelDB-Log-WAL-of-LSMTree-C0/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/05/29/LevelDB-Log-WAL-of-LSMTree-C0/&title=LevelDB Log: WAL of LSMTree C0"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/05/29/LevelDB-Log-WAL-of-LSMTree-C0/&title=LevelDB Log: WAL of LSMTree C0"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/05/29/LevelDB-Log-WAL-of-LSMTree-C0/&title=LevelDB Log: WAL of LSMTree C0"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/05/29/LevelDB-Log-WAL-of-LSMTree-C0/&title=LevelDB Log: WAL of LSMTree C0"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/05/29/LevelDB-Log-WAL-of-LSMTree-C0/&name=LevelDB Log: WAL of LSMTree C0&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/05/29/LevelDB-Log-WAL-of-LSMTree-C0/&t=LevelDB Log: WAL of LSMTree C0"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

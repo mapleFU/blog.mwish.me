@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="SQL 是用户使用的，数据库会把 SQL 转换成某种内部表示，类似于扩展的关系代数。 关于词法、语法解析的部分，比较幸运的是，很多书都介绍了怎么处理 SQL:  https:&#x2F;&#x2F;book.douban.com&#x2F;subject&#x2F;6109479&#x2F; https:&#x2F;&#x2F;book.douban.com&#x2F;subject&#x2F;27082372&#x2F;   Query-evaluation Engine 处理给定的 Plan">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Notes-on-Query-Execution:part1">
+<meta property="og:url" content="http://blog.mwish.me/2021/02/08/Notes-on-Query-Execution/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="SQL 是用户使用的，数据库会把 SQL 转换成某种内部表示，类似于扩展的关系代数。 关于词法、语法解析的部分，比较幸运的是，很多书都介绍了怎么处理 SQL:  https:&#x2F;&#x2F;book.douban.com&#x2F;subject&#x2F;6109479&#x2F; https:&#x2F;&#x2F;book.douban.com&#x2F;subject&#x2F;27082372&#x2F;   Query-evaluation Engine 处理给定的 Plan">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/A23D3A76-BC84-4873-A2C1-74DA42F1F795.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/CC050B3A-1569-42B4-9924-18A91D72DAD9.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/2B0B9940-9714-42AD-989A-5CAE288F3F97.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/BE84D5FA-B143-4EA3-9AE8-5EE764779368.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/65D7BD6A-CD41-4656-8A08-A0C4A33FDBA4.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/B4BF6308-9A34-43D2-9B7E-6133055B1E96.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/467B05FF-55E6-4952-8DBA-B7B9006131AD.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/B37A2209-60C4-455D-8C49-9E3E1051290A.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/7CF38D96-CEAE-4BAC-9F35-811B82023EBA.png">
+<meta property="article:published_time" content="2021-02-07T16:11:00.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.570Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/A23D3A76-BC84-4873-A2C1-74DA42F1F795.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>Notes-on-Query-Execution:part1</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2021/02/08/Notes-on-Query-Cost-Estimation/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2020/12/29/Distributed-System-Master/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2021/02/08/Notes-on-Query-Execution/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2021/02/08/Notes-on-Query-Execution/&text=Notes-on-Query-Execution:part1"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2021/02/08/Notes-on-Query-Execution/&title=Notes-on-Query-Execution:part1"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2021/02/08/Notes-on-Query-Execution/&is_video=false&description=Notes-on-Query-Execution:part1"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Notes-on-Query-Execution:part1&body=Check out this article: http://blog.mwish.me/2021/02/08/Notes-on-Query-Execution/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2021/02/08/Notes-on-Query-Execution/&title=Notes-on-Query-Execution:part1"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2021/02/08/Notes-on-Query-Execution/&title=Notes-on-Query-Execution:part1"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2021/02/08/Notes-on-Query-Execution/&title=Notes-on-Query-Execution:part1"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2021/02/08/Notes-on-Query-Execution/&title=Notes-on-Query-Execution:part1"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2021/02/08/Notes-on-Query-Execution/&name=Notes-on-Query-Execution:part1&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2021/02/08/Notes-on-Query-Execution/&t=Notes-on-Query-Execution:part1"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9F%A5%E8%AF%A2%E7%9A%84%E4%BB%A3%E4%BB%B7"><span class="toc-number">1.</span> <span class="toc-text">查询的代价</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Selection"><span class="toc-number">2.</span> <span class="toc-text">Selection</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Conjunction-Disjunction-Negation"><span class="toc-number">2.1.</span> <span class="toc-text">Conjunction&#x2F;Disjunction&#x2F;Negation</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Sorting"><span class="toc-number">3.</span> <span class="toc-text">Sorting</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Join"><span class="toc-number">4.</span> <span class="toc-text">Join</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Nested-loop-join-Block-Nested-loop-join"><span class="toc-number">4.1.</span> <span class="toc-text">Nested-loop join &#x2F; Block Nested-loop join</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Indexed-Nested-loop-Join"><span class="toc-number">4.2.</span> <span class="toc-text">Indexed Nested-loop Join</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Sort-Merge-Join"><span class="toc-number">4.3.</span> <span class="toc-text">Sort-Merge Join</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Hash-Join"><span class="toc-number">4.4.</span> <span class="toc-text">Hash Join</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Hybrid-Hash-Join"><span class="toc-number">4.4.1.</span> <span class="toc-text">Hybrid Hash Join</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%9D%82%E9%A1%B9%EF%BC%9A%E4%BC%98%E5%8C%96"><span class="toc-number">4.5.</span> <span class="toc-text">杂项：优化</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%B6%E4%BB%96%E8%BF%90%E7%AE%97"><span class="toc-number">5.</span> <span class="toc-text">其他运算</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Duplicate-Elimination"><span class="toc-number">5.1.</span> <span class="toc-text">Duplicate Elimination</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Set"><span class="toc-number">5.2.</span> <span class="toc-text">Set</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Aggregation"><span class="toc-number">5.3.</span> <span class="toc-text">Aggregation</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9F%A5%E8%AF%A2%E6%89%A7%E8%A1%8C"><span class="toc-number">6.</span> <span class="toc-text">查询执行</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Notes-on-Query-Execution:part1
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2021-02-07T16:11:00.000Z" itemprop="datePublished">2021-02-08</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>SQL 是用户使用的，数据库会把 SQL 转换成某种内部表示，类似于扩展的关系代数。</p>
+<p>关于词法、语法解析的部分，比较幸运的是，很多书都介绍了怎么处理 SQL:</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://book.douban.com/subject/6109479/">https://book.douban.com/subject/6109479/</a></li>
+<li><a target="_blank" rel="noopener" href="https://book.douban.com/subject/27082372/">https://book.douban.com/subject/27082372/</a></li>
+</ul>
+<p><img src="https://image.mwish.me/blog-image/A23D3A76-BC84-4873-A2C1-74DA42F1F795.png" alt="A23D3A76-BC84-4873-A2C1-74DA42F1F795"></p>
+<p>Query-evaluation Engine 处理给定的 Plan, 执行这个 Plan, 然后把结果返回给查询。</p>
+<h2 id="查询的代价"><a href="#查询的代价" class="headerlink" title="查询的代价"></a>查询的代价</h2><p><a target="_blank" rel="noopener" href="https://colin-scott.github.io/personal_website/research/interactive_latency.html">https://colin-scott.github.io/personal_website/research/interactive_latency.html</a></p>
+<p>上面是每年的 Latency Numbers Every Programmer Should Know</p>
+<p>2020 年：</p>
+<ol>
+<li>Main memory reference: 100ns</li>
+<li>SSD random read: 16000ns</li>
+<li>1,000,000 bytes sequentially from SSD: 49, 000ns</li>
+<li>Disk seek: 2ms</li>
+<li>1,000,000 bytes sequentially from dosl: 825, 000 ns</li>
+</ol>
+<p>书上作者举的是2018年的例子，HDD Seek + 传送数据可以以10ms为单位，SSD则快得多，经常处在亚0.1 ms 级。（结合我这边生产，感觉基本没有用 HDD 的了…不晓得存储会不会这么搞）</p>
+<p>此外，有些东西会让这些统计变得更复杂：</p>
+<ol>
+<li>无论用 <code>mmap</code> 还是手写 buffer pool，读写的很大一部分势必在内存中</li>
+<li>如果系统有多个 disk, 那么并行访问多个 disk 可能能比在一个 disk 上 IO 快很多</li>
+</ol>
+<p>下面介绍了 Postgres 的策略：</p>
+<blockquote>
+<p>In addition, although we assume that data must be read from disk initially, it is possible that a block that is accessed is already present in the in-memory buffer. Again, for simplicity, we ignore this effect; as a result, the actual disk-access cost during the execution of a plan may be less than the estimated cost. To account (at least partially) for buffer residence, PostgreSQL uses the following “hack”: the cost of a random page read is assumed to be 1/10th of the actual random page read cost, to model the situation that 90% of reads are found to be resident in cache.</p>
+</blockquote>
+<h2 id="Selection"><a href="#Selection" class="headerlink" title="Selection"></a>Selection</h2><p>下面介绍一下 B+Tree 的一些参数：</p>
+<ol>
+<li>$h_i$ B+Tree 的高度。</li>
+<li>$t_s$ : block-access time (disk seek time plus rotational latency) ， 对于 SSD，2018 年大约是 90 microseconds；对于 HDD,2018 年大概是 4ms</li>
+<li>$t_T$ 单个 block 数据传输的时间，对于 SSD，有 10 microseconds for a 4-kilobyte block. 对于 HDD，这个速度慢得多</li>
+</ol>
+<p>（2021年还有人用 HDD 做 DB 吗？这也太慢了，氪金就是力量诶）</p>
+<p>那么，开销大概是：</p>
+<p><img src="https://image.mwish.me/blog-image/CC050B3A-1569-42B4-9924-18A91D72DAD9.png" alt="CC050B3A-1569-42B4-9924-18A91D72DAD9"></p>
+<p>给出一个 A2 的参考 Cluster Index Equality on Key: $(h_i + 1) * (t_T + t_s)$ . 在 cluster index找到就可以，路径都需要读到。</p>
+<p>A3 则是因为大概要找到 left-most page，然后执行 A1 类似的逻辑。以此类推。</p>
+<p>有上述内容，我们大概可以知道 MySQL 里面查询、回表之类的代价估计了。</p>
+<p>不过上述 cluster index 和 secondary index 就涉及到了索引选择的问题。如果满足要求的数据很多，那就直接走 cluster index 了，否则数据少的话走 secondary index 优化，岂不美哉。</p>
+<p>Postgres 实现了 bitmap index scan, 走 index 挑出需要 scan 的 block, 再决定具体的行为。可以看：<a target="_blank" rel="noopener" href="https://dba.stackexchange.com/questions/119386/understanding-bitmap-heap-scan-and-bitmap-index-scan">https://dba.stackexchange.com/questions/119386/understanding-bitmap-heap-scan-and-bitmap-index-scan</a></p>
+<h3 id="Conjunction-Disjunction-Negation"><a href="#Conjunction-Disjunction-Negation" class="headerlink" title="Conjunction/Disjunction/Negation"></a>Conjunction/Disjunction/Negation</h3><p>这…表面上懂的都懂，但这里涉及一个问题：假如有多于一个索引，索引选择怎么办</p>
+<blockquote>
+<p>To reduce the cost, we choose a θ<em>i</em> and one of algorithms A1 through A6 for which the combination results in the least cost for σθ<em>i</em> (<em>r</em>). The cost of algorithm A7 is given by the cost of the chosen algorithm.</p>
+</blockquote>
+<p>一种方式如上述 A7，根据 cost 选择一个代价最低的索引</p>
+<p>另一种方式 A8 是走 <strong>composite index</strong>（中文似乎叫联合索引）。</p>
+<p>A9 需要有对应的 UID 来做 tuple 标示，它会走多个索引，然后取相同的 uid。</p>
+<p>Disjunction 需要所有的路径都可以走 index, 否则退化成 Linear Scan.</p>
+<h2 id="Sorting"><a href="#Sorting" class="headerlink" title="Sorting"></a>Sorting</h2><p>(我感觉排序这种在面试里面出现过一万遍了，然后数据结构书一般都讲了外排序吧…)</p>
+<p>$M$ 系统可以提供给 sort 的 block 数目</p>
+<p>$b_b$ 被定义为 N-way Merge 阶段可以处理的 block 数目</p>
+<p>$b_r$ 为这个 relation 的 block 数量</p>
+<p><img src="https://image.mwish.me/blog-image/2B0B9940-9714-42AD-989A-5CAE288F3F97.png" alt="2B0B9940-9714-42AD-989A-5CAE288F3F97"></p>
+<ol>
+<li>第一次产生了 $b_r$ 的 block 输出，IO 大致为 $b_r / M$</li>
+<li>每一次能够处理 $M / b_b$ 次</li>
+<li>产生了上述结果</li>
+</ol>
+<p>可以看看 TiDB 的外部排序：<a target="_blank" rel="noopener" href="https://github.com/pingcap/tidb/issues/12431">https://github.com/pingcap/tidb/issues/12431</a></p>
+<h2 id="Join"><a href="#Join" class="headerlink" title="Join"></a>Join</h2><p>首先贴一下书上给的模型吧：</p>
+<p><img src="https://image.mwish.me/blog-image/BE84D5FA-B143-4EA3-9AE8-5EE764779368.png" alt="BE84D5FA-B143-4EA3-9AE8-5EE764779368"></p>
+<p>（想起了我们说唱大学，因为数据库没什么考的，所以要把书上给的 Schema 背下来，然后默写 SQL，真的傻逼）</p>
+<h3 id="Nested-loop-join-Block-Nested-loop-join"><a href="#Nested-loop-join-Block-Nested-loop-join" class="headerlink" title="Nested-loop join / Block Nested-loop join"></a>Nested-loop join / Block Nested-loop join</h3><p>真的有人在用吗…</p>
+<p>简单说：Nest-loop Join 就是搞两个循环来 Join; Block Nest-loop Join 就是针对关系的 block 搞两个循环，内层走 nest-loop join.</p>
+<p>不过值得注意的是，外层的 tuple 只会 Scan 一遍，内层的会 Scan 很多遍。理智告诉我们应该把内层的放小一点。</p>
+<p>实际上，考虑到类似的场景，例如 broadcast join: <a target="_blank" rel="noopener" href="https://jaceklaskowski.gitbooks.io/mastering-spark-sql/content/spark-sql-joins-broadcast.html">https://jaceklaskowski.gitbooks.io/mastering-spark-sql/content/spark-sql-joins-broadcast.html</a> 其实思路也差不多</p>
+<p><img src="https://image.mwish.me/blog-image/65D7BD6A-CD41-4656-8A08-A0C4A33FDBA4.png" alt="65D7BD6A-CD41-4656-8A08-A0C4A33FDBA4"></p>
+<p>上述方法能够减少内层 IO ，因为我们一次性读取了多个外层 block, 减少了循环的次数。</p>
+<h3 id="Indexed-Nested-loop-Join"><a href="#Indexed-Nested-loop-Join" class="headerlink" title="Indexed Nested-loop Join"></a>Indexed Nested-loop Join</h3><p><img src="https://image.mwish.me/blog-image/B4BF6308-9A34-43D2-9B7E-6133055B1E96.png" alt="B4BF6308-9A34-43D2-9B7E-6133055B1E96"></p>
+<blockquote>
+<p>Although the number of block transfers has been reduced, the seek cost has actually increased, increasing the total cost since a seek is considerably more expensive than a block transfer. However, if we had a selection on the <em>student</em> relation that reduces the number of rows significantly, indexed nested-loop join could be significantly faster than block nested-loop join.</p>
+</blockquote>
+<p>其实看上去有优势，但是并没有好多少。</p>
+<h3 id="Sort-Merge-Join"><a href="#Sort-Merge-Join" class="headerlink" title="Sort-Merge Join"></a>Sort-Merge Join</h3><p>这个去掉了 loop 的形式，采取 sort ，然后在有序的区间内作 equal 的操作。</p>
+<p>Merge 的操作是 $M + N$, sort 的操作如之前所叙述。此外，在 worst case 中，如果两个关系中所有的 join key 都一样，那么 Merge 的操作会退化到 $M * N$</p>
+<p>此外，有一种 <strong>Hybrid merge-join</strong> 的算法, 如果关系 A 走在 cluster index 或者已经有排序，关系 B 可以走 secondary index。那么可以 A 和 B merge, 再去 B 做类似 index bitmap scan 的操作。为什么需要这样呢？如果两边都是 secondary index 才能 Join 的话，可能会有莫名其妙的 IO 代价放大。</p>
+<h3 id="Hash-Join"><a href="#Hash-Join" class="headerlink" title="Hash Join"></a>Hash Join</h3><p>先看看书上的形式化定义：</p>
+<p><img src="https://image.mwish.me/blog-image/467B05FF-55E6-4952-8DBA-B7B9006131AD.png" alt="467B05FF-55E6-4952-8DBA-B7B9006131AD"></p>
+<p>(实际上这里用的是 grace hash join)</p>
+<p><img src="https://image.mwish.me/blog-image/B37A2209-60C4-455D-8C49-9E3E1051290A.png" alt="B37A2209-60C4-455D-8C49-9E3E1051290A"></p>
+<p>这里分为 build phase 和 probe phase。如果 s 能装在内存中，那就直接在内存中哈希，然后扫 r。</p>
+<p>否则给 s 和 r 构建 hash index, 然后每个相同的 hash 做 nested loop join 的操作。</p>
+<p>这里问题是：</p>
+<p>Skew/Overflow: 数据可能倾斜，这里可以避免产生过大的 block, 或者递归走 hash build</p>
+<p>关于 hash join, 这里有一些性能分析：</p>
+<p>对于 grace hash join, 每个 block 要：</p>
+<ol>
+<li>读取一遍，然后哈希写入一遍，这是一个 pass</li>
+<li>再读取一遍，做 nested loop join, 这是一个 pass</li>
+</ol>
+<p>此外，哈希会造成 $n_h$ 的冗余 block 开销，所以，这里的开销是：</p>
+<p>$3(b_r + b_s) + 4n_h$</p>
+<p>在递归的情况下，我们要利用到因子 $M$ 得到：</p>
+<p><img src="https://image.mwish.me/blog-image/7CF38D96-CEAE-4BAC-9F35-811B82023EBA.png" alt="7CF38D96-CEAE-4BAC-9F35-811B82023EBA"></p>
+<p>15-445 指出，一般来说 hash join 有着比较好的效率，不过已排序/要排序的数据，可以使用 sort join</p>
+<p>如果内层关系很小，且外层可以走索引，那 Index Nested Loop Join 会不错，否则可以试试 Hash Join，这个应该需要根据统计信息来判定。</p>
+<h4 id="Hybrid-Hash-Join"><a href="#Hybrid-Hash-Join" class="headerlink" title="Hybrid Hash Join"></a>Hybrid Hash Join</h4><p>hybrid hash join 做了内存足够的时候，执行上的优化，这里考虑的场景是「内存比较大，但是整个 Hash Join 也不是完全放得下」的场景。之前考虑过 s 全部构件在内存或者写到盘上的情况的情况，感觉 hybrid hash join 构建了一个半 on-disk hash，来优化这个操作。我们构造一个 $s_0$, 它包含:</p>
+<ul>
+<li>先将一个关系切分成 t 在内存中，k - t 在盘上，然后哈希</li>
+<li>另一个关系 load 起来 t 份和之前的关系直接处理，剩下的部分再走盘上哈希的流程。</li>
+</ul>
+<p>以此来优化。</p>
+<h3 id="杂项：优化"><a href="#杂项：优化" class="headerlink" title="杂项：优化"></a>杂项：优化</h3><p>使用 bloom filter 来优化 Join</p>
+<h2 id="其他运算"><a href="#其他运算" class="headerlink" title="其他运算"></a>其他运算</h2><h3 id="Duplicate-Elimination"><a href="#Duplicate-Elimination" class="headerlink" title="Duplicate Elimination"></a>Duplicate Elimination</h3><ul>
+<li>使用 hashing 或者 sorting 去重</li>
+<li>有些 DB 有 HLL 之类的模糊手段</li>
+</ul>
+<h3 id="Set"><a href="#Set" class="headerlink" title="Set"></a>Set</h3><p>大体是构建 hash map 甚至 on-disk hash, 然后 probe.</p>
+<h3 id="Aggregation"><a href="#Aggregation" class="headerlink" title="Aggregation"></a>Aggregation</h3><p>感觉是一个另类的统计，我实现的时候构建过一个统计的 hash, 统计完之后遍历取信息。这里有不同的方案：</p>
+<ol>
+<li>在构造过程中（类似流式的）取信息</li>
+<li>走 Hashing 来构造</li>
+</ol>
+<p>正常情况下，能不 swap 到盘上还是不 swap 到盘上吧，但是算子之间肯定还是有区别的。</p>
+<h2 id="查询执行"><a href="#查询执行" class="headerlink" title="查询执行"></a>查询执行</h2><p>15-445 应该介绍过 DB 的查询执行。比较传统的执行方式是 volcano 模型，这个模型和当时的硬件结构是有关的。同时，我们也知道 vectorize 和 codegen 等模型。我们可以在 <code>MonetDB/X100</code> 和  Efficiently Compiling Efficient Query Plans for Modern Hardware 这两篇论文找到对应的答案。</p>
+<p>这里表达式执行可以分为：</p>
+<ol>
+<li>物化执行（materialized evaluation）：中间关系的结果需要被物化</li>
+<li>流水线执行（pipeline evaluation）：可以减少临时文件（物化输出）的数量，将结果能直接输出给下一个表达式。这种方式能够消除读写中间输出的代价。其中，也能够这样区分对应的输出方式<ol>
+<li>需求驱动：由 top 的算子来发送 <code>next</code> 或者 <code>next_batch</code> 这样的请求，驱动下层的算子来取对应的数据。可以看作是 pull 的模型</li>
+<li>生产者驱动：底层的算子产生 tuple，然后输出给上层的算子。可以看作是 push 的模型</li>
+</ol>
+</li>
+</ol>
+<p>在查询中，可以流水化的边被称为 pipelined edge, 需要物化的（比如 Hash Join）被称为 blocking edge. 一般来说，不同的 pipeline edge 组成的子树可以并发执行，blocking 的可能需要物化。</p>
+<p>这里还介绍了一下 streaming 上的查询执行，感觉可以看：<a target="_blank" rel="noopener" href="https://www.skyzh.dev/posts/articles/2022-01-15-store-of-streaming-states/">https://www.skyzh.dev/posts/articles/2022-01-15-store-of-streaming-states/</a></p>
+<p>此外，有些 cache 亲和的查询执行策略，这里是让划分的 block 能 fit 在 L1/L2/L3 cache 中，从而加速查询。</p>
+<p>这里还介绍了查询编译和 columnar 执行，不过就提了两行。</p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9F%A5%E8%AF%A2%E7%9A%84%E4%BB%A3%E4%BB%B7"><span class="toc-number">1.</span> <span class="toc-text">查询的代价</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Selection"><span class="toc-number">2.</span> <span class="toc-text">Selection</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Conjunction-Disjunction-Negation"><span class="toc-number">2.1.</span> <span class="toc-text">Conjunction&#x2F;Disjunction&#x2F;Negation</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Sorting"><span class="toc-number">3.</span> <span class="toc-text">Sorting</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Join"><span class="toc-number">4.</span> <span class="toc-text">Join</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Nested-loop-join-Block-Nested-loop-join"><span class="toc-number">4.1.</span> <span class="toc-text">Nested-loop join &#x2F; Block Nested-loop join</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Indexed-Nested-loop-Join"><span class="toc-number">4.2.</span> <span class="toc-text">Indexed Nested-loop Join</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Sort-Merge-Join"><span class="toc-number">4.3.</span> <span class="toc-text">Sort-Merge Join</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Hash-Join"><span class="toc-number">4.4.</span> <span class="toc-text">Hash Join</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Hybrid-Hash-Join"><span class="toc-number">4.4.1.</span> <span class="toc-text">Hybrid Hash Join</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%9D%82%E9%A1%B9%EF%BC%9A%E4%BC%98%E5%8C%96"><span class="toc-number">4.5.</span> <span class="toc-text">杂项：优化</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%B6%E4%BB%96%E8%BF%90%E7%AE%97"><span class="toc-number">5.</span> <span class="toc-text">其他运算</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Duplicate-Elimination"><span class="toc-number">5.1.</span> <span class="toc-text">Duplicate Elimination</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Set"><span class="toc-number">5.2.</span> <span class="toc-text">Set</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Aggregation"><span class="toc-number">5.3.</span> <span class="toc-text">Aggregation</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9F%A5%E8%AF%A2%E6%89%A7%E8%A1%8C"><span class="toc-number">6.</span> <span class="toc-text">查询执行</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2021/02/08/Notes-on-Query-Execution/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2021/02/08/Notes-on-Query-Execution/&text=Notes-on-Query-Execution:part1"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2021/02/08/Notes-on-Query-Execution/&title=Notes-on-Query-Execution:part1"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2021/02/08/Notes-on-Query-Execution/&is_video=false&description=Notes-on-Query-Execution:part1"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Notes-on-Query-Execution:part1&body=Check out this article: http://blog.mwish.me/2021/02/08/Notes-on-Query-Execution/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2021/02/08/Notes-on-Query-Execution/&title=Notes-on-Query-Execution:part1"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2021/02/08/Notes-on-Query-Execution/&title=Notes-on-Query-Execution:part1"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2021/02/08/Notes-on-Query-Execution/&title=Notes-on-Query-Execution:part1"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2021/02/08/Notes-on-Query-Execution/&title=Notes-on-Query-Execution:part1"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2021/02/08/Notes-on-Query-Execution/&name=Notes-on-Query-Execution:part1&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2021/02/08/Notes-on-Query-Execution/&t=Notes-on-Query-Execution:part1"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

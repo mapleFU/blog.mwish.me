@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="这是 1998 年的关于 RDBMS 优化器的论文，旨在指出 70 年代到当时的优化器的变化。SQL 的优化器可以说是一个并不新颖的领域了，虽然新技术常有提出，但是很多还是在 Selinger 优化器和 Cascades 优化器的框架下。 IntroductionDB 的上层可以分为 Query Optimizer 和 Query Execution Engine，15-721 给出过一个比较合适">
+<meta property="og:type" content="article">
+<meta property="og:title" content="An Overview of Query Optimization in Relational Systems">
+<meta property="og:url" content="http://blog.mwish.me/2021/11/05/An-Overview-of-Query-Optimization-in-Relational-Systems/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="这是 1998 年的关于 RDBMS 优化器的论文，旨在指出 70 年代到当时的优化器的变化。SQL 的优化器可以说是一个并不新颖的领域了，虽然新技术常有提出，但是很多还是在 Selinger 优化器和 Cascades 优化器的框架下。 IntroductionDB 的上层可以分为 Query Optimizer 和 Query Execution Engine，15-721 给出过一个比较合适">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/9D7B6B21-4DFC-4768-B508-E1D6B3C3B5AE.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/465761AC-C4FA-472A-8CE4-88AF87E57A59.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/58149849-AF28-49B6-9210-8C69D0A0DFC7.png">
+<meta property="article:published_time" content="2021-11-05T07:14:16.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.572Z">
+<meta property="article:author" content="mwish">
+<meta property="article:tag" content="database, optimizer">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/9D7B6B21-4DFC-4768-B508-E1D6B3C3B5AE.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>An Overview of Query Optimization in Relational Systems</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2022/01/14/format-thinking/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2021/11/01/SSD-as-Cache-and-CacheLib/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2021/11/05/An-Overview-of-Query-Optimization-in-Relational-Systems/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2021/11/05/An-Overview-of-Query-Optimization-in-Relational-Systems/&text=An Overview of Query Optimization in Relational Systems"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2021/11/05/An-Overview-of-Query-Optimization-in-Relational-Systems/&title=An Overview of Query Optimization in Relational Systems"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2021/11/05/An-Overview-of-Query-Optimization-in-Relational-Systems/&is_video=false&description=An Overview of Query Optimization in Relational Systems"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=An Overview of Query Optimization in Relational Systems&body=Check out this article: http://blog.mwish.me/2021/11/05/An-Overview-of-Query-Optimization-in-Relational-Systems/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2021/11/05/An-Overview-of-Query-Optimization-in-Relational-Systems/&title=An Overview of Query Optimization in Relational Systems"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2021/11/05/An-Overview-of-Query-Optimization-in-Relational-Systems/&title=An Overview of Query Optimization in Relational Systems"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2021/11/05/An-Overview-of-Query-Optimization-in-Relational-Systems/&title=An Overview of Query Optimization in Relational Systems"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2021/11/05/An-Overview-of-Query-Optimization-in-Relational-Systems/&title=An Overview of Query Optimization in Relational Systems"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2021/11/05/An-Overview-of-Query-Optimization-in-Relational-Systems/&name=An Overview of Query Optimization in Relational Systems&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2021/11/05/An-Overview-of-Query-Optimization-in-Relational-Systems/&t=An Overview of Query Optimization in Relational Systems"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Introduction"><span class="toc-number">1.</span> <span class="toc-text">Introduction</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#System-R-Optimizer"><span class="toc-number">1.1.</span> <span class="toc-text">System-R Optimizer</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Search-Space"><span class="toc-number">2.</span> <span class="toc-text">Search Space</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Commuting-Between-Operators"><span class="toc-number">2.1.</span> <span class="toc-text">Commuting Between Operators</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Generalizing-Join-Sequencing"><span class="toc-number">2.1.1.</span> <span class="toc-text">Generalizing Join Sequencing</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Outerjoin-and-Join"><span class="toc-number">2.1.2.</span> <span class="toc-text">Outerjoin and Join</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Group-By-and-Join"><span class="toc-number">2.1.3.</span> <span class="toc-text">Group-By and Join</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Reducing-Multi-Block-Queries-to-Single-Block"><span class="toc-number">2.2.</span> <span class="toc-text">Reducing Multi-Block Queries to Single-Block</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Merging-Views"><span class="toc-number">2.2.1.</span> <span class="toc-text">Merging Views</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Merging-Nested-Subqueries"><span class="toc-number">2.2.2.</span> <span class="toc-text">Merging Nested Subqueries</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Using-Semijoin-Like-Techniques-for-Optimizing-Multi-Block-Queries"><span class="toc-number">2.3.</span> <span class="toc-text">Using Semijoin Like Techniques for Optimizing Multi-Block Queries</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Statistics-And-Cost-Estimation"><span class="toc-number">3.</span> <span class="toc-text">Statistics And Cost Estimation</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Statistical-Summaries-of-Data"><span class="toc-number">3.1.</span> <span class="toc-text">Statistical Summaries of Data</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Base-Data"><span class="toc-number">3.1.1.</span> <span class="toc-text">Base Data</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Propagation-of-Statistical-Information"><span class="toc-number">3.1.2.</span> <span class="toc-text">Propagation of Statistical Information</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Cost-Computation"><span class="toc-number">3.1.3.</span> <span class="toc-text">Cost Computation</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Enumeration-Architectures"><span class="toc-number">4.</span> <span class="toc-text">Enumeration Architectures</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Starburst"><span class="toc-number">4.1.</span> <span class="toc-text">Starburst</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Volcano-Cascades"><span class="toc-number">4.2.</span> <span class="toc-text">Volcano&#x2F;Cascades</span></a></li></ol></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        An Overview of Query Optimization in Relational Systems
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2021-11-05T07:14:16.000Z" itemprop="datePublished">2021-11-05</time>
+        
+      
+    </div>
+
+
+      
+
+      
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/database-optimizer/" rel="tag">database, optimizer</a>
+    </div>
+
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>这是 1998 年的关于 RDBMS 优化器的论文，旨在指出 70 年代到当时的优化器的变化。SQL 的优化器可以说是一个并不新颖的领域了，虽然新技术常有提出，但是很多还是在 Selinger 优化器和 Cascades 优化器的框架下。</p>
+<h2 id="Introduction"><a href="#Introduction" class="headerlink" title="Introduction"></a>Introduction</h2><p>DB 的上层可以分为 Query Optimizer 和 Query Execution Engine，15-721 给出过一个比较合适的图：</p>
+<p><img src="https://image.mwish.me/blog-image/9D7B6B21-4DFC-4768-B508-E1D6B3C3B5AE.png" alt="9D7B6B21-4DFC-4768-B508-E1D6B3C3B5AE"></p>
+<p>这里区分了 Physical Operators 和 Logical Operators. 这两个并不是一对一关系。Physical 的意思大概是更接近具体执行的步骤，它会被丢给 Execution Engine 执行。</p>
+<p>产生一个 Optimal 的 Plan 是一个 NP-Hard 的问题，而优化器本身也有许多技巧来进行优化，不过话说回来，优化器在有的时候也没有承担那么复杂的逻辑，比如在 TP 系统中，所有优化都依赖“索引”，简单的优化器直接做很多基于规则的优化和索引推断就行。</p>
+<p>言归正传，论文认为 Query Optimization 需要：</p>
+<ol>
+<li>Search Space: Plan 的生成空间</li>
+<li>Cost Estimation: 估算一个 Plan 是不是好</li>
+<li>Enumeration algorithm: 枚举出对应的 Plan</li>
+</ol>
+<p>上面感觉其实在说废话，但是挺重要的，因为 (1) 要包含最好的结果，(2) 要又快又准，(3) 要高效。</p>
+<h3 id="System-R-Optimizer"><a href="#System-R-Optimizer" class="headerlink" title="System-R Optimizer"></a>System-R Optimizer</h3><p>这篇论文简短介绍了 System-R 优化器的 Select-Project-Join (SPJ) 部分</p>
+<p><img src="https://image.mwish.me/blog-image/465761AC-C4FA-472A-8CE4-88AF87E57A59.png" alt="465761AC-C4FA-472A-8CE4-88AF87E57A59"></p>
+<p>System-R 优化器认识到了 Join 的 associative 和 commutative，同时 Join 有两种实现：Nested Loop Join 和 Sort-Merge Join. Scan 可以是 Index Scan (可以在 cluster index 或者是 secondary index 上)，或者 Sequential Scan。</p>
+<p>这里有一些启发式的部分：Predict 应该尽早被执行。</p>
+<p>System-R 优化器依赖统计信息、对 Selection Selectivity 的分析（事后看虽然朴素，不过也比较有启发性了）、具体分析 io-cost 和 cpu-cost 的公式（其实我也不太清楚这个 2020 年有没有很好的量化公式）。通过上面的信息，System-R Optimizer 能够拿到估计中的：</p>
+<ol>
+<li>物理的 Operation Node 输出的大概数目</li>
+<li>输出的 Tuples 的顺序</li>
+<li>Operator 大概的 cost</li>
+</ol>
+<p>System-R 用 DP 来找到 best plan，只处理左深树来减少 search space，通过 interesting order 来处理顺序。</p>
+<p>找 best plan 的时候，算法大概如下：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">1. j = set of join nodes</span><br><span class="line">2. for (i in 1...|j|):</span><br><span class="line">3.     for s in &#123;all length i subsets of j&#125;</span><br><span class="line">4.       bestPlan = &#123;&#125;</span><br><span class="line">5.       for s&#x27; in &#123;all length d-1 subsets of s&#125;</span><br><span class="line">6.            subplan = optjoin(s&#x27;)</span><br><span class="line">7.            plan = best way to join (s-s&#x27;) to subplan</span><br><span class="line">8.            if (cost(plan) &lt; cost(bestPlan))</span><br><span class="line">9.               bestPlan = plan</span><br><span class="line">10.      optjoin(s) = bestPlan</span><br><span class="line">11. return optjoin(j)</span><br></pre></td></tr></table></figure>
+<p>这里的 best way to join 实际上还要考虑到只有左深树。基本上就是 Join(subOptimal, {remain}). 然后找到最优的子 plan.</p>
+<p>另外，这里有个 interesting order 的内容，简单的说，在上面的 subOptimal 中，不能只考虑“下面几张表 join 的时候最优的是哪棵树“，还要考虑表 Operator 输出的属性的顺序。这个 interesting order 的内容为后续一些 “physical properties” 的设计提供了基础。</p>
+<blockquote>
+<p>Intuitively, a physical property is any characteristic of a plan that is not sharedby all plans for the samelogical expression,but can impact the cost of subscqucntoperations</p>
+</blockquote>
+<p>虽然上述的设计很优雅也很有启发性，但是这些没有讲述什么 logical transformations 和扩展 search space 的部分。</p>
+<h2 id="Search-Space"><a href="#Search-Space" class="headerlink" title="Search Space"></a>Search Space</h2><p>SQL 会有很多 transformation 的部分，有的时候我们可以当作这些一定能起到作用，做逻辑上的优化，比如 System-R 很多时候就是这么执行的。但是也有一些很可能能起到作用的 transformation。</p>
+<p>这里说的比较绕，贴一下原文：</p>
+<blockquote>
+<p>It should be noted that trunsfonnations do not necessarily reduce cost and therefore must be applied in a cost-based manner by the enum algorirhm to ensure a positive benejit.</p>
+</blockquote>
+<p>在这里面，Optimizer 可能会把 Plan 格式变更若干次。保证开始是一个逻辑计划，最后是一个可以丢给 Execution Engine 的东西就行了。</p>
+<p>关于这个我找了找 Starburst 有关的论文：<a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/369771981">https://zhuanlan.zhihu.com/p/369771981</a> ，Starburst 会生成一个便于优化的 QGM，便于对整个树做一些逻辑优化。不过批评者认为这些优化不一定考虑到了 Page/Block 相关的信息。</p>
+<h3 id="Commuting-Between-Operators"><a href="#Commuting-Between-Operators" class="headerlink" title="Commuting Between Operators"></a>Commuting Between Operators</h3><p>很多 transformation 用到了算子的交换律。</p>
+<h4 id="Generalizing-Join-Sequencing"><a href="#Generalizing-Join-Sequencing" class="headerlink" title="Generalizing Join Sequencing"></a>Generalizing Join Sequencing</h4><p>在 System-R 优化器中，只会考虑 left-deep tree。但实际上，原则上我们可以考虑 bushy tree，近日的 DPCCP 开始计入相关的内容，正面面对 bushy tree。同时，System-R 优化器将笛卡尔积丢到最后处理，但是实际上这个也可能被显著优化，比方说在 BI 系统中，对笛卡尔积的优化是很重要的。</p>
+<p>在一个可扩展的系统中，可能会允许搜索 bushy tree （这个需要物化 Join 结果）或者笛卡尔积。（当然这个也是比较难推断下来具体该不该这么做的）。</p>
+<h4 id="Outerjoin-and-Join"><a href="#Outerjoin-and-Join" class="headerlink" title="Outerjoin and Join"></a>Outerjoin and Join</h4><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Join(R, S LOJ T) = Join(R, s) LOJ T</span><br></pre></td></tr></table></figure>
+<p>这些操作能让 Joins 在 <code>Join + outerjoins</code> 之前执行</p>
+<h4 id="Group-By-and-Join"><a href="#Group-By-and-Join" class="headerlink" title="Group-By and Join"></a>Group-By and Join</h4><p><img src="https://image.mwish.me/blog-image/58149849-AF28-49B6-9210-8C69D0A0DFC7.png" alt="58149849-AF28-49B6-9210-8C69D0A0DFC7"></p>
+<p>早期的一些优化器中，SPJ 会在 Group By 之前执行. Figure 4 的 Transformation 在 Join 之前即可处理 Group By. 比如在 <code>Select DISTINCT</code> 的时候，这里可能会把部分 Group By 下推，这一定情况下可以减少 Join 的数量。此外，如果 Group By 可以利用 R1 的 order，那么显然是好的。</p>
+<p>这里把 Group By 下推给 G1，一定程度上，这可以减少 Join 的数量。不过这也要求能把 Group By 做一定的拆分。</p>
+<h3 id="Reducing-Multi-Block-Queries-to-Single-Block"><a href="#Reducing-Multi-Block-Queries-to-Single-Block" class="headerlink" title="Reducing Multi-Block Queries to Single-Block"></a>Reducing Multi-Block Queries to Single-Block</h3><h4 id="Merging-Views"><a href="#Merging-Views" class="headerlink" title="Merging Views"></a>Merging Views</h4><p>对于简单的：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">Q = Join(R, V)</span><br><span class="line">V = View of Join(S, T)</span><br></pre></td></tr></table></figure>
+<p>Q 是可以拆开来然后进行 join order optimize 的，不过话又说回来，上一节降到了 Group By 和 DISTINCT 下推，这里的展开可能是反着两个下推的。我们可能要重新执行 Figure 4 的流程</p>
+<h4 id="Merging-Nested-Subqueries"><a href="#Merging-Nested-Subqueries" class="headerlink" title="Merging Nested Subqueries"></a>Merging Nested Subqueries</h4><p>子查询相当相当重要。</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">SELECT</span> Emp.Name</span><br><span class="line"><span class="keyword">FROM</span> Emp</span><br><span class="line"><span class="keyword">WHERE</span> Emp.Dept <span class="keyword">IN</span></span><br><span class="line">	(</span><br><span class="line">		<span class="keyword">SELECT</span> Dept.Dept <span class="keyword">FROM</span> Dept</span><br><span class="line">		<span class="keyword">WHERE</span> Dept.Loc <span class="operator">=</span> <span class="string">&#x27;xxx&#x27;</span></span><br><span class="line">		<span class="keyword">AND</span> Emp.Emp <span class="operator">=</span> Dept.Mgr</span><br><span class="line">	)</span><br></pre></td></tr></table></figure>
+<p>(1) 当内部查询部不带有外部查询( uncorrelated ) 的情况下，内部查询只需要执行一次。</p>
+<p>如果内部查询和外部查询相关，需要外部查询中的变量，那就麻烦了。例如上面的 SELECT 可以 cast 成：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">FROM</span> Emp E, Dept D</span><br><span class="line"><span class="keyword">WHERE</span> E.Dept <span class="operator">=</span> D.Dept</span><br><span class="line"><span class="keyword">AND</span> D.Loc <span class="operator">=</span> <span class="string">&#x27;xxx&#x27;</span> <span class="keyword">AND</span> E.Emp <span class="operator">=</span> D.Mgr</span><br></pre></td></tr></table></figure>
+<p>转化的流程取决于内部表达式的复杂度，即有无 quantifiers (例如 ALL, EXIST)、aggregates 或者都没有。(2) 在最简单的场景下，如上面，Table 可以改成一个 Semijoin:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Semijoin(Emp, Dept, Emp.Dept <span class="operator">=</span> Dept.Dept) <span class="operator">=</span> Project(<span class="keyword">Join</span>(Emp, Dept), Emp.<span class="operator">*</span>)</span><br></pre></td></tr></table></figure>
+<p>当子查询有 subquery 的时候，情况可能需要转化成 LOJ 或者 ROJ:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">SELECT</span> Dept.name</span><br><span class="line"><span class="keyword">FROM</span> Dept</span><br><span class="line"><span class="keyword">WHERE</span> Dept.num<span class="operator">-</span><span class="keyword">of</span><span class="operator">-</span>machines <span class="operator">&gt;=</span></span><br><span class="line">	(</span><br><span class="line">		<span class="keyword">SELECT</span> <span class="built_in">COUNT</span>(Emp.<span class="operator">*</span>)</span><br><span class="line">		<span class="keyword">FROM</span> Emp</span><br><span class="line">		<span class="keyword">WHERE</span> Dept.name <span class="operator">=</span> Emp.Dept_name</span><br><span class="line">	)</span><br></pre></td></tr></table></figure>
+<p><code>SELECT Count(Emp.*)</code> 是个 agg，这里麻烦的地方是，如果 <code>Dept.name</code> 相等的 <code>Emp</code> 是不存在的，那么这个条件显然是满足的。所以这里的逻辑是：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">Select</span> Dept.name <span class="keyword">FROM</span> Dept <span class="keyword">LEFT</span> <span class="keyword">OUTER</span> <span class="keyword">JOIN</span> Emp <span class="keyword">ON</span> Dept.name <span class="operator">=</span> Emp.Dept_name <span class="keyword">Group</span> <span class="keyword">BY</span> Dept.name </span><br><span class="line"><span class="keyword">HAVING</span> Dept.num<span class="operator">-</span><span class="keyword">of</span><span class="operator">-</span>machines <span class="operator">&lt;</span> <span class="built_in">COUNT</span>(Emp.<span class="operator">*</span>)</span><br></pre></td></tr></table></figure>
+<p>这里相当于 Dept LOJ 内部 agg 的表。这个的优化可以依赖之前提的，后处理 LOJ</p>
+<h3 id="Using-Semijoin-Like-Techniques-for-Optimizing-Multi-Block-Queries"><a href="#Using-Semijoin-Like-Techniques-for-Optimizing-Multi-Block-Queries" class="headerlink" title="Using Semijoin Like Techniques for Optimizing Multi-Block Queries"></a>Using Semijoin Like Techniques for Optimizing Multi-Block Queries</h3><figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">CREATE</span> <span class="keyword">VIEW</span> DepAvgSal <span class="keyword">As</span> (</span><br><span class="line">	<span class="keyword">SELECT</span> E.did, <span class="built_in">Avg</span>(E.Sal) <span class="keyword">AS</span> avgsal</span><br><span class="line">	<span class="keyword">FROM</span> Emp E</span><br><span class="line">	<span class="keyword">GROUP</span> <span class="keyword">BY</span> E.did</span><br><span class="line">)</span><br><span class="line"></span><br><span class="line"><span class="keyword">SELECT</span> E.eid, E.sal</span><br><span class="line"><span class="keyword">FROM</span> Emp E, Dept D, DepAvgSal v</span><br><span class="line"><span class="keyword">WHERE</span> E.did <span class="operator">=</span> D.did <span class="keyword">AND</span> E.did <span class="operator">=</span> V.did</span><br><span class="line"><span class="keyword">AND</span> E.age <span class="operator">&lt;</span> <span class="number">30</span> <span class="keyword">AND</span> D.budget <span class="operator">&gt;</span> <span class="number">100</span>k</span><br><span class="line"><span class="keyword">AND</span> E.sal <span class="operator">&gt;</span> V.avgsal</span><br></pre></td></tr></table></figure>
+<p>这里面，SQL 可以被优化为 <code>E.did</code> 相关的 view</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">CREATE</span> <span class="keyword">VIEW</span> partialresult <span class="keyword">AS</span></span><br><span class="line">(</span><br><span class="line">	<span class="keyword">SELECT</span> E.id, E.sal, E.did</span><br><span class="line">	<span class="keyword">FROM</span> Emp E, Dept D</span><br><span class="line">	<span class="keyword">WHERE</span> E.did <span class="operator">=</span> D.did <span class="keyword">AND</span> E.age <span class="operator">&lt;</span> <span class="number">30</span></span><br><span class="line">	<span class="keyword">AND</span> D.budget <span class="operator">&gt;</span> <span class="number">100</span>k</span><br><span class="line">)</span><br><span class="line"></span><br><span class="line"><span class="keyword">CREATE</span> <span class="keyword">View</span> <span class="keyword">Filter</span> <span class="keyword">AS</span> </span><br><span class="line">(</span><br><span class="line">	<span class="keyword">SELECT</span> <span class="keyword">DISTINCT</span> P.did <span class="keyword">FROM</span> partialresult P</span><br><span class="line">)</span><br><span class="line"></span><br><span class="line"><span class="keyword">CREATE</span> <span class="keyword">VIEW</span> LimitedAvgSal <span class="keyword">AS</span> (</span><br><span class="line">	<span class="keyword">SELECT</span> E.did, <span class="built_in">Avg</span>(E.sal) <span class="keyword">AS</span> avgsal</span><br><span class="line">	<span class="keyword">FROM</span> Emp E, <span class="keyword">Filter</span> F</span><br><span class="line">	<span class="keyword">WHERE</span> E.did <span class="operator">=</span> F.did <span class="keyword">GROUP</span> <span class="keyword">BY</span> E.did</span><br><span class="line">)</span><br></pre></td></tr></table></figure>
+<p>这种操作将子查询变更为不重复访问的查询。</p>
+<h2 id="Statistics-And-Cost-Estimation"><a href="#Statistics-And-Cost-Estimation" class="headerlink" title="Statistics And Cost Estimation"></a>Statistics And Cost Estimation</h2><p>上面的部分介绍了一些 Logical 的 Transformation。对于一个表达式树，我们要考量的资源可能有：</p>
+<ul>
+<li>CPU time</li>
+<li>IO cost</li>
+<li>memory</li>
+<li>bandwidth</li>
+</ul>
+<p>Cost Estimation 是希望快捷又准确的计算这些值。System-R 给出了一个基本的框架：</p>
+<ol>
+<li>对存储的数据做一些分析</li>
+<li>对每个 Operator，给出一个评估策略：<ol>
+<li>输出数据的一些统计值</li>
+<li>操作的 cost</li>
+</ol>
+</li>
+</ol>
+<p>关于 (1), 这里有两个问题：</p>
+<ul>
+<li>我们需要什么数据</li>
+<li>我们什么时候获取/更新这些统计数据</li>
+</ul>
+<h3 id="Statistical-Summaries-of-Data"><a href="#Statistical-Summaries-of-Data" class="headerlink" title="Statistical Summaries of Data"></a>Statistical Summaries of Data</h3><h4 id="Base-Data"><a href="#Base-Data" class="headerlink" title="Base Data"></a>Base Data</h4><p>一个关键点是，我们需要知道 tuples 和相关的 pages 的大概数目。这些信息是物理的数据，独立于 expression 的 selectivity 这样的逻辑数据，并且和后者一起做出决策。我们需要知道各个列相关的一些协助预测的信息。</p>
+<p>在很多 RDBMS 中，等深（equi-depth）直方图可以用来统计信息。在直方图的单个 Bucket 里，可以当作数据是 uniform distribution 的。如果缺少直方图，可以保存数值的 min/max（需要注意的是，实践中，这里也会处理一些极大极小值，保留次大值之类的）。</p>
+<p>我们可能要为所有的 Column 都构建对应的 Histogram，当然，一个查询可能会有多列的 condition。一般我们不会为列的 pairs 维护 histogram，这样会造成巨大的空间放大，但我们可能维护相关的 distinct value（不同的值）。</p>
+<h4 id="Propagation-of-Statistical-Information"><a href="#Propagation-of-Statistical-Information" class="headerlink" title="Propagation of Statistical Information"></a>Propagation of Statistical Information</h4><p>histogram 可以支持在插入后更新数据，也可以在某个统计信息不是很准的 SELECT 之后，根据 SELECT 的结果，更新数据，不过不太好的一点是，如果有的列被频繁更新，但是很少读取，这些数据可能会失真。当我们有多个条件的时候，可能会取各个 Column 的 Selectivity 的积，这可能导致问题变严重。</p>
+<p>不过有的系统可能只会用一些 Column 的统计信息。一些系统在 Join 的时候也可以给 Histogram 做 “Join”，不过这涉及 Histogram 的对齐工作。</p>
+<h4 id="Cost-Computation"><a href="#Cost-Computation" class="headerlink" title="Cost Computation"></a>Cost Computation</h4><p>这里要求把 CPU，IO 等考虑上，也提到了分布式系统中，也要考虑 IO 开销（不知道 snowflake 和 ClickHouse 做了吗）。这里还提到对 RDBMS，Buffer Pool  相关的策略对预测影响也很高。</p>
+<h2 id="Enumeration-Architectures"><a href="#Enumeration-Architectures" class="headerlink" title="Enumeration Architectures"></a>Enumeration Architectures</h2><p>System-R 优化器会根据表访问方法、Join 方法构建搜索策略。当添加新的 transformation 和新的 physical operator 的时候，希望有一个可扩展（extensible）的 optimizer。这里关注了自底向上的 Starburst 和自顶向下的 Volcano/Cascades，他们的共同点是：</p>
+<ol>
+<li>使用 generalized cost functions + physical properties + operator nodes</li>
+<li>使用规则引擎，让 transformation 能够更新 query expression / operator trees</li>
+</ol>
+<h3 id="Starburst"><a href="#Starburst" class="headerlink" title="Starburst"></a>Starburst</h3><p>Starburst 被构建在 DB2 中，有 Query Rewrite 和 Plan Optimization 两个阶段。它被证明有不错的性能，但是也有一定的问题。</p>
+<p>Starburst 会把查询构建成 QGM，其中 <code>box</code> 代表 table 相关的 query block，每个 box 会描述数据是否有序、predicate 相关的策略。</p>
+<p>在 rewrite 阶段，系统有很多的 rules，每个 rule 包含<code>&lt;判断 apply 的条件, apply 的流程&gt;</code> .这些 rules 按顺序排布。</p>
+<p>在 plan optimization 阶段，QGM 会产生对应的 physical operators，这个产生方法可能有某种 dsl 来描述。每个 Plan 有自己的 selectivity, physical properties，cost。</p>
+<h3 id="Volcano-Cascades"><a href="#Volcano-Cascades" class="headerlink" title="Volcano/Cascades"></a>Volcano/Cascades</h3><p>starburst 会先生成一组 QGM，Volcano/Cascades 会有逻辑到物理的变化。借助 memo 来做具体的实现。</p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Introduction"><span class="toc-number">1.</span> <span class="toc-text">Introduction</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#System-R-Optimizer"><span class="toc-number">1.1.</span> <span class="toc-text">System-R Optimizer</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Search-Space"><span class="toc-number">2.</span> <span class="toc-text">Search Space</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Commuting-Between-Operators"><span class="toc-number">2.1.</span> <span class="toc-text">Commuting Between Operators</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Generalizing-Join-Sequencing"><span class="toc-number">2.1.1.</span> <span class="toc-text">Generalizing Join Sequencing</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Outerjoin-and-Join"><span class="toc-number">2.1.2.</span> <span class="toc-text">Outerjoin and Join</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Group-By-and-Join"><span class="toc-number">2.1.3.</span> <span class="toc-text">Group-By and Join</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Reducing-Multi-Block-Queries-to-Single-Block"><span class="toc-number">2.2.</span> <span class="toc-text">Reducing Multi-Block Queries to Single-Block</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Merging-Views"><span class="toc-number">2.2.1.</span> <span class="toc-text">Merging Views</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Merging-Nested-Subqueries"><span class="toc-number">2.2.2.</span> <span class="toc-text">Merging Nested Subqueries</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Using-Semijoin-Like-Techniques-for-Optimizing-Multi-Block-Queries"><span class="toc-number">2.3.</span> <span class="toc-text">Using Semijoin Like Techniques for Optimizing Multi-Block Queries</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Statistics-And-Cost-Estimation"><span class="toc-number">3.</span> <span class="toc-text">Statistics And Cost Estimation</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Statistical-Summaries-of-Data"><span class="toc-number">3.1.</span> <span class="toc-text">Statistical Summaries of Data</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Base-Data"><span class="toc-number">3.1.1.</span> <span class="toc-text">Base Data</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Propagation-of-Statistical-Information"><span class="toc-number">3.1.2.</span> <span class="toc-text">Propagation of Statistical Information</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Cost-Computation"><span class="toc-number">3.1.3.</span> <span class="toc-text">Cost Computation</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Enumeration-Architectures"><span class="toc-number">4.</span> <span class="toc-text">Enumeration Architectures</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Starburst"><span class="toc-number">4.1.</span> <span class="toc-text">Starburst</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Volcano-Cascades"><span class="toc-number">4.2.</span> <span class="toc-text">Volcano&#x2F;Cascades</span></a></li></ol></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2021/11/05/An-Overview-of-Query-Optimization-in-Relational-Systems/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2021/11/05/An-Overview-of-Query-Optimization-in-Relational-Systems/&text=An Overview of Query Optimization in Relational Systems"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2021/11/05/An-Overview-of-Query-Optimization-in-Relational-Systems/&title=An Overview of Query Optimization in Relational Systems"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2021/11/05/An-Overview-of-Query-Optimization-in-Relational-Systems/&is_video=false&description=An Overview of Query Optimization in Relational Systems"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=An Overview of Query Optimization in Relational Systems&body=Check out this article: http://blog.mwish.me/2021/11/05/An-Overview-of-Query-Optimization-in-Relational-Systems/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2021/11/05/An-Overview-of-Query-Optimization-in-Relational-Systems/&title=An Overview of Query Optimization in Relational Systems"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2021/11/05/An-Overview-of-Query-Optimization-in-Relational-Systems/&title=An Overview of Query Optimization in Relational Systems"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2021/11/05/An-Overview-of-Query-Optimization-in-Relational-Systems/&title=An Overview of Query Optimization in Relational Systems"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2021/11/05/An-Overview-of-Query-Optimization-in-Relational-Systems/&title=An Overview of Query Optimization in Relational Systems"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2021/11/05/An-Overview-of-Query-Optimization-in-Relational-Systems/&name=An Overview of Query Optimization in Relational Systems&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2021/11/05/An-Overview-of-Query-Optimization-in-Relational-Systems/&t=An Overview of Query Optimization in Relational Systems"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

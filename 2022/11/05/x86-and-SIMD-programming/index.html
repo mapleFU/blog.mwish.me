@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="作为指令集并行的一部分，SIMD 已经被大幅度用来提高程序的性能了。而在数据库系统中，分析型数据库也大量使用 SIMD 来做 vectorize，来提高性能。本栏尽量介绍一下基本的 SIMD 的历史、需求和基础，然后后面也会讲到 AVX2 的入门、xsimd 库和让编译器自动来做向量化。在这里，了解硬件和指令集是比较重要的组成部分，而虽然 ARM 平台也有自己的 SIMD 指令集，但作为 db 研">
+<meta property="og:type" content="article">
+<meta property="og:title" content="x86 and SIMD programming Part0: Background">
+<meta property="og:url" content="http://blog.mwish.me/2022/11/05/x86-and-SIMD-programming/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="作为指令集并行的一部分，SIMD 已经被大幅度用来提高程序的性能了。而在数据库系统中，分析型数据库也大量使用 SIMD 来做 vectorize，来提高性能。本栏尽量介绍一下基本的 SIMD 的历史、需求和基础，然后后面也会讲到 AVX2 的入门、xsimd 库和让编译器自动来做向量化。在这里，了解硬件和指令集是比较重要的组成部分，而虽然 ARM 平台也有自己的 SIMD 指令集，但作为 db 研">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/0EDCEC2A-2361-4560-91DD-68FE51B150D8.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/5FC1C556-0F2B-474B-B12E-4A6EAC8405FF.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/18C67A41-F361-4853-8F9E-E1F4E5F61D01.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/D8C704E9-F29C-48E4-8B8E-E9387C8DBE44.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/AFA12812-C13B-4C01-BA95-E6E92971B7E5.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/IntelProcessorRoadmap-4v.svg.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/A5C7244A-F0A4-4EFE-8C73-B02694C904D8.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/02878185-F1E5-4D59-850D-1D898DE7B4CD.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/EE09112C-4AB4-44EC-8BBD-DC9A51B04448.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/3A279C0B-9D87-498A-9B44-9649281E2475.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/CF950F53-1EA1-4CC7-B961-E8B11A7A8FB6.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/999085C9-F9CB-42C3-A8FB-2BB92F4A60EB.png">
+<meta property="article:published_time" content="2022-11-04T17:00:00.000Z">
+<meta property="article:modified_time" content="2022-11-04T17:12:29.230Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/0EDCEC2A-2361-4560-91DD-68FE51B150D8.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>x86 and SIMD programming Part0: Background</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2022/11/13/Introduction-to-velox/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2022/10/30/Kudu-Storage-for-Fast-Analytics-on-Fast-Data/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2022/11/05/x86-and-SIMD-programming/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2022/11/05/x86-and-SIMD-programming/&text=x86 and SIMD programming Part0: Background"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2022/11/05/x86-and-SIMD-programming/&title=x86 and SIMD programming Part0: Background"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2022/11/05/x86-and-SIMD-programming/&is_video=false&description=x86 and SIMD programming Part0: Background"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=x86 and SIMD programming Part0: Background&body=Check out this article: http://blog.mwish.me/2022/11/05/x86-and-SIMD-programming/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2022/11/05/x86-and-SIMD-programming/&title=x86 and SIMD programming Part0: Background"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2022/11/05/x86-and-SIMD-programming/&title=x86 and SIMD programming Part0: Background"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2022/11/05/x86-and-SIMD-programming/&title=x86 and SIMD programming Part0: Background"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2022/11/05/x86-and-SIMD-programming/&title=x86 and SIMD programming Part0: Background"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2022/11/05/x86-and-SIMD-programming/&name=x86 and SIMD programming Part0: Background&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2022/11/05/x86-and-SIMD-programming/&t=x86 and SIMD programming Part0: Background"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%A1%AC%E4%BB%B6%E5%8F%91%E5%B1%95%E5%92%8C%E7%A1%AC%E4%BB%B6%E5%9F%BA%E7%A1%80"><span class="toc-number">1.</span> <span class="toc-text">硬件发展和硬件基础</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Intel-and-Skylake"><span class="toc-number">2.</span> <span class="toc-text">Intel and Skylake</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%A1%A1%E9%87%8F%E5%BA%94%E7%94%A8-Besides-O-N"><span class="toc-number">3.</span> <span class="toc-text">衡量应用: Besides O(N)</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9F%A5%E7%9C%8B%E4%BD%A0%E7%9A%84%E6%9C%BA%E5%99%A8"><span class="toc-number">4.</span> <span class="toc-text">查看你的机器</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#References"><span class="toc-number">5.</span> <span class="toc-text">References</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        x86 and SIMD programming Part0: Background
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2022-11-04T17:00:00.000Z" itemprop="datePublished">2022-11-05</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>作为指令集并行的一部分，SIMD 已经被大幅度用来提高程序的性能了。而在数据库系统中，分析型数据库也大量使用 SIMD 来做 vectorize，来提高性能。本栏尽量介绍一下基本的 SIMD 的历史、需求和基础，然后后面也会讲到 AVX2 的入门、xsimd 库和让编译器自动来做向量化。在这里，了解硬件和指令集是比较重要的组成部分，而虽然 ARM 平台也有自己的 SIMD 指令集，但作为 db 研发，我们还是以 x86 的为准（倒不是看不起 arm，就单纯先不花时间吧）。</p>
+<p>CPU 有一些技术来帮忙优化，比如 Hyper Threading / Super Scalar，CPU 也有专门的 SIMD 处理单元。这使得人们可以给出更好的实现。在数据库里面，近年来卷到爆炸的分析型数据库领域也希望能够利用好 SIMD。</p>
+<p>言归正传，程序员早期其实是没那么懂并发编程的，原因大概在 <a href="https://blog.mwish.me/2022/05/04/perfbook-notes-hardware/">perfbook 那节</a> 也讲过，以前硬件提升都是可以直接反映到程序上，啥都不做性能就提升了，但是现在的程序员必须 get hands dirty，来了解一下下层的抽象，来一把捅下去获得性能。同时，有的时候性能、生产力、通用性是个不肯能三角，这个在 perfbook 那节也有提到。这话有点太俗了，下面的图其实是比较好理解的：</p>
+<p><img src="https://image.mwish.me/blog-image/0EDCEC2A-2361-4560-91DD-68FE51B150D8.png" alt="0EDCEC2A-2361-4560-91DD-68FE51B150D8"></p>
+<p>这里还有一张关于内存带宽和频率有关的图：</p>
+<p><img src="https://image.mwish.me/blog-image/5FC1C556-0F2B-474B-B12E-4A6EAC8405FF.png" alt="5FC1C556-0F2B-474B-B12E-4A6EAC8405FF"></p>
+<p>（实际上，可以看 ref 4，单线程已经跑不满内存带宽了，不过内存带宽仍然受到限制）</p>
+<p>关于性能，这里还有一些 hints:</p>
+<ol>
+<li>cache miss 可能很重，可能相当于几十几百条指令，当然，IO 就更重了</li>
+<li>需要利用 SIMD、多核、多线程甚至 GPU 甚至特殊硬件来改善性能</li>
+<li>写 fastcode 可能涉及代码量大、多线程协调、不跨平台（比如单平台 SIMD 的问题），同时，Compiler 可能也不一定能够生成合适的代码。多线程必不多说，SIMD 可能也没法生成很好的选项，实际上很多地方（例如 TiFlash、ClickHouse）都是写便于向量化的代码，尽量让编译器自动向量化然后加一些编译参数来检查，一些关键路径也得自己手搓 SIMD 或者用 SIMD 库。</li>
+</ol>
+<p><img src="https://image.mwish.me/blog-image/18C67A41-F361-4853-8F9E-E1F4E5F61D01.png" alt="18C67A41-F361-4853-8F9E-E1F4E5F61D01"></p>
+<h2 id="硬件发展和硬件基础"><a href="#硬件发展和硬件基础" class="headerlink" title="硬件发展和硬件基础"></a>硬件发展和硬件基础</h2><p><img src="https://image.mwish.me/blog-image/D8C704E9-F29C-48E4-8B8E-E9387C8DBE44.png" alt="D8C704E9-F29C-48E4-8B8E-E9387C8DBE44"></p>
+<p>X86-64 平台是 x86-32 的一个扩展。当然，这里 x86 指的是 ISA，与之等同的是 RISC-V、ARM、POWER、MISC 等。而不同的是下层的实现和 microarch，比如 cacheline 的长度。x86 是一个 CISC 指令集，但是它的指令会被处理成 RISC 的，以获取性能：</p>
+<p><img src="https://image.mwish.me/blog-image/AFA12812-C13B-4C01-BA95-E6E92971B7E5.png" alt="AFA12812-C13B-4C01-BA95-E6E92971B7E5"></p>
+<p>下面是一个 Intel 芯片的图，来自 wiki:</p>
+<p><img src="https://image.mwish.me/blog-image/IntelProcessorRoadmap-4v.svg.png" alt="IntelProcessorRoadmap-4v.svg"></p>
+<p>Intel 在 06 年提出 tick-tock 模型: Tick 一次代表制程（Process）更新，利用硬件提升；Tock 代表作出新的架构。这个策略后来被更新为 Process–architecture–optimization 模型：</p>
+<p><img src="https://image.mwish.me/blog-image/A5C7244A-F0A4-4EFE-8C73-B02694C904D8.png" alt="A5C7244A-F0A4-4EFE-8C73-B02694C904D8"></p>
+<p>最早出现的芯片是 16位的 Intel 8086, Intel 8088, Intel 80186, Intel 80286。游戏的开端是 1985 年的 Intel 80386，它最初采用了 32位的 IA-32 架构（ 此外，还有个名字很像的、创造者同样包含 Intel 的 IA-64，则是另一个指令集。），它有各种寄存器、4GB 的虚拟地址空间、基于页的虚拟内存。80386 有独立的 80387 FPU。在 80486 中，这些被集成到了系统中，即 x87 FPU。实际上，FPU 和 SIMD 很多处理的逻辑类似，一定程度上，它们是被整合到一起的。</p>
+<p>x86-32 平台在 93-95 年推出的 P5 microarchitecture 中，MMX 技术出现，它用 64-bits 位宽的寄存器来同时处理多个整数。</p>
+<p>在 P6 架构的 Pentium Pro (1995) 和 Pentium II (1997) 中，Intel 引入了 superscalar，decode / dispatch / execute 可以乱序执行。Pentium 有个你可能很熟悉的名字，叫「奔腾」。</p>
+<p>99 年引入的 P6 架构的 Pentium III 中，SSE（Streaming SIMD extensions） 指令集被引入了，它加入了一组 128bits 的寄存器，可以进行 SIMD 的单精度浮点运算.</p>
+<p>一年后，2000 年，Intel 推出了 Netburst 架构，并引入了 SSE2，它补全了 SSE 处理双精度浮点数的能力，同时，它在 SSE 引入的寄存器上补齐了整数运算的能力。04 年，SSE3 推出，并运行在制程 90nm 的 Pentium 和 Xeon 架构上，这一代架构有 hyper-threading. 06年推出的 Core 架构（酷睿）做了不少优化、降低了能耗，同时引入了 SSSE3 指令集和 SSE4.1，他们没有引入新的寄存器，同时，hyper-threading 也被去除了。2008 年的 Nehalem 再次引入了 hyper-threading，同时也引入了 SSE 最后的 SSE4.2 指令集，这个指令集扩展了 SSE 寄存器上的字符串/文本处理。</p>
+<p>2011 年 Intel 推出了 Sandy Bridge 架构，它引入了 Advanced Vector Extensions (AVX) 这一 SIMD 指令集，它用 256-bits 的寄存器来处理数据，这提升了寄存器的宽度，一定程度上减小了开销.</p>
+<p>2013 年 Intel 推出了 Haswell 架构，同时，它引入了 AVX2，实际上，现在比较常用的编译参数包含 <code>-mavx2 -march=haswell</code>，同时，它提供了一组 data transfer 相关的指令：</p>
+<ul>
+<li>broadcast: 把一个值广播到多个位置</li>
+<li>gather: 把多个不连续位置的内存加载</li>
+<li>permute: 给出一组 index, 按照 index 来加载数据</li>
+</ul>
+<p>Haswell 还引入了 FMA 操作，FMA 代表 Fused Multiply-Add, eg:</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/* matrix multiplication; A, B, C are n x n matrices of doubles */</span> </span><br><span class="line"><span class="keyword">for</span> (i = <span class="number">0</span>; i &lt; n; i++)</span><br><span class="line">  <span class="keyword">for</span> (j = <span class="number">0</span>; j &lt; n; j++) </span><br><span class="line">    <span class="keyword">for</span> (k = <span class="number">0</span>; k &lt; n; k++) </span><br><span class="line">      C[i*n+j] += A[i*n+k]*B[k*n+j];</span><br></pre></td></tr></table></figure>
+<p>这种 <code>x = x + y * z</code> 的操作，只会舍入(rounding) 一次。</p>
+<p>2017 年，Intel 的 Skylake-X 中，引入了 AVX512，使用 512-bits 的寄存器。</p>
+<p>作为 Intel 之外最大的 x86 厂商，AMD 也对 SIMD 进行过支持， zen 架构支持了 AVX2，而之前的 K8 架构支持了 MMX、SSE、SSE2、SSE3，AMD 引入了 SSE4a 和 FMA4 等 Intel 不太支持的指令集。</p>
+<p>在 ARM 芯片上，也存在 SIMD 指令集。NEON 有 128-bit 的寄存器。此外还有 NEON64 等指令集。</p>
+<p>在 RISC-V 上，<a target="_blank" rel="noopener" href="https://github.com/riscv/riscv-v-spec">Vector</a> 扩展前几个月刚刚 stable，不过编译器还有一些 instrinct 没有定下来，有待多方继续推进。</p>
+<h2 id="Intel-and-Skylake"><a href="#Intel-and-Skylake" class="headerlink" title="Intel and Skylake"></a>Intel and Skylake</h2><p>Intel 机器执行指令的时候，大致逻辑如下：</p>
+<p><img src="https://image.mwish.me/blog-image/02878185-F1E5-4D59-850D-1D898DE7B4CD.png" alt="02878185-F1E5-4D59-850D-1D898DE7B4CD"></p>
+<p>这是一个 Superscalar 的模型，这里可以参考我们之前的 notes:</p>
+<p><a href="https://blog.mwish.me/2020/10/21/SDS-Intro-RISC-V-Datapath-4-Pipeline/#Multiple-issue-%E2%80%9CSuperscalar%E2%80%9D">https://blog.mwish.me/2020/10/21/SDS-Intro-RISC-V-Datapath-4-Pipeline/#Multiple-issue-%E2%80%9CSuperscalar%E2%80%9D</a></p>
+<p>这里，指令被解码后，你会看到一组 ports，来帮助进行程序的执行</p>
+<p><img src="https://image.mwish.me/blog-image/EE09112C-4AB4-44EC-8BBD-DC9A51B04448.png" alt="EE09112C-4AB4-44EC-8BBD-DC9A51B04448"></p>
+<p>可以回顾一下之前 notes 里面 OoO 的图，这里又一些 SIMD/fp 等的执行单元。</p>
+<p>每条指令执行的效率是不一样的，同时如上图，fp fma、SIMD log 可能有多个执行单元，这不会影响延迟，但会影响吞吐：</p>
+<p><img src="https://image.mwish.me/blog-image/3A279C0B-9D87-498A-9B44-9649281E2475.png" alt="3A279C0B-9D87-498A-9B44-9649281E2475"></p>
+<p>关于相关指令，可以访问：<a target="_blank" rel="noopener" href="https://www.agner.org/optimize/instruction_tables.pdf">https://www.agner.org/optimize/instruction_tables.pdf</a></p>
+<p>你也许会发现 div 特别慢，可以参考 ref 11 来学习。这个也可以计算出各个指令的 flops/cycle</p>
+<h2 id="衡量应用-Besides-O-N"><a href="#衡量应用-Besides-O-N" class="headerlink" title="衡量应用: Besides O(N)"></a>衡量应用: Besides O(N)</h2><p>complexity 是程序员都很熟悉的东西，有一个很好的入门回答：</p>
+<ul>
+<li>为什么时间复杂度中可以忽略常数? - 伊莉雅SAMA的回答 - 知乎 <a target="_blank" rel="noopener" href="https://www.zhihu.com/question/361692674/answer/2635594762">https://www.zhihu.com/question/361692674/answer/2635594762</a></li>
+</ul>
+<p>这里，程序的分析可以引入对内存 - 计算的访问，区分操作是 memory bound 还是 compute bound:</p>
+<p><img src="https://image.mwish.me/blog-image/CF950F53-1EA1-4CC7-B961-E8B11A7A8FB6.png" alt="CF950F53-1EA1-4CC7-B961-E8B11A7A8FB6"></p>
+<p>和</p>
+<p><img src="https://image.mwish.me/blog-image/999085C9-F9CB-42C3-A8FB-2BB92F4A60EB.png" alt="999085C9-F9CB-42C3-A8FB-2BB92F4A60EB"></p>
+<p>有一个很有趣的 case 在 ref 4:  <a target="_blank" rel="noopener" href="https://stackoverflow.com/questions/18159455/why-vectorizing-the-loop-does-not-have-performance-improvement/18159503">https://stackoverflow.com/questions/18159455/why-vectorizing-the-loop-does-not-have-performance-improvement/18159503</a></p>
+<h2 id="查看你的机器"><a href="#查看你的机器" class="headerlink" title="查看你的机器"></a>查看你的机器</h2><p>学以致用，笔者有一台搭载了 Apple M1 的 Mac 和 AMD 3800X 芯片的台式机，可以看到，下面对应的参数：</p>
+<ol>
+<li><a target="_blank" rel="noopener" href="https://en.wikichip.org/wiki/amd/ryzen_7/3800x">https://en.wikichip.org/wiki/amd/ryzen_7/3800x</a></li>
+<li><a target="_blank" rel="noopener" href="https://en.wikichip.org/wiki/apple/mx/m1">https://en.wikichip.org/wiki/apple/mx/m1</a></li>
+</ol>
+<h2 id="References"><a href="#References" class="headerlink" title="References"></a>References</h2><ol>
+<li>Intel tick-tock: <a target="_blank" rel="noopener" href="https://zh.wikipedia.org/wiki/Intel_Tick-Tock">https://zh.wikipedia.org/wiki/Intel_Tick-Tock</a></li>
+<li>Mircoarch cheatsheet: <a target="_blank" rel="noopener" href="https://github.com/akhin/microarchitecture-cheatsheet/">https://github.com/akhin/microarchitecture-cheatsheet/</a></li>
+<li>Micro arch 有关的博客: </li>
+<li>一个非常有趣的问题: <a target="_blank" rel="noopener" href="https://stackoverflow.com/questions/18159455/why-vectorizing-the-loop-does-not-have-performance-improvement/18159503">https://stackoverflow.com/questions/18159455/why-vectorizing-the-loop-does-not-have-performance-improvement/18159503</a></li>
+<li>x86 wiki: <a target="_blank" rel="noopener" href="https://zh.wikipedia.org/wiki/X86">https://zh.wikipedia.org/wiki/X86</a></li>
+<li>VLIW wiki: <a target="_blank" rel="noopener" href="https://zh.wikipedia.org/wiki/%E8%B6%85%E9%95%BF%E6%8C%87%E4%BB%A4%E5%AD%97">https://zh.wikipedia.org/wiki/%E8%B6%85%E9%95%BF%E6%8C%87%E4%BB%A4%E5%AD%97</a></li>
+<li>指令级并行，线程级并行，数据级并行区别？线程的概念是什么？ - 用心阁的回答 - 知乎 <a target="_blank" rel="noopener" href="https://www.zhihu.com/question/21823699/answer/172571488">https://www.zhihu.com/question/21823699/answer/172571488</a></li>
+<li>FMA wiki: <a target="_blank" rel="noopener" href="https://en.wikipedia.org/wiki/FMA_instruction_set">https://en.wikipedia.org/wiki/FMA_instruction_set</a></li>
+<li>Intel’s Haswell CPU Microarchitecture: <a target="_blank" rel="noopener" href="https://www.realworldtech.com/haswell-cpu/">https://www.realworldtech.com/haswell-cpu/</a></li>
+<li>Instruction table: <a target="_blank" rel="noopener" href="https://www.agner.org/optimize/instruction_tables.pdf">https://www.agner.org/optimize/instruction_tables.pdf</a></li>
+<li>Div: <a target="_blank" rel="noopener" href="https://stackoverflow.com/questions/26907523/branch-alignment-for-loops-involving-micro-coded-instructions-on-intel-snb-famil">https://stackoverflow.com/questions/26907523/branch-alignment-for-loops-involving-micro-coded-instructions-on-intel-snb-famil</a>  和 <a target="_blank" rel="noopener" href="https://stackoverflow.com/questions/4125033/floating-point-division-vs-floating-point-multiplication">https://stackoverflow.com/questions/4125033/floating-point-division-vs-floating-point-multiplication</a></li>
+</ol>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%A1%AC%E4%BB%B6%E5%8F%91%E5%B1%95%E5%92%8C%E7%A1%AC%E4%BB%B6%E5%9F%BA%E7%A1%80"><span class="toc-number">1.</span> <span class="toc-text">硬件发展和硬件基础</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Intel-and-Skylake"><span class="toc-number">2.</span> <span class="toc-text">Intel and Skylake</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%A1%A1%E9%87%8F%E5%BA%94%E7%94%A8-Besides-O-N"><span class="toc-number">3.</span> <span class="toc-text">衡量应用: Besides O(N)</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9F%A5%E7%9C%8B%E4%BD%A0%E7%9A%84%E6%9C%BA%E5%99%A8"><span class="toc-number">4.</span> <span class="toc-text">查看你的机器</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#References"><span class="toc-number">5.</span> <span class="toc-text">References</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2022/11/05/x86-and-SIMD-programming/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2022/11/05/x86-and-SIMD-programming/&text=x86 and SIMD programming Part0: Background"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2022/11/05/x86-and-SIMD-programming/&title=x86 and SIMD programming Part0: Background"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2022/11/05/x86-and-SIMD-programming/&is_video=false&description=x86 and SIMD programming Part0: Background"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=x86 and SIMD programming Part0: Background&body=Check out this article: http://blog.mwish.me/2022/11/05/x86-and-SIMD-programming/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2022/11/05/x86-and-SIMD-programming/&title=x86 and SIMD programming Part0: Background"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2022/11/05/x86-and-SIMD-programming/&title=x86 and SIMD programming Part0: Background"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2022/11/05/x86-and-SIMD-programming/&title=x86 and SIMD programming Part0: Background"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2022/11/05/x86-and-SIMD-programming/&title=x86 and SIMD programming Part0: Background"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2022/11/05/x86-and-SIMD-programming/&name=x86 and SIMD programming Part0: Background&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2022/11/05/x86-and-SIMD-programming/&t=x86 and SIMD programming Part0: Background"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

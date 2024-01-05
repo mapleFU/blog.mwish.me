@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="Google 在 VLDB’21 年发表了 Napa 的论文： Napa: Powering Scalable Data Warehousing with Robust Query Performance at Google。Napa 本身定位是一个对 MV 支持很好的数仓，它用 LSM 来存储对应的内容，读查询通常是 Scan 和 Multi-key Lookup（下面是 Multi-key L">
+<meta property="og:type" content="article">
+<meta property="og:title" content="VLDB&#39;23: Query Partition in Napa">
+<meta property="og:url" content="http://blog.mwish.me/2023/09/08/VLDB-23-Query-Partition-in-Napa/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="Google 在 VLDB’21 年发表了 Napa 的论文： Napa: Powering Scalable Data Warehousing with Robust Query Performance at Google。Napa 本身定位是一个对 MV 支持很好的数仓，它用 LSM 来存储对应的内容，读查询通常是 Scan 和 Multi-key Lookup（下面是 Multi-key L">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/5678331180122730692.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/4965052238396183469.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/2987111351221671228.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/9198748789641734866.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/648885662659901694.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/3125270644515696735.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/6275015760304340221.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/2872769688922876604.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/1296285521936491971.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/1850538063534972728.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/6739283094117746993.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/210579796710822954.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/140444377129215087.png">
+<meta property="article:published_time" content="2023-09-08T15:05:00.000Z">
+<meta property="article:modified_time" content="2023-09-08T15:02:15.850Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/5678331180122730692.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>VLDB&#39;23: Query Partition in Napa</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2023/10/22/ATC-19-EROFS/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2023/09/05/It%E2%80%99s-not-always-obvious-when-tail-call-optimization-is-allowed/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2023/09/08/VLDB-23-Query-Partition-in-Napa/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2023/09/08/VLDB-23-Query-Partition-in-Napa/&text=VLDB&#39;23: Query Partition in Napa"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2023/09/08/VLDB-23-Query-Partition-in-Napa/&title=VLDB&#39;23: Query Partition in Napa"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2023/09/08/VLDB-23-Query-Partition-in-Napa/&is_video=false&description=VLDB&#39;23: Query Partition in Napa"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=VLDB&#39;23: Query Partition in Napa&body=Check out this article: http://blog.mwish.me/2023/09/08/VLDB-23-Query-Partition-in-Napa/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2023/09/08/VLDB-23-Query-Partition-in-Napa/&title=VLDB&#39;23: Query Partition in Napa"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2023/09/08/VLDB-23-Query-Partition-in-Napa/&title=VLDB&#39;23: Query Partition in Napa"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2023/09/08/VLDB-23-Query-Partition-in-Napa/&title=VLDB&#39;23: Query Partition in Napa"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2023/09/08/VLDB-23-Query-Partition-in-Napa/&title=VLDB&#39;23: Query Partition in Napa"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2023/09/08/VLDB-23-Query-Partition-in-Napa/&name=VLDB&#39;23: Query Partition in Napa&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2023/09/08/VLDB-23-Query-Partition-in-Napa/&t=VLDB&#39;23: Query Partition in Napa"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%9B%B8%E5%85%B3%E5%B7%A5%E4%BD%9C"><span class="toc-number">1.</span> <span class="toc-text">相关工作</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Napa"><span class="toc-number">2.</span> <span class="toc-text">Napa</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BB%BA%E6%A8%A1"><span class="toc-number">3.</span> <span class="toc-text">建模</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#LSM"><span class="toc-number">3.1.</span> <span class="toc-text">LSM</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%9F%A5%E8%AF%A2"><span class="toc-number">3.2.</span> <span class="toc-text">查询</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Progressive-Parititoning"><span class="toc-number">4.</span> <span class="toc-text">Progressive Parititoning</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%AE%97%E6%B3%95%E7%BB%86%E8%8A%82"><span class="toc-number">4.1.</span> <span class="toc-text">算法细节</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Split-point-candidates"><span class="toc-number">4.1.1.</span> <span class="toc-text">Split point candidates</span></a></li></ol></li></ol></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        VLDB&#39;23: Query Partition in Napa
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2023-09-08T15:05:00.000Z" itemprop="datePublished">2023-09-08</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>Google 在 VLDB’21 年发表了 Napa 的论文： Napa: Powering Scalable Data Warehousing with Robust Query Performance at Google。Napa 本身定位是一个对 MV 支持很好的数仓，它用 LSM 来存储对应的内容，读查询通常是 Scan 和 Multi-key Lookup（下面是 Multi-key Lookup 的一个例子，感觉是很 ads 的需求）。</p>
+<p>在查询延时上，Napa 的需求比较高，通常它需要在压秒级的时间内完成一些查询。在数据上，Napa 有数百个 databases，其中有数千个 Table 和 MV.有些表大小甚至到达了几 PB。这些表也会被上游流系统很频繁的更新。用户希望数据有一定的实时性。为了满足这个需求，Napa 实现了 LSM-Tree 和基于 LSM 的 MV 维护引擎。</p>
+<p><img src="https://image.mwish.me/blog-image/5678331180122730692.png" alt="img"></p>
+<p>上述 Figure1 例子中，Napa 以 <code>K1, K2, K3</code> 为主键，并按照 <code>K..</code> 排序。这里主要需求是对这一组查询（<code>K1, K2</code> 的前缀 key）采取并行查询，通过打大并发降低对应的延迟。</p>
+<p>这里有一些比较重要的部分：</p>
+<ol>
+<li>Query-specific partition: 根据查询生成对应的并发度和 Partition，来 match 对应的 SLO</li>
+<li>Evenness: Partition 需要能够处理 skew 的情况，e.g. Figure1 中 <code>&lt;K1 = 1, K2 = 20&gt;</code> 数据可能有几百 GB</li>
+<li>Progressiveness: 这个有点类似 Planner(但我其实不太懂，我理解是有点像，但也可能根本不一样)。算出一个 Perfect 的 Partition 是很费时间的，只要算出来预估差不多满足 SLO 需求就可以停手去执行了。所以这个算法是渐进式的。</li>
+</ol>
+<p>在本论文之前也有很多 database partition 的需求，包括 write-time partition(主动 partition, compaction, snowflake 风格的 micro-partition) 和查询并行. 作者认为这里解决的问题不完全一样（但我觉得肯定可以整合到一起），假如用 Partition 的方式解决并行问题的话：</p>
+<ol>
+<li>Partition Unit 小的话， Metadata 维护开销很大，访问 metadata 的 latency 会增加</li>
+<li>Partition Unit 大的话，如果按照 Partition 来并行的话，可能读数据的 latency 下不去</li>
+</ol>
+<p>论文中实验也表明，用太细的东西做 plan 的话，这部分 planning 开销也会升高。这部分 Napa 和 Btree 结合起来了，它的 LSM Sorted Run 本身是个 DataBlocks + Btree (看着像是用 Btree 组织了一组 SST，类似 Kudu 的 Block 存储，会根据 Btree 来组织，见 <a target="_blank" rel="noopener" href="https://github.com/apache/kudu/blob/master/docs/design-docs/tablet.md#handling-mutations-against-on-disk-files">https://github.com/apache/kudu/blob/master/docs/design-docs/tablet.md#handling-mutations-against-on-disk-files</a> 。RocksDB 的 Index 也大概是这种方式组织的)，每层有一些统计信息，越上面越粗略。Napa 通过这种方式来做切分。如果 Btree 上层节点足够了就用上层的，上层切不出来或者不够详细就要访问 Btree 下层。(之前在 bg 好像搞过类似的，不过它这里好处还是 immutable + 和统计结合)</p>
+<h2 id="相关工作"><a href="#相关工作" class="headerlink" title="相关工作"></a><strong>相关工作</strong></h2><p>并行处理的主要工作基本上是并行化 SQL + SIMD 模型来查询。早期的批处理工作类似 Map Reduce 一个 idea 就是切分输入并并行。</p>
+<p>在数据库迁移到云上或者做大规模处理的时候，流行的方式是对 Key 做 {Hash/Range} Partition。这种方式也允许用户做 Collocate Join，并且能够尽量避免 distributed transaction （ For OLTP workloads, graph-based [6, 20] and skew-aware [19] partitioning approaches have been developed to minimize the number of distributed transactions. ）。这种方式倾向于写时维护 Partition（废话，TP 分布式事务或者多走了一轮开销大是这样的）</p>
+<p>在查询的时候做 Partition 没有那么直接的工作，比较接近的工作是 database cracking。本作准备用 RL 糊屎来解决不同用户的输入。</p>
+<h2 id="Napa"><a href="#Napa" class="headerlink" title="Napa"></a><strong>Napa</strong></h2><p>Napa 吹了一下自己系统几个需求：</p>
+<ol>
+<li>Robust Query Performance: 亚秒级响应，adhoc 查询</li>
+<li>System Flexibility: Napa 的性能三角，允许拿钱之类的换 freshness</li>
+<li>High-throughput Data Ingestion: Napa 会有很大的写入量</li>
+</ol>
+<p>Napa 的每个 Delta Set 相当于 LSM 的 Sorted Run，它们会被组织成 btree。每个 Delta 的 Btree 内部是没有 MVCC 的（不像 RocksDB 可能会把同一份数据 Duplicate 不同时间戳的多次操作）。为了支持 Statistics 的需求，这里会设计每层的 Statistics，父亲级别 Agg 子层级的统计信息。</p>
+<h2 id="建模"><a href="#建模" class="headerlink" title="建模"></a><strong>建模</strong></h2><h3 id="LSM"><a href="#LSM" class="headerlink" title="LSM"></a><strong>LSM</strong></h3><p>在 napa 中，每个文件是 immutable 的，在 napa 的设计中叫做 Delta。对应格式是一个 btree，对应 napa 中的一个时间范围，<strong>和文件的 indexes</strong>。Napa 采用了 Tiered Compaction 的形式（话说之前看 G.Goetz 的简历上说他现在还在维护 napa 的 compaction），它时间戳和 Compaction 逻辑维护形式<strong>有点类似于 ClickHouse</strong>，文件落到 Napa 的时候拿到一个统一的时间戳（<code>[T1, T1]</code>)，Compaction 的时候产生新的时间戳 Range(<code>[T1, T3]</code>)。</p>
+<p>当 Table 存在 unique key 或者 primary key 的时候，这里需要做读的时候 dedup (类似 Hudi MOR）。Napa 似乎不会对系统做假定(类似 Hudi 不假定前面是 MOR 还是 COW？）。</p>
+<p>作者认为 LSM 增加了 Query Partition 的复杂度。主要还是因为它不是 btr 那样单层的模型，一个 key 可能存在多处。这也给查询 evenness 的估计带来了一定的复杂度。最后一点是，不同层的 Sorted Run 可能因为数据分布不同，在它们上面 Plan Partition 的难度也不同。</p>
+<h3 id="查询"><a href="#查询" class="headerlink" title="查询"></a>查询</h3><p><img src="https://image.mwish.me/blog-image/4965052238396183469.png" alt="img"></p>
+<p>Napa 有一些单机的 scan worker ：</p>
+<ul>
+<li>能够执行：Selection, projection, partial (local) agg</li>
+<li>输出可以是别的 downstream，可能会被 full agg, sort, join 之类的消费对应的计算</li>
+</ul>
+<p>Napa 的查询优化器会尽量按照 PK 把用户的 Predicates 做成前缀（感觉有 pk 的表大家都这么搞的，但是这里有点类似 PG，<code>&lt;pk1, pk2...&gt;</code> 里面，即使只有 <code>pk2 == ...</code>, 它也会尝试构建 Prefix），在上述查询中有下列的 transform。</p>
+<p><img src="https://image.mwish.me/blog-image/2987111351221671228.png" alt="img"></p>
+<p>在做 Partition 的时候，因为 filter selectivity 的不同，scan worker 配置的资源不一样，所以查询的时候 partition 的情况也不同（这里大概可以理解成，论文里的 size 是原始数据的大小，应该不是 filter 之后的大小）。所以最佳的 partition unit size 可能从 10MB - 1GB。此外还有个问题是查询的 skew。Napa 对于 <code>&lt;c, d&gt;</code> 这种表，当 <code>d = d3</code> 的时候，构建的前缀可能覆盖了整张表的大部分空间（那你就别这么搞啊…）这也表明，Partition 规划需要是渐进式的，能够防止构建的粒度过细。</p>
+<p>Napa 认为 write-time partition 并不好处理这种 case，主要原因还是它：</p>
+<ol>
+<li>写的时候切的太细的话或者太粗的话，读者需求都不一定完全满足。毕竟都是 adhoc query 和不同的资源在到处飘</li>
+<li>Hash Cluster 之类的情况不太能处理 skew 或者 <code>d = d3</code> 这种查询。可能导致 Partition 规划的开销高，算起来还因为 Partition skew 性能不太好。</li>
+</ol>
+<p>然后 G+ 的人不装了，扯了这么久才介绍自己的需求:</p>
+<blockquote>
+<p>Note by this example, we have established that partitioning is highly specific to query under consideration and existing writetime partitioning is inadequate for workloads with a wide spectrum of query workloads</p>
+</blockquote>
+<p>总之 G+ 的人是想要在 PROGRESSIVE PARTITIONING 中发掘 Partition 的需求，渐渐发现「Plan Partition 快、查询也满足 SLO」的真相</p>
+<h2 id="Progressive-Parititoning"><a href="#Progressive-Parititoning" class="headerlink" title="Progressive Parititoning"></a>Progressive Parititoning</h2><p>那么，Napa 已经有：</p>
+<ol>
+<li>每个 Delta 有一个 B-tree, 维护指向每个 PAX layout Block 的 size 等 Statistics</li>
+<li>一定数量的 scan workers, 和从 workers + QoS 可以推断的目标 Partition 数量 P</li>
+<li>margin ratio: theta, 用于控制衡量 Partition 的结果，表明预估的大小和实际分片大小可能的偏差。算法的预期是随着运行让这个误差尽量小。满足预期的时候，算法推出</li>
+</ol>
+<p>算法的预期是：</p>
+<ul>
+<li>给定查询 Q，算法能够切分 D 组 Deltas 成为 P 个 key-range Partition, error margin 对应是 theta</li>
+<li>预期大小 == 根据 Btree Indices 的大小和 combine-key 来推断</li>
+</ul>
+<p>Figure 4-5 演示了算法工作的流程。Figure 4 展示了有四个 Delta 的表中，当 P = 2 的时候，查询 K1-K8 时候的切分。在 Figure4 可以看到，Delta#1 查询 btree 深度更大，而 Delta#2 更早停下了。因为算法认为达到了 error margin ratio。当然这个算法也可以往下切，<strong>你可以理解成这里的访问是一个 stack 或者 wave，认为某个地方可以切细，就可以访问子节点</strong>。</p>
+<p>Figure 5 展示了具体切分的效果，这里如果按照估计，总大小上限是 70，假如按照 Figure 5，算法在 K4-K5 之间切分，那么根据算法可以算出每个 Partition 的 min-max 大小。如 Figure5.</p>
+<p><img src="https://image.mwish.me/blog-image/9198748789641734866.png" alt="img"></p>
+<p><img src="https://image.mwish.me/blog-image/648885662659901694.png" alt="img"></p>
+<p>Margin Ratio 可以按照 <code>(Max - Min ) * 2 /  (Max + Min)</code> 来计算。如果两个 Partition 比率合理，那么 theta 被视为足够好了，否则算法会访问 btree 的深层来捞统计信息。比如把 <code>[K4, K8]</code> 索引再探深一层（Napa 称这种操作为 Drill Down）</p>
+<p>Drill Down 只是部分的</p>
+<blockquote>
+<p>Note that we only need to drill down entries contributing to the error margin. The other entries are kept in the working set (called the set) without matching entry drill down.</p>
+</blockquote>
+<p>但我不知道这个 Contribute 是怎么判定的。。。Margin Ratio 大小合适度又是怎么判定的。。。这些都会在算法细节部分介绍！未完待续！</p>
+<h3 id="算法细节"><a href="#算法细节" class="headerlink" title="算法细节"></a>算法细节</h3><p>假定 Delta 为 <script type="math/tex">\{1, ..., D\}</script>，第 i 个查询为 <script type="math/tex">d_{i}</script>。给定查询 Q， <script type="math/tex">d_{i}</script>中满足要求的条目称为 mathing entry set <script type="math/tex">E_{i}</script>. 那么在查询中也可以找到一组满足要求的 <script type="math/tex">\{E_{1}, E_{2}, ..., E_{D}\}</script>。对于每个 B-tree 节点，这里可以找到子条目 <script type="math/tex">e_{i}</script>和 <script type="math/tex">e_{i+1}</script>，每个条目的 size 等级于自己子部分内容的 size 和。它的统计信息可以简化为 <code>e = &lt;start, end, size, level, block&gt;</code>，<code>[start, end)</code> 代表 key-range. <code>level</code> 代表可以 dive 的层数（我理解层数应该是 hidden 的，不用存，只是个抽象?），<code>e.block</code> 是 child index block 的数量。</p>
+<p>算法会逐渐推进，从一个 (virtual) root entry 扩展开来，每次到一层可以更新一批 matching entry set，相当于通过 IO （和部分 CPU 与维护成本）来提供更精细的统计。这里提供的内容基本上是 <strong>maximum size estimate</strong>。这个精细化的过程就是 DrillDown：</p>
+<p><img src="https://image.mwish.me/blog-image/3125270644515696735.png" alt="img"></p>
+<p>DrillDown 本身可能引入 IO（老实说我感觉 btr 这个东西本身就很容易缓存，但是这种大规模查询可能缓存命中率也做不到很高，具体得测测或者结合 RocksDB Index 的经验看看）。所以这里可能会 Batch 访问下层来优化（说实话我真不懂这了。。。虽然我看着懂他的意思，但是脑部不出为啥要这么写）</p>
+<h4 id="Split-point-candidates"><a href="#Split-point-candidates" class="headerlink" title="Split point candidates"></a>Split point candidates</h4><p>下面是到一组 Entry Sets  <script type="math/tex">\{E_{1}, E_{2}, ..., E_{D}\}</script>里面寻找<strong>所有的 bonadry-key</strong> <script type="math/tex">\{k_{1}, k_{2}, ..., k_{m}\}</script>和对应的 cumulative 大小和<script type="math/tex">\{c_{1}, c_{2}, ..., c_{m}\}</script>. 这里希望这里面的切分能够尽量均匀. 在这里 <script type="math/tex">k_{i}</script>和下一个 key 中间的某个 key 被称为 i split point candidate 。选作中间某个 key 是一个 <strong>short-key 优化</strong>（类似处理 min-max 过长时候的优化<strong>）。</strong></p>
+<p><script type="math/tex">c_{i}</script>实现上有点类似 DP，会选取&lt;从零到这个这个key 的 size可能的最小&gt;和&lt;从零到这个这个key 的 size可能的最大&gt;。这个说法有点抽象，截图论文了</p>
+<p><img src="https://image.mwish.me/blog-image/6275015760304340221.png" alt="img"></p>
+<p>下面是具体的参数：</p>
+<p><img src="https://image.mwish.me/blog-image/2872769688922876604.png" alt="img"></p>
+<p>通过这个粗糙的计算 size 和错误率。这个问题等价于在所有 m 个 key 中切出 P 个 Paritition（P-1 个 split point）。</p>
+<p>下面是找到具体的 split point。本质上是一个 uniform partition 算法。算法的目标是，给定<script type="math/tex">\{c_{1}, c_{2}, ..., c_{m}\}</script>计算<script type="math/tex">\{s_{1}, s_{2}, ..., s_{p-1}\}</script>.因为这里有一个总大小（相当于最后一个 <script type="math/tex">c_{m}</script>的 max），所以根据总大小能推断出每个 Partition 的推荐大小。然后扫出一组 Partition，他这里算法我没看懂，复杂度如下</p>
+<p><img src="https://image.mwish.me/blog-image/1296285521936491971.png" alt="img"></p>
+<p>然后这里再次计算 <script type="math/tex">\{s_{1}, s_{2}, ..., s_{p-1}\}</script> 是否足够好了，下面挑选出对应的不合法集合：</p>
+<p><img src="https://image.mwish.me/blog-image/1850538063534972728.png" alt="img"></p>
+<p>这里根据不合法的集合尝试找到需要 dive 的 entry</p>
+<p><img src="https://image.mwish.me/blog-image/6739283094117746993.png" alt="img"></p>
+<p>可以看到，entry 是针对 key 而言的，这里可以针对 key 找到一组对应的需要切的 entry，然后尝试切一下。（论文描述了两种切分方法）</p>
+<p><img src="https://image.mwish.me/blog-image/210579796710822954.png" alt="img"></p>
+<p>组合起来算法如下：</p>
+<p><img src="https://image.mwish.me/blog-image/140444377129215087.png" alt="img"></p>
+<p>工程上这里有一些优化：</p>
+<ol>
+<li>允许用户设置 dop，但是每个 dop 有最小大小限制，用户可能瞎几把设，不能搞太细</li>
+<li>允许根据 Scan 的 size 来估计，而不是根据 dop 来估计。因为可能 scan size 对于查询估计来说是个更好的东西</li>
+</ol>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%9B%B8%E5%85%B3%E5%B7%A5%E4%BD%9C"><span class="toc-number">1.</span> <span class="toc-text">相关工作</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Napa"><span class="toc-number">2.</span> <span class="toc-text">Napa</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BB%BA%E6%A8%A1"><span class="toc-number">3.</span> <span class="toc-text">建模</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#LSM"><span class="toc-number">3.1.</span> <span class="toc-text">LSM</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%9F%A5%E8%AF%A2"><span class="toc-number">3.2.</span> <span class="toc-text">查询</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Progressive-Parititoning"><span class="toc-number">4.</span> <span class="toc-text">Progressive Parititoning</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%AE%97%E6%B3%95%E7%BB%86%E8%8A%82"><span class="toc-number">4.1.</span> <span class="toc-text">算法细节</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Split-point-candidates"><span class="toc-number">4.1.1.</span> <span class="toc-text">Split point candidates</span></a></li></ol></li></ol></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2023/09/08/VLDB-23-Query-Partition-in-Napa/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2023/09/08/VLDB-23-Query-Partition-in-Napa/&text=VLDB&#39;23: Query Partition in Napa"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2023/09/08/VLDB-23-Query-Partition-in-Napa/&title=VLDB&#39;23: Query Partition in Napa"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2023/09/08/VLDB-23-Query-Partition-in-Napa/&is_video=false&description=VLDB&#39;23: Query Partition in Napa"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=VLDB&#39;23: Query Partition in Napa&body=Check out this article: http://blog.mwish.me/2023/09/08/VLDB-23-Query-Partition-in-Napa/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2023/09/08/VLDB-23-Query-Partition-in-Napa/&title=VLDB&#39;23: Query Partition in Napa"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2023/09/08/VLDB-23-Query-Partition-in-Napa/&title=VLDB&#39;23: Query Partition in Napa"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2023/09/08/VLDB-23-Query-Partition-in-Napa/&title=VLDB&#39;23: Query Partition in Napa"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2023/09/08/VLDB-23-Query-Partition-in-Napa/&title=VLDB&#39;23: Query Partition in Napa"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2023/09/08/VLDB-23-Query-Partition-in-Napa/&name=VLDB&#39;23: Query Partition in Napa&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2023/09/08/VLDB-23-Query-Partition-in-Napa/&t=VLDB&#39;23: Query Partition in Napa"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="前面使用部分不太感兴趣，直接从第十章开始看 Ep10 大数据分析偏向大数据一些的基础架构。回头写。 Ep 11 数据分析偏向利用 Ep10 拿到的结果再做一些分析。回头写。 Ep12 物理存储系统首先存储是分层的，具体而言是：  cache main memory flash memory(SSD) 磁盘存储（感觉经常在商业系统存一些冷数据） 光学存储器（类似 DVD） 磁带存储器  此外存储器还">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Database System Concepts 7th">
+<meta property="og:url" content="http://blog.mwish.me/2022/01/30/Database-System-Concepts-7th/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="前面使用部分不太感兴趣，直接从第十章开始看 Ep10 大数据分析偏向大数据一些的基础架构。回头写。 Ep 11 数据分析偏向利用 Ep10 拿到的结果再做一些分析。回头写。 Ep12 物理存储系统首先存储是分层的，具体而言是：  cache main memory flash memory(SSD) 磁盘存储（感觉经常在商业系统存一些冷数据） 光学存储器（类似 DVD） 磁带存储器  此外存储器还">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/E4DE3EA7-EA78-4FE0-9A54-1F6459096D96.png">
+<meta property="article:published_time" content="2022-01-30T11:53:50.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.562Z">
+<meta property="article:author" content="mwish">
+<meta property="article:tag" content="database, reading">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/E4DE3EA7-EA78-4FE0-9A54-1F6459096D96.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>Database System Concepts 7th</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2022/01/31/mwish-2021-summary/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2022/01/28/Transaction-OCC-and-modern-hardware/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2022/01/30/Database-System-Concepts-7th/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2022/01/30/Database-System-Concepts-7th/&text=Database System Concepts 7th"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2022/01/30/Database-System-Concepts-7th/&title=Database System Concepts 7th"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2022/01/30/Database-System-Concepts-7th/&is_video=false&description=Database System Concepts 7th"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Database System Concepts 7th&body=Check out this article: http://blog.mwish.me/2022/01/30/Database-System-Concepts-7th/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2022/01/30/Database-System-Concepts-7th/&title=Database System Concepts 7th"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2022/01/30/Database-System-Concepts-7th/&title=Database System Concepts 7th"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2022/01/30/Database-System-Concepts-7th/&title=Database System Concepts 7th"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2022/01/30/Database-System-Concepts-7th/&title=Database System Concepts 7th"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2022/01/30/Database-System-Concepts-7th/&name=Database System Concepts 7th&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2022/01/30/Database-System-Concepts-7th/&t=Database System Concepts 7th"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Ep10-%E5%A4%A7%E6%95%B0%E6%8D%AE%E5%88%86%E6%9E%90"><span class="toc-number">1.</span> <span class="toc-text">Ep10 大数据分析</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Ep-11-%E6%95%B0%E6%8D%AE%E5%88%86%E6%9E%90"><span class="toc-number">2.</span> <span class="toc-text">Ep 11 数据分析</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Ep12-%E7%89%A9%E7%90%86%E5%AD%98%E5%82%A8%E7%B3%BB%E7%BB%9F"><span class="toc-number">3.</span> <span class="toc-text">Ep12 物理存储系统</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%A3%81%E7%9B%98"><span class="toc-number">3.1.</span> <span class="toc-text">磁盘</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%97%AA%E5%AD%98"><span class="toc-number">3.2.</span> <span class="toc-text">闪存</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#RAID"><span class="toc-number">3.3.</span> <span class="toc-text">RAID</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#EP13-%E6%95%B0%E6%8D%AE%E5%AD%98%E5%82%A8%E7%BB%93%E6%9E%84"><span class="toc-number">4.</span> <span class="toc-text">EP13 数据存储结构</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%A1%8C%E5%AD%98%E7%9A%84%E6%95%B0%E6%8D%AE%E7%BB%84%E7%BB%87"><span class="toc-number">4.1.</span> <span class="toc-text">行存的数据组织</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%A4%A7%E5%AF%B9%E8%B1%A1%E5%AD%98%E5%82%A8"><span class="toc-number">4.1.1.</span> <span class="toc-text">大对象存储</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%96%87%E4%BB%B6%E8%AE%B0%E5%BD%95%E7%9A%84%E7%BB%84%E7%BB%87"><span class="toc-number">4.2.</span> <span class="toc-text">文件记录的组织</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Partition"><span class="toc-number">4.2.1.</span> <span class="toc-text">Partition</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Catalog"><span class="toc-number">4.2.2.</span> <span class="toc-text">Catalog</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Buffer-Pool-Manager"><span class="toc-number">4.3.</span> <span class="toc-text">Buffer Pool Manager</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%9D%A2%E5%90%91%E5%88%97%E7%9A%84%E5%AD%98%E5%82%A8"><span class="toc-number">4.4.</span> <span class="toc-text">面向列的存储</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Main-Memory-DB"><span class="toc-number">4.5.</span> <span class="toc-text">Main-Memory DB</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Ep14-%E7%B4%A2%E5%BC%95%E7%BB%93%E6%9E%84"><span class="toc-number">5.</span> <span class="toc-text">Ep14 索引结构</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Ep15-%E6%9F%A5%E8%AF%A2%E6%89%A7%E8%A1%8C"><span class="toc-number">6.</span> <span class="toc-text">Ep15 查询执行</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Ep16-%E6%9F%A5%E8%AF%A2%E4%BC%98%E5%8C%96"><span class="toc-number">7.</span> <span class="toc-text">Ep16 查询优化</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Ep17-%E4%BA%8B%E5%8A%A1"><span class="toc-number">8.</span> <span class="toc-text">Ep17 事务</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Ep18-%E5%B9%B6%E5%8F%91%E6%8E%A7%E5%88%B6"><span class="toc-number">9.</span> <span class="toc-text">Ep18 并发控制</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Ep19-%E6%81%A2%E5%A4%8D%E7%B3%BB%E7%BB%9F"><span class="toc-number">10.</span> <span class="toc-text">Ep19 恢复系统</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Database System Concepts 7th
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2022-01-30T11:53:50.000Z" itemprop="datePublished">2022-01-30</time>
+        
+      
+    </div>
+
+
+      
+
+      
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/database-reading/" rel="tag">database, reading</a>
+    </div>
+
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>前面使用部分不太感兴趣，直接从第十章开始看</p>
+<h2 id="Ep10-大数据分析"><a href="#Ep10-大数据分析" class="headerlink" title="Ep10 大数据分析"></a>Ep10 大数据分析</h2><p>偏向大数据一些的基础架构。回头写。</p>
+<h2 id="Ep-11-数据分析"><a href="#Ep-11-数据分析" class="headerlink" title="Ep 11 数据分析"></a>Ep 11 数据分析</h2><p>偏向利用 Ep10 拿到的结果再做一些分析。回头写。</p>
+<h2 id="Ep12-物理存储系统"><a href="#Ep12-物理存储系统" class="headerlink" title="Ep12 物理存储系统"></a>Ep12 物理存储系统</h2><p>首先存储是分层的，具体而言是：</p>
+<ol>
+<li>cache</li>
+<li>main memory</li>
+<li>flash memory(SSD)</li>
+<li>磁盘存储（感觉经常在商业系统存一些冷数据）</li>
+<li>光学存储器（类似 DVD）</li>
+<li>磁带存储器</li>
+</ol>
+<p>此外存储器还有接口，对应物理接口和一些协议栈：</p>
+<ol>
+<li>SATA 总线</li>
+<li>PCIe 总线</li>
+</ol>
+<p>在协议上也有区别</p>
+<ol>
+<li>NVMe 协议</li>
+<li>SCSI 协议</li>
+</ol>
+<p>此外，硬件接口也有区别，最常见的是 mSATA 和 M.2. 这个可以去 jd 搜搜，一看就懂。</p>
+<p>具体可看：<a target="_blank" rel="noopener" href="https://sjtu-sjtug.feishu.cn/docs/doccnfdnoqmgt6qqko5GM0tAKkh#">https://sjtu-sjtug.feishu.cn/docs/doccnfdnoqmgt6qqko5GM0tAKkh#</a> 和 《深入浅出 SSD》这两个材料。</p>
+<p>存储设备在互联网上可能以 SAN 的形式组织，这种形式提供了盘一样的访问接口，现在也有 ifiniBand 之类的方式。此外还有 NAS 之类的，提供网络文件系统的形式（我在家组了个 NAS 放片，爽的）。</p>
+<h3 id="磁盘"><a href="#磁盘" class="headerlink" title="磁盘"></a>磁盘</h3><p>以 sector 为形式组织，受限于物理的访问，磁盘生命取决于保存和访问。对外提供的性能大概是：</p>
+<ol>
+<li>2-20ms 的 seek time</li>
+<li>旋转时间: 可能又是个位数 ms</li>
+<li>传输：50-200MB/s</li>
+<li>sector: 可能是 512B</li>
+</ol>
+<h3 id="闪存"><a href="#闪存" class="headerlink" title="闪存"></a>闪存</h3><p>SSD 性质看看我之前介绍就行，in short，长一点的可以看之前那个： </p>
+<ol>
+<li>我之前抄的：<a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/430451374">https://zhuanlan.zhihu.com/p/430451374</a></li>
+<li>长一点的，感谢 SJTU：<a target="_blank" rel="noopener" href="https://sjtu-sjtug.feishu.cn/docs/doccnfdnoqmgt6qqko5GM0tAKkh#">https://sjtu-sjtug.feishu.cn/docs/doccnfdnoqmgt6qqko5GM0tAKkh#</a> </li>
+</ol>
+<p>关于性能，可以到数千 MB/s, 同时有一定的并行读写能力。我感觉现在一般大公司内部都一堆 SSD 来 Handle 用户的写入</p>
+<h3 id="RAID"><a href="#RAID" class="headerlink" title="RAID"></a>RAID</h3><p>上大学的时候背过 RAID0-RAID5 应付考试，现在全忘光了，感觉再背一遍也没什么意思，就主要讲讲思路吧。</p>
+<ol>
+<li>冗余以提高可靠性<ol>
+<li>这点对现在的人其实有点 confusing，为什么呢，现在的时代很多时候可能单机都不需要考虑数据的靠谱，靠 GFS Style 的备份之类的是更常见的 idiom. 跟群友讨论了下，ebs/GFS 这种感觉目前还是领先地位的，RAID0 RAID1 是可以用的</li>
+</ol>
+</li>
+<li>并行以提高性能<ol>
+<li>感觉这个在 SSD 上用处有限，HDD 上倒是好一些？</li>
+</ol>
+</li>
+</ol>
+<h2 id="EP13-数据存储结构"><a href="#EP13-数据存储结构" class="headerlink" title="EP13 数据存储结构"></a>EP13 数据存储结构</h2><p>这章感觉也很 trivial，就讨论了各种存储的结构：</p>
+<ol>
+<li>架设在行存中的数据库</li>
+<li>架设在列存中的数据库</li>
+<li>内存数据库/NVM 数据库</li>
+</ol>
+<h3 id="行存的数据组织"><a href="#行存的数据组织" class="headerlink" title="行存的数据组织"></a>行存的数据组织</h3><p>传统的 RDBMS 会以 Block/Page 为粒度组织系统，本身 HDD/SDD 都是基于块的存储设备。它们的大小通常为 4kB/8kB/16kB。</p>
+<p>假设 Page 大小是固定的。定长记录可以从 Catalog 里面知道长度，直接顺序存就行，变长记录可能需要一些特殊方式：</p>
+<p><img src="https://image.mwish.me/blog-image/E4DE3EA7-EA78-4FE0-9A54-1F6459096D96.png" alt="E4DE3EA7-EA78-4FE0-9A54-1F6459096D96"></p>
+<p>上图是 PG 中的处理形式，PG 的 HeapPage 单个 Page 内会这样组织数据。这里有个很清晰的问题是，在数据删除比较多的时候会怎么重新组织，这个时候它会在 Vacuum 阶段处理这些数据。</p>
+<p>此外，MySQL 的 InnoDB Page 内部记录组织会更复杂一些。采用了链表+minmax+稀疏索引的形式。究其原因，InnoDB 对写操作支持要好很多，这些都可以算在写操作的支持里面。</p>
+<h4 id="大对象存储"><a href="#大对象存储" class="headerlink" title="大对象存储"></a>大对象存储</h4><p>MySQL 的 Page 要求 Btr 的 Page 会至少存储两个 record, 多的纪录会放到 BLOB 对象和 Page 中。</p>
+<p>PostgreSQL 有 TOAST 对象，具体如下：<a target="_blank" rel="noopener" href="https://cch1996.github.io/2020/09/22/postgres-04/">https://cch1996.github.io/2020/09/22/postgres-04/</a></p>
+<p>简单来说，TOAST 记录会放在 TOAST 表中。</p>
+<h3 id="文件记录的组织"><a href="#文件记录的组织" class="headerlink" title="文件记录的组织"></a>文件记录的组织</h3><ol>
+<li>HeapFile 组织，记录放在文件的人和地方</li>
+<li>顺序文件组织</li>
+<li>B+Tree 文件组织</li>
+<li>Hashing 文件组织</li>
+</ol>
+<p>Record 的组织可以看我之前写的内容的 Tuple 部分：<a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/457605514">https://zhuanlan.zhihu.com/p/457605514</a></p>
+<p>对于传统的 RDBMS，在 Stonebraker 的<a target="_blank" rel="noopener" href="https://book.douban.com/subject/17665384/">文章</a> 中，表示虽然文件系统可能会有一些特殊的组织方式，不会按文件的格式顺序存放所有块，但是直接用文件组织的话，开销是比较小的。新时代随着 SPDK 等技术的发展，这个可能会有一点变化，但是程序员我感觉也不用太关注。</p>
+<p>对于 Page 的组织，PostgreSQL 做的简单一些，会放在 Database Cluster 的空间中，PG 除了表文件，还有对应的 <code>_fsm</code> （空间空间映射）和 <code>_vm</code> （可见性映射），通过在 fsm 的标记找到可用的 Page，然后找到写入的 Page。</p>
+<p>InnoDB 这个要复杂一些：</p>
+<ol>
+<li>Extent （区）：连续存放 64 个 Page，希望提高 Page 分配的局部性</li>
+<li>Segment（段）：存放不同类型的数据，比如叶子结点段、非叶子结点段。Segment 会向 OS 申请 Extent 大小的存储空间。</li>
+</ol>
+<p>回收的时候，PG 根据 Freeze/Vacuum 和 <code>_vm</code> 的标记来回收，InnoDB 则会根据 Extent 的链表（XDES）来做回收</p>
+<h4 id="Partition"><a href="#Partition" class="headerlink" title="Partition"></a>Partition</h4><p>数据根据某个 key 划分成多个文件/空间。这种方式能够将单个库拆分、做冷热分离，但也会影响跟这个 key 无关的请求。</p>
+<h4 id="Catalog"><a href="#Catalog" class="headerlink" title="Catalog"></a>Catalog</h4><p>一般 Catalog 可以全部保持在内存中，存储的时候要持久化。</p>
+<h3 id="Buffer-Pool-Manager"><a href="#Buffer-Pool-Manager" class="headerlink" title="Buffer Pool Manager"></a>Buffer Pool Manager</h3><p>掠过不谈，反正就经典 Pin, Cache Replacement, Dirty 之类的。看 InnoDB 策略、ARC 基本就行了。</p>
+<p>这里还有个写顺序和 WAL 的问题，略过不谈，反正 recovery system 可以讲。</p>
+<p>本质上就是预测用户行为，然后丢缓存之类的。</p>
+<h3 id="面向列的存储"><a href="#面向列的存储" class="headerlink" title="面向列的存储"></a>面向列的存储</h3><p>没啥说的，基本参考 abadi 的 Columnar DBMS，存储看我这篇：<a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/457889634">https://zhuanlan.zhihu.com/p/457889634</a></p>
+<h3 id="Main-Memory-DB"><a href="#Main-Memory-DB" class="headerlink" title="Main-Memory DB"></a>Main-Memory DB</h3><p>感觉这部分讲的还是内存上的，行列都讲，就写的不是很清晰，没啥意思。</p>
+<h2 id="Ep14-索引结构"><a href="#Ep14-索引结构" class="headerlink" title="Ep14 索引结构"></a>Ep14 索引结构</h2><p>B+Tree 都看吐了，我一个字都不想写。就跟 Btree 比一下简单一些，Btree 省空间一点，但是没啥意义，很容易被抹平。</p>
+<p>SSD 上的 Btree Style 索引：</p>
+<ol>
+<li>BwTree</li>
+<li>FDTree</li>
+<li>MassTree</li>
+</ol>
+<p>我个人反正感觉这些东西反而很多都没用上，除了 ms 的论文，就 Ark 用了下 BwTree。不知道是这些结构本身不靠谱，还是 TP 系统和 Btree 已经是时代的眼泪了。</p>
+<p>Btree 本身是为 HDD 那样的结构设计的，在 SSD 上，Btree 还是有优势的，因为内存和 SSD 还是有 gap 的，而且 Btr 本身会有一些很细的优化，比如 trxn 之类的，但是这套东西也还是很难实现的。以 BwTree 为例：</p>
+<p>BwTree 做了：</p>
+<ol>
+<li>Mapping Table: 对 Node 或者写入的映射</li>
+<li>写入类似 Log 的形式存放，Btree 也预留了空间</li>
+<li>无锁</li>
+</ol>
+<p>主存上的索引类似 ART.</p>
+<p>还有 hashing 索引什么的，我感觉这些国内材料比较少，我自己也没写过，就不谈了。</p>
+<p>LSM 是新时代的宠儿，因为实现比 Btr 简单，性能不错，写性能很好（设计者认为，读是很好优化的）可调整可预测，还有 RocksDB 什么的。这里还有些 WiscKey 之类的 SSD 友好结构，不过 WiscKey 设计也有一些问题，比如: <a target="_blank" rel="noopener" href="https://www.skyzh.dev/posts/articles/2021-08-07-lsm-kv-separation-overview/">https://www.skyzh.dev/posts/articles/2021-08-07-lsm-kv-separation-overview/</a> 。此外 LSM 虽然本身是一个写优化的结构，但是它的思路被放到了很多 HTAP 类似的读写混合系统里面。</p>
+<p>这里还提到了 Buffer Tree，我觉得有点类似 FD-Tree, 把更新搞到一个缓冲区（Delta），然后先找 Delta 再找下面，Buffer 满了之后按一定策略来下推。</p>
+<p>位图索引（我记得 PG 有这个），本身和列存那套差不多，当然这套东西也可以做到 Btree 上(防止一个 Page 放不下？)。删除记录可能在定位的地方产生洞，这里可以用一个 exist 的位图表示，不过我觉得 TUM 的 PDT 思路好一些，它用了一个偏移量的 B树（Position Delta Tree）来表述。此外：</p>
+<ol>
+<li>如果只有某个值出现的比较多，可以单独给它一个索引</li>
+<li>如果叶子结点发现可以位图压缩，那就用</li>
+</ol>
+<p>上面这些优化我感觉都是看上去能省空间，但是实际情况有点 confusing 的，暂且不表吧。</p>
+<p>空间结构：k-d-B 树。这名字有点复杂，可以先看 k-d 树：<a target="_blank" rel="noopener" href="https://oi-wiki.org/ds/kdt/#_3">https://oi-wiki.org/ds/kdt/#_3</a> 。k-d 树形态上是一个 Binary Search Tree，这里相当于提供了一个 Btree 的形式。</p>
+<h2 id="Ep15-查询执行"><a href="#Ep15-查询执行" class="headerlink" title="Ep15 查询执行"></a>Ep15 查询执行</h2><p>直接看这个就行，对应本章的笔记：<a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/349943902">https://zhuanlan.zhihu.com/p/349943902</a></p>
+<h2 id="Ep16-查询优化"><a href="#Ep16-查询优化" class="headerlink" title="Ep16 查询优化"></a>Ep16 查询优化</h2><p>统计信息参见：<a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/350255430">https://zhuanlan.zhihu.com/p/350255430</a></p>
+<p>执行计划的估计可以参考：</p>
+<ol>
+<li>Selinger 的 System R 优化器</li>
+<li>Graefe Goetz 的 Cascades/Volcano Planner</li>
+</ol>
+<p>我感觉上面 15-721 的 slide 写的很详细，目测 noisepage 参考 Columbia 抄了个 Cascade Planner。</p>
+<p>关于连接顺序的，基本是个 DP。不过复杂度很高，基本是 $O(3^n)$, Selinger 那篇采用了 <strong>启发式</strong> 做一些优化，比如：</p>
+<ol>
+<li>outer join 最后 Plan</li>
+<li>Selection 先下推 （这个在一些 case，比如 A Join B, 选择在 B 的字段，且 JOIN 可以走索引的场景下，工作的不是很好）</li>
+<li>Projection 先下推</li>
+</ol>
+<p>然后有一些 interesting order 或者 physical properties 的方式来施加一些限制。</p>
+<p>Cascades/Volcano 框架则有下列的思想：</p>
+<ol>
+<li>有一些被称为物理等价规则(physical equivalence rule) 的规则，来完成 transform。通常这些规则一般都是原子的，即不能被别的规则组合出来</li>
+<li>这些规则是和代价估计结合在一起的</li>
+<li>memorization 来存储最优的形式</li>
+<li>保存一些子结构</li>
+</ol>
+<p>有一个很重要的东西是 Join Order 的选择，其实是这样的：</p>
+<ol>
+<li>表多直接遗传算法了，比如 PG 那种，超过 12个表直接遗传算法</li>
+<li>传统的 Selinger 那篇文章，只考虑了 left deep tree。有一些复杂的算法会考虑 bushy tree，比如 dpccp</li>
+</ol>
+<p>有一个重要的话题是子查询的优化，可以把一些 EXIST 之类的改成 Semijoin，不过这个规则有点啰嗦，PG 有一块就是处理子查询，我看的人一愣一愣的…TUM 有一篇处理任意子查询的论文，这里有个二手博客：<a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/60380557">https://zhuanlan.zhihu.com/p/60380557</a></p>
+<p>有一个比较重要的部分是物化视图，随着最近 OLAP 系统的火热，物化视图越来越热门。不过老大难的问题是物化视图的更新，最新的参考 Google 的 Napa 系统。老大难的问题是物化视图的选择（类似索引选择）和更新（实时性 — 写性能 — 成本），Napa 用一个 ts 来让你自己选。我们考虑下面的更新：</p>
+<ol>
+<li>JOIN: 相当于单条记录 Join 另一张表，然后增加/删除记录</li>
+<li>Selection/Projection: Selection 可能好处理一些，直接区间操作就行；Projection 可能要记录数据的来源/counting，在其上操作</li>
+<li>Agg: count/sum/avg 这些比较好处理，min/max 可能需要在有序集合上处理。维护 min/max 的插入很简单，但是要在上面处理删除是很难得。</li>
+</ol>
+<p>还有一些 advance 的内容，15-721 也有列，包括：</p>
+<ol>
+<li>top-K 优化</li>
+<li>adaptive 的查询处理</li>
+<li>参数化的查询优化</li>
+<li>共享扫描、多查询优化</li>
+</ol>
+<h2 id="Ep17-事务"><a href="#Ep17-事务" class="headerlink" title="Ep17 事务"></a>Ep17 事务</h2><p>事务有着 ACID 的概念，这里我看到过介绍的最好的是 DDIA 那本书：</p>
+<ol>
+<li>A: 事务本身多个操作是可以原子性 abort 的</li>
+<li>C: 对外的状态满足某些一致性约束</li>
+<li>I: 可见性之类的东西受到约束</li>
+<li>D: 提交、掉电之后还在</li>
+</ol>
+<p>串行化是假设事务一个接一个执行的情况，这种情况叫「串行化」。而并发控制组件（concurrency-control）会控制事务的访问。对于逻辑上等同于串行化的调度，成为「冲突可串行化」。同时，通过事务的读写关系，能定义事务之间的<em>偏序</em>关系。</p>
+<p>这里（ <a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/293533311）介绍了一种用图描绘冲突的方式，我觉得是一种相当好的定义方式。">https://zhuanlan.zhihu.com/p/293533311）介绍了一种用图描绘冲突的方式，我觉得是一种相当好的定义方式。</a></p>
+<p>这里调度还要考虑「可恢复（reconverable）」和「无级联调度（cascadeless）」:</p>
+<ol>
+<li>可恢复调度指的是，A depends on B,  A commit 了, B 没有 commit, 那么可能 B abort 了，A 就没法恢复了。</li>
+<li>A-&gt;B-&gt;C，C abort 了，那 B/A 需要级联 abort。OCC 中可能遇到这种情况，S2PL 应该不会。</li>
+</ol>
+<p>然后这里介绍了一下隔离级别，可以参考我之前发的那玩意。隔离级别可以用 锁、ts、MVCC 或者组合来实现，这些概念其实是可以杂糅在一起的，具体还是看具体实现。</p>
+<h2 id="Ep18-并发控制"><a href="#Ep18-并发控制" class="headerlink" title="Ep18 并发控制"></a>Ep18 并发控制</h2><p>这节感觉是有点难度的，讨论了传统的各种并发控制，和一些杂项。然后讨论了一下 Online DDL 之类的。</p>
+<p>协议部分见：</p>
+<ol>
+<li><a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/294657612">https://zhuanlan.zhihu.com/p/294657612</a></li>
+<li><a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/298576970">https://zhuanlan.zhihu.com/p/298576970</a></li>
+</ol>
+<p>然后 Online DDL 基本是 快照读 + 排序 + 追增量。Percolator + F1 是在写的时候做了状态兼容，把追增量这部替换掉了，其实是差不多的。</p>
+<h2 id="Ep19-恢复系统"><a href="#Ep19-恢复系统" class="headerlink" title="Ep19 恢复系统"></a>Ep19 恢复系统</h2><p>见：<a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/397469987">https://zhuanlan.zhihu.com/p/397469987</a></p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Ep10-%E5%A4%A7%E6%95%B0%E6%8D%AE%E5%88%86%E6%9E%90"><span class="toc-number">1.</span> <span class="toc-text">Ep10 大数据分析</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Ep-11-%E6%95%B0%E6%8D%AE%E5%88%86%E6%9E%90"><span class="toc-number">2.</span> <span class="toc-text">Ep 11 数据分析</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Ep12-%E7%89%A9%E7%90%86%E5%AD%98%E5%82%A8%E7%B3%BB%E7%BB%9F"><span class="toc-number">3.</span> <span class="toc-text">Ep12 物理存储系统</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%A3%81%E7%9B%98"><span class="toc-number">3.1.</span> <span class="toc-text">磁盘</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%97%AA%E5%AD%98"><span class="toc-number">3.2.</span> <span class="toc-text">闪存</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#RAID"><span class="toc-number">3.3.</span> <span class="toc-text">RAID</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#EP13-%E6%95%B0%E6%8D%AE%E5%AD%98%E5%82%A8%E7%BB%93%E6%9E%84"><span class="toc-number">4.</span> <span class="toc-text">EP13 数据存储结构</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%A1%8C%E5%AD%98%E7%9A%84%E6%95%B0%E6%8D%AE%E7%BB%84%E7%BB%87"><span class="toc-number">4.1.</span> <span class="toc-text">行存的数据组织</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%A4%A7%E5%AF%B9%E8%B1%A1%E5%AD%98%E5%82%A8"><span class="toc-number">4.1.1.</span> <span class="toc-text">大对象存储</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%96%87%E4%BB%B6%E8%AE%B0%E5%BD%95%E7%9A%84%E7%BB%84%E7%BB%87"><span class="toc-number">4.2.</span> <span class="toc-text">文件记录的组织</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Partition"><span class="toc-number">4.2.1.</span> <span class="toc-text">Partition</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Catalog"><span class="toc-number">4.2.2.</span> <span class="toc-text">Catalog</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Buffer-Pool-Manager"><span class="toc-number">4.3.</span> <span class="toc-text">Buffer Pool Manager</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%9D%A2%E5%90%91%E5%88%97%E7%9A%84%E5%AD%98%E5%82%A8"><span class="toc-number">4.4.</span> <span class="toc-text">面向列的存储</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Main-Memory-DB"><span class="toc-number">4.5.</span> <span class="toc-text">Main-Memory DB</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Ep14-%E7%B4%A2%E5%BC%95%E7%BB%93%E6%9E%84"><span class="toc-number">5.</span> <span class="toc-text">Ep14 索引结构</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Ep15-%E6%9F%A5%E8%AF%A2%E6%89%A7%E8%A1%8C"><span class="toc-number">6.</span> <span class="toc-text">Ep15 查询执行</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Ep16-%E6%9F%A5%E8%AF%A2%E4%BC%98%E5%8C%96"><span class="toc-number">7.</span> <span class="toc-text">Ep16 查询优化</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Ep17-%E4%BA%8B%E5%8A%A1"><span class="toc-number">8.</span> <span class="toc-text">Ep17 事务</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Ep18-%E5%B9%B6%E5%8F%91%E6%8E%A7%E5%88%B6"><span class="toc-number">9.</span> <span class="toc-text">Ep18 并发控制</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Ep19-%E6%81%A2%E5%A4%8D%E7%B3%BB%E7%BB%9F"><span class="toc-number">10.</span> <span class="toc-text">Ep19 恢复系统</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2022/01/30/Database-System-Concepts-7th/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2022/01/30/Database-System-Concepts-7th/&text=Database System Concepts 7th"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2022/01/30/Database-System-Concepts-7th/&title=Database System Concepts 7th"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2022/01/30/Database-System-Concepts-7th/&is_video=false&description=Database System Concepts 7th"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Database System Concepts 7th&body=Check out this article: http://blog.mwish.me/2022/01/30/Database-System-Concepts-7th/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2022/01/30/Database-System-Concepts-7th/&title=Database System Concepts 7th"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2022/01/30/Database-System-Concepts-7th/&title=Database System Concepts 7th"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2022/01/30/Database-System-Concepts-7th/&title=Database System Concepts 7th"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2022/01/30/Database-System-Concepts-7th/&title=Database System Concepts 7th"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2022/01/30/Database-System-Concepts-7th/&name=Database System Concepts 7th&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2022/01/30/Database-System-Concepts-7th/&t=Database System Concepts 7th"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

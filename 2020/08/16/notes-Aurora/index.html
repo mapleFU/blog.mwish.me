@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="Aurora让我们继续 6.824 阅读。Lecture 10 的标题是:  Lecture 10: Database logging, quorums, Amazon Aurora  与前面的 Raft&#x2F;CRAQ 不同，Aurora 展示了一种技术很牛逼也卖得很好的共享存储架构。我们可以说这是经过了考验的设计良好的架构。 6.824 主要介绍的是 AZ 和 Quorum，虽然这些东西都很厉害，不">
+<meta property="og:type" content="article">
+<meta property="og:title" content="notes: Aurora">
+<meta property="og:url" content="http://blog.mwish.me/2020/08/16/notes-Aurora/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="Aurora让我们继续 6.824 阅读。Lecture 10 的标题是:  Lecture 10: Database logging, quorums, Amazon Aurora  与前面的 Raft&#x2F;CRAQ 不同，Aurora 展示了一种技术很牛逼也卖得很好的共享存储架构。我们可以说这是经过了考验的设计良好的架构。 6.824 主要介绍的是 AZ 和 Quorum，虽然这些东西都很厉害，不">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/2F83C406-2307-437E-9E86-772AF7D89F39.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/F2166CAF-99B5-4B32-BFE9-A5008D68FF2B.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/76F2664C-65A4-4D5C-AF5D-10334065E8BA.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/image.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/9DE4AA15-CD61-4C5E-852B-22B34EC48A82.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/509272B2-DDAB-49AB-9DE3-4B2131B96997.png">
+<meta property="article:published_time" content="2020-08-15T20:17:05.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.549Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/2F83C406-2307-437E-9E86-772AF7D89F39.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>notes: Aurora</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2020/08/19/notes-Spanner/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2020/08/12/notes-Skiplist-based-lsm-tree/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/08/16/notes-Aurora/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/08/16/notes-Aurora/&text=notes: Aurora"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/08/16/notes-Aurora/&title=notes: Aurora"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/08/16/notes-Aurora/&is_video=false&description=notes: Aurora"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=notes: Aurora&body=Check out this article: http://blog.mwish.me/2020/08/16/notes-Aurora/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/08/16/notes-Aurora/&title=notes: Aurora"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/08/16/notes-Aurora/&title=notes: Aurora"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/08/16/notes-Aurora/&title=notes: Aurora"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/08/16/notes-Aurora/&title=notes: Aurora"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/08/16/notes-Aurora/&name=notes: Aurora&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/08/16/notes-Aurora/&t=notes: Aurora"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#Aurora"><span class="toc-number">1.</span> <span class="toc-text">Aurora</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AD%98%E5%82%A8"><span class="toc-number">1.1.</span> <span class="toc-text">存储</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#The-log-is-the-database"><span class="toc-number">1.2.</span> <span class="toc-text">The log is the database</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%97%A5%E5%BF%97%E5%92%8C-SQL"><span class="toc-number">1.3.</span> <span class="toc-text">日志和 SQL</span></a></li></ol></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        notes: Aurora
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2020-08-15T20:17:05.000Z" itemprop="datePublished">2020-08-16</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <h1 id="Aurora"><a href="#Aurora" class="headerlink" title="Aurora"></a>Aurora</h1><p>让我们继续 6.824 阅读。Lecture 10 的标题是:</p>
+<blockquote>
+<p>Lecture 10: Database logging, quorums, Amazon Aurora</p>
+</blockquote>
+<p>与前面的 Raft/CRAQ 不同，Aurora 展示了一种技术很牛逼也卖得很好的共享存储架构。我们可以说这是经过了考验的设计良好的架构。</p>
+<p>6.824 主要介绍的是 AZ 和 Quorum，虽然这些东西都很厉害，不过我总觉得没介绍 Aurora 最牛的东西？</p>
+<p><img src="https://image.mwish.me/blog-image/2F83C406-2307-437E-9E86-772AF7D89F39.png" alt="2F83C406-2307-437E-9E86-772AF7D89F39"></p>
+<p>EC2 是 Amazon 的云服务器，由本地的 SSD，并有多租户等特性，S3 是亚马逊的对象存储. 在 S3 上存上去了能保证安全性。</p>
+<p>这里的 RW 表示有读/写权限的 Primary, RO 表示只读的机器。运算节点机器部署在 Amazon 的 VPC 上，而存储依赖于部署在各地、有本地 SSD 的存储节点。它也会产生类似 binlog 的文件，同步到 Amazon S3 对象存储上。</p>
+<p>6.824 给了一些 AWS 服务的介绍：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">EC2 is great for www servers</span><br><span class="line">  more load -&gt; rent more EC2 instances</span><br><span class="line">  crash -&gt; who cares, stateless, data in DB</span><br><span class="line">EC2 is not ideal for DB e.g. MySQL</span><br><span class="line">  limited scaling options -- just read/only DB replicas</span><br><span class="line">  limited fault-tolerance; if phys machine dies, disk dies with it</span><br><span class="line">    periodic DB backups to Amazon&#x27;s &quot;S3&quot; bulk storage service</span><br></pre></td></tr></table></figure>
+<p>此外还需要介绍 Amazon EBS, 即 Block Store，AWS 的块存储。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">Amazon EBS (Elastic Block Store)</span><br><span class="line">  [diagram of EC2 instance, two EBS servers -- left half of Figure 2]</span><br><span class="line">  block storage that&#x27;s still available even if an EC2 instance crashes</span><br><span class="line">  looks like a disk to EC2 instances, mount e.g. Linux ext4 on EBS volume</span><br><span class="line">  implemented as pairs of servers with disk drives, chain replication,</span><br><span class="line">    paxos-based configuration manager</span><br><span class="line">  both replicas are in the same &quot;availability zone&quot; (AZ)</span><br><span class="line">    AZ = machine room or datacenter</span><br><span class="line">    for speed, since all client writes have to wait for both EBS servers</span><br><span class="line">  for a DB on EC2, much better fault-tolerance than locally-attached storage!</span><br><span class="line">    if DB EC2 instance crashes, just re-start it on another EC2 instance</span><br><span class="line">    and attach to the same EBS volume</span><br><span class="line">  note: only one EC2 instance can use a given EBS volume at a time</span><br><span class="line">    EBS is not shared storage</span><br></pre></td></tr></table></figure>
+<p>传统的 Mirror 方案 Pipeline 如下：</p>
+<p><img src="https://image.mwish.me/blog-image/F2166CAF-99B5-4B32-BFE9-A5008D68FF2B.png" alt="F2166CAF-99B5-4B32-BFE9-A5008D68FF2B"></p>
+<p>（异步的方案或许只要读取 binlog, 但是同步复制则需要做上面的操作 <a target="_blank" rel="noopener" href="https://dev.mysql.com/doc/refman/8.0/en/replication-semisync.html）">https://dev.mysql.com/doc/refman/8.0/en/replication-semisync.html）</a></p>
+<p>上述的操作或者方案会带来很大的写放大。此外，Aurora 认为，在一个集群中，慢的机器和慢的/同步的操作很容易成为瓶颈，例如：</p>
+<ul>
+<li>事务的 Commit 阻塞冲突的事务</li>
+<li>分布式事务的 2PC</li>
+<li>单机的 Cache Miss</li>
+</ul>
+<p>Aurora 把上层保留（不过可能也要做一些适配），然后在存储层替换为了分布式的：</p>
+<p><img src="https://image.mwish.me/blog-image/76F2664C-65A4-4D5C-AF5D-10334065E8BA.png" alt="76F2664C-65A4-4D5C-AF5D-10334065E8BA"></p>
+<blockquote>
+<p>First, by building storage as an independent fault- tolerant and self-healing service across multiple data-centers, we protect the database from performance variance and transient or permanent failures at either the networking or storage tiers. We observe that a failure in durability can be modeled as a long- lasting availability event, and an availability event can be modeled as a long-lasting performance variation – a well-designed system can treat each of these uniformly [42]. Second, by only writing redo log records to storage, we are able to reduce network IOPS by an order of magnitude. Once we removed this bottleneck, we were able to aggressively optimize numerous other points of contention, obtaining significant throughput improvements over the base MySQL code base from which we started. Third, we move some of the most complex and critical functions (backup and redo recovery) from one-time expensive operations in the database engine to continuous asynchronous operations amortized across a large distributed fleet.</p>
+</blockquote>
+<p>Aurora 主要思路是：</p>
+<ol>
+<li>提供共享的存储和 RWN, 在多个可用区保证可靠性</li>
+<li>The log is the database, 共享存储与 Log</li>
+<li>基于(2) 的事务</li>
+</ol>
+<p>我觉得 1 其实很好理解，2对我这种没看过的比较新奇，但是也可以理解，3这段很难</p>
+<h2 id="存储"><a href="#存储" class="headerlink" title="存储"></a>存储</h2> <figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Goal: better fault tolerance by cross-AZ replication</span><br></pre></td></tr></table></figure>
+<p>Available Zone 可用区，简单理解类似于阿里云 xx 机房，特性是：</p>
+<ul>
+<li>内部机器物理上大概很接近，零点几毫秒 ping 一下</li>
+<li>硬件一般故障其实概率都差不多，但是高温、发洪水、网络延迟之类的可能导致整个机房都不可用</li>
+</ul>
+<p>Aurora 采取3AZ + 每个 AZ 两台的形式，在 RWN 协议下保证了：</p>
+<ul>
+<li>一个 AZ 内全部坏掉 + 额外坏一台，是可读的</li>
+<li>一个 AZ 全部坏掉，是可写的</li>
+</ul>
+<p>（我的问题是这样写入不会延迟巨高么=。=）</p>
+<p>Aurora 将：</p>
+<ul>
+<li>长期的机器坏掉</li>
+<li>短暂的网络延迟</li>
+<li>更新</li>
+</ul>
+<p>上述的问题都视作系统的不可用。现在它想要保证的是：</p>
+<ul>
+<li>无法减少故障修复时间</li>
+<li>—&gt; 希望减少 MTTF （平均故障间隔），来让上述不可用很少发生，保证系统有 Quorum</li>
+</ul>
+<p>Aurora 采用 Segment Storage, 来分10G段存储，分段修复。</p>
+<blockquote>
+<p>之所以选择10G，是因为在万兆网络条件下，恢复一个数据段只需要10秒钟。在这种情况，如果要打破多数派，那么必须同时出现两个数据段同时故障加上一个AZ故障，同时AZ故障不包含之前两个数据段故障的独立事件。通过我们对故障率的观察，这种情况出现的概率足够低，即使是在我们现在为客户服务的数据库量级上。</p>
+</blockquote>
+<p>以上的是模型上的思路，Aurora 提供了 EBS 级别的容错：</p>
+<ul>
+<li>EBS 部署在上述所叙述的情况下，来保证写入的 Quorum</li>
+</ul>
+<p>话说 6.824 在这里简单介绍了一下 Quorum read/write，Amazon 在实现 Dynamo 的时候也用了这套：</p>
+<ul>
+<li>可能写入需要维护版本</li>
+<li>N 是总副本的数量，R是读的数量，W是成功写的数量，那么：<ul>
+<li>R + W &gt; N, 即刻说明读写必定有交集，必定能读到写入的数据</li>
+</ul>
+</li>
+</ul>
+<p>6.824 介绍如下：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"> the goal: fault-tolerant storage,</span><br><span class="line">   read latest data even if some failures</span><br><span class="line">how to decide which is the most recent copy?</span><br><span class="line">   cannot vote on content!</span><br><span class="line">     only one server in read quorum might be up to date</span><br><span class="line">   writer assigns increasing version numbers to its writes</span><br><span class="line">   storage servers must remember version of each item</span><br><span class="line">   reader takes max version # of the R copies it receives</span><br><span class="line"> what if a read or write can&#x27;t assemble a quorum?</span><br><span class="line">   keep trying.</span><br></pre></td></tr></table></figure>
+<p>下面是它的 pros and cons</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">What is the benefit of quorum read/write storage systems?</span><br><span class="line">  In contrast to e.g. chain replication.</span><br><span class="line">  Smooth handling of dead or slow or partitioned storage servers</span><br><span class="line">    No need to wait, no need to detect failure, no timeout</span><br><span class="line">    Important for Amazon for remote AZs and temporarily slow servers</span><br><span class="line">    No risk of split brain among the storage servers</span><br><span class="line">  Can adjust R and W to make reads or writes faster (but not both).</span><br><span class="line">  But:</span><br><span class="line">    Servers not in write quorum must catch up (e.g. Aurora&#x27;s gossip).</span><br><span class="line">    Can only tolerate min(N-W, N-R) failures.</span><br><span class="line">    Requirement for version numbers makes it most suitable for single writer.</span><br></pre></td></tr></table></figure>
+<p>同时，数据按照 segment 进行 sharding:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">What if the database is too big for a replica to fit into one storage server?</span><br><span class="line">  Data pages are sharded into 10-GB Protection Groups (PGs).</span><br><span class="line">  Each PG is separately replicated as six &quot;segments&quot; (on six replicas).</span><br><span class="line">    Different PGs likely to be on different sets of six storage servers.</span><br><span class="line">  [DB server, two PGs on 12 storage servers]</span><br></pre></td></tr></table></figure>
+<h2 id="The-log-is-the-database"><a href="#The-log-is-the-database" class="headerlink" title="The log is the database"></a>The log is the database</h2><p><img src="https://image.mwish.me/blog-image/image.png" alt="image"></p>
+<p>Aurora 只会同步 Redo Log，而不要像之前的 MySQL 那样同步很多别的 write 操作。Redo log 描述要进行的操作。日志和存储层下沉到了存储节点。你可能会记得下面的：</p>
+<p><img src="https://image.mwish.me/blog-image/9DE4AA15-CD61-4C5E-852B-22B34EC48A82.png" alt="9DE4AA15-CD61-4C5E-852B-22B34EC48A82"></p>
+<p>这要求系统大概要满足 no-steal/no-force 的特性：未完成事务的页不能刷到盘上. 我们会在 Log 部分再次讨论这一段。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">Storage servers understand how to apply DB&#x27;s log to data pages</span><br><span class="line">  So only need to send (small) log entries, not (big) dirty pages</span><br><span class="line">  Sending to many replicas, but not much data</span><br></pre></td></tr></table></figure>
+<p><img src="https://image.mwish.me/blog-image/509272B2-DDAB-49AB-9DE3-4B2131B96997.png" alt="509272B2-DDAB-49AB-9DE3-4B2131B96997"></p>
+<p>通过上述的策略和异步的 apply, Aurora 减少了写入的延时：log 写入放入 Update Queue 即可，大大降低了 Latency.</p>
+<h2 id="日志和-SQL"><a href="#日志和-SQL" class="headerlink" title="日志和 SQL"></a>日志和 SQL</h2><p>Log 需要对应的 LSN。对日志处理的层在 Storage Layer 上，所以它们知道日志的语义，能够 apply 这些日志。</p>
+<p>以上的写入流程是过于简单的，然而读总要读到像样的东西吧！既然和 MySQL 来 PK，总要有事务的语义吧！</p>
+<p>数据库要确认下列信息：</p>
+<ul>
+<li>VCL（Volume Complete LSN）：保证之前都被持久化的 LSN</li>
+<li>CPL（Consistency Point LSN）：对于事务的语义的 CP</li>
+<li>VDL（Volume Durable LSN）: 副本最大的 CPL</li>
+</ul>
+<blockquote>
+<p>CPL必须小于或者等VCL，所有大于VDL的日志记录都可以被截断丢掉</p>
+</blockquote>
+<p>那么，甚至 VDL 之前的一些都要在语义上视作没 Commit. 写入北推进的时候，VCL CPL VDL 被推进，来实现事务的语义。</p>
+<p>6.824 对 Log Write 有个比较精炼的描述：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">What does an Aurora quorum write look like?</span><br><span class="line">  Not a classic quorum write:</span><br><span class="line">    DB server&#x27;s writes to storage servers do *not* modify existing data items!</span><br><span class="line">  A write consists of a new log entry.</span><br><span class="line">    For an in-progress transaction.</span><br><span class="line">    Or a commit log record.</span><br><span class="line">  Aurora sends each log record to all six storage servers.</span><br><span class="line">  Transaction commit waits for all of xaction&#x27;s log records to be on a quorum.</span><br><span class="line">    Stated as VDL &gt;= transaction&#x27;s last record.</span><br><span class="line">    So every xaction through this one can be recovered after a crash.</span><br><span class="line">  Commit ==&gt; release locks, reply to client.</span><br></pre></td></tr></table></figure>
+<p>在写入的时候，你要写 Quorum, 然后 <code>VDL &gt; 日志的 CPL</code> 时, 提交就是安全的，你可以 Commit 了。</p>
+<p>读取的时候流程如下：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">What does an ordinary Aurora read look like?</span><br><span class="line">  Not a quorum read!</span><br><span class="line">  The Aurora DB server needs a data page, due to a cache miss.</span><br><span class="line">    Writes are log entries; reads yield data pages.</span><br><span class="line">  Needs to find a storage server that has all the relevant log entries.</span><br><span class="line">  Database server tracks each storage server&#x27;s SCL (Segment Complete LSN).</span><br><span class="line">    Each storage server has all log entries &lt;= its SCL.</span><br><span class="line">    Reports back to the database server.</span><br><span class="line">  DB server reads from any storage server whose SCL &gt;= highest committed LSN.</span><br><span class="line">    That storage server may need to apply some log records to the data page.</span><br></pre></td></tr></table></figure>
+<p>数据库建立一个读时间点，表示这个时候读到什么数据是安全的，然后在对应 Segment 下读.</p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#Aurora"><span class="toc-number">1.</span> <span class="toc-text">Aurora</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AD%98%E5%82%A8"><span class="toc-number">1.1.</span> <span class="toc-text">存储</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#The-log-is-the-database"><span class="toc-number">1.2.</span> <span class="toc-text">The log is the database</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%97%A5%E5%BF%97%E5%92%8C-SQL"><span class="toc-number">1.3.</span> <span class="toc-text">日志和 SQL</span></a></li></ol></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/08/16/notes-Aurora/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/08/16/notes-Aurora/&text=notes: Aurora"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/08/16/notes-Aurora/&title=notes: Aurora"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/08/16/notes-Aurora/&is_video=false&description=notes: Aurora"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=notes: Aurora&body=Check out this article: http://blog.mwish.me/2020/08/16/notes-Aurora/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/08/16/notes-Aurora/&title=notes: Aurora"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/08/16/notes-Aurora/&title=notes: Aurora"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/08/16/notes-Aurora/&title=notes: Aurora"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/08/16/notes-Aurora/&title=notes: Aurora"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/08/16/notes-Aurora/&name=notes: Aurora&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/08/16/notes-Aurora/&t=notes: Aurora"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

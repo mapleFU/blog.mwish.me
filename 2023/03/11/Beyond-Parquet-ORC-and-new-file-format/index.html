@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="Apache Parquet 是一个功能强大的列存系统，不过也有一些同类的顶级项目，比如 Apache ORC。Google 自己发过一些 Capacitor 格式，作为 Dremel (BigQuery) 的文件格式。此外，Biswapesh Chattopadhyay 在一些新的论文中谈过 Youtube (2019) 和 Shared Foundations (CIDR’23) 一些设计的新">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Beyond Parquet: ORC and new file format">
+<meta property="og:url" content="http://blog.mwish.me/2023/03/11/Beyond-Parquet-ORC-and-new-file-format/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="Apache Parquet 是一个功能强大的列存系统，不过也有一些同类的顶级项目，比如 Apache ORC。Google 自己发过一些 Capacitor 格式，作为 Dremel (BigQuery) 的文件格式。此外，Biswapesh Chattopadhyay 在一些新的论文中谈过 Youtube (2019) 和 Shared Foundations (CIDR’23) 一些设计的新">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/gpdhpp5sx7.jpeg">
+<meta property="article:published_time" content="2023-03-11T06:15:00.000Z">
+<meta property="article:modified_time" content="2023-03-11T06:13:40.373Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/gpdhpp5sx7.jpeg">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>Beyond Parquet: ORC and new file format</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2023/03/17/Apache-Hive-A-History-on-Hadoop/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2023/03/05/Storage-in-AP-Systems/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2023/03/11/Beyond-Parquet-ORC-and-new-file-format/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2023/03/11/Beyond-Parquet-ORC-and-new-file-format/&text=Beyond Parquet: ORC and new file format"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2023/03/11/Beyond-Parquet-ORC-and-new-file-format/&title=Beyond Parquet: ORC and new file format"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2023/03/11/Beyond-Parquet-ORC-and-new-file-format/&is_video=false&description=Beyond Parquet: ORC and new file format"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Beyond Parquet: ORC and new file format&body=Check out this article: http://blog.mwish.me/2023/03/11/Beyond-Parquet-ORC-and-new-file-format/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2023/03/11/Beyond-Parquet-ORC-and-new-file-format/&title=Beyond Parquet: ORC and new file format"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2023/03/11/Beyond-Parquet-ORC-and-new-file-format/&title=Beyond Parquet: ORC and new file format"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2023/03/11/Beyond-Parquet-ORC-and-new-file-format/&title=Beyond Parquet: ORC and new file format"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2023/03/11/Beyond-Parquet-ORC-and-new-file-format/&title=Beyond Parquet: ORC and new file format"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2023/03/11/Beyond-Parquet-ORC-and-new-file-format/&name=Beyond Parquet: ORC and new file format&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2023/03/11/Beyond-Parquet-ORC-and-new-file-format/&t=Beyond Parquet: ORC and new file format"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Apache-ORC"><span class="toc-number">1.</span> <span class="toc-text">Apache ORC</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Statistics-amp-Index"><span class="toc-number">1.1.</span> <span class="toc-text">Statistics &amp; Index</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#ACID"><span class="toc-number">1.2.</span> <span class="toc-text">ACID?</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Capacitor-in-Dremel"><span class="toc-number">2.</span> <span class="toc-text">Capacitor in Dremel</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#HTAP-HSAP-Design"><span class="toc-number">3.</span> <span class="toc-text">HTAP&#x2F;HSAP Design</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#AI-The-Old-one-and-The-new-one"><span class="toc-number">4.</span> <span class="toc-text">AI, The Old one and The new one</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#References"><span class="toc-number">5.</span> <span class="toc-text">References</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Beyond Parquet: ORC and new file format
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2023-03-11T06:15:00.000Z" itemprop="datePublished">2023-03-11</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>Apache Parquet 是一个功能强大的列存系统，不过也有一些同类的顶级项目，比如 Apache ORC。Google 自己发过一些 Capacitor 格式，作为 Dremel (BigQuery) 的文件格式。此外，Biswapesh Chattopadhyay 在一些新的论文中谈过 Youtube (2019) 和 Shared Foundations (CIDR’23) 一些设计的新的格式。</p>
+<p>此外，还有人为 AI workload 做了一些特殊的格式，比如 IndexR. 包括还有历史悠久的 HDF5 和新鲜的 lance。</p>
+<p>这些格式的需求各有不同，和我熟悉的 Parquet 相比有同有异。下面可以开始简单介绍</p>
+<h2 id="Apache-ORC"><a href="#Apache-ORC" class="headerlink" title="Apache ORC"></a>Apache ORC</h2><p>Apache ORC 由 Hive 社区开发，如果你听过 RC 或者 RCFile 的话，会发现 ORC 这个名字有点熟悉，其实 ORC 前面那个 O 是 Optimized 的概念。Apache ORC 自认为可以：</p>
+<ul>
+<li>typed, self-describe</li>
+<li>挑选合适的 encoding 方式</li>
+<li>提供 Index</li>
+<li>切分 10000 rows，然后 Predicate Pushdown</li>
+<li>支持 ComplexType: Map, Union, Struct, List</li>
+</ul>
+<p>Apache ORC 有三个版本：</p>
+<ol>
+<li>v0: Hive 旧版本使用</li>
+<li>V1: Hive1.0 和 0.12 之后使用</li>
+<li>V2: 不知道啥状态，好像每次看都是 TODO，虽然内容挺多的</li>
+</ol>
+<p>Apache ORC 格式如下图，有一些相似的概念：</p>
+<ul>
+<li>File Tail: 类似 Parquet 的 Footer 和 FileMetaData，在文件的尾部<ul>
+<li>File Tail 包含 encrypted statistics, stripe metadata, Footer , file footer, postscript</li>
+<li>PostScript: 文件本身元信息，包括版本，Footer 长度，写者（很奇怪的是竟然有文件压缩方式）</li>
+<li>File Footer 类似 Parquet Footer，是一个 protobuf，内容如下：<a target="_blank" rel="noopener" href="https://github.com/apache/orc/blob/main/proto/orc_proto.proto#L354">https://github.com/apache/orc/blob/main/proto/orc_proto.proto#L354</a><ul>
+<li>包含文件类型，整个文件的 statistics，文件 header，所有 Stripe 的信息</li>
+<li>Stripe 信息包含 Stripe 的起始地，index 长度，Row Data 长度，Stripe Footer 长度，行数</li>
+<li>Type 包含文件类型，整个文件有相同的类型。</li>
+<li>ColumnStatistics 包含各列的 min/max/hasNull</li>
+<li>user metadata: 塞入 key-value</li>
+<li>Encryption 相关的信息，不太懂加密，不写了</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>Index: Parquet 有 BloomFilter 和没有实现任何 Index 的 Index Page (笑)，ORC 有 Index Data</li>
+<li>Stripe: 对应 Parquet 的 RowGroup，由 Index Data + Row Data + Stripe Footer 构成。Row 不会跨 Stripe。<ul>
+<li>Stripe 通常比较大 (~200MB)，可以当作并发的单位</li>
+<li>Stripe 数据被存储在相邻的多个 Stream 中。列的数据氛围 Present Stream 和 Data Stream，Present 存放类似 null 的信息，Stream 有自己的 Kind, length。我们之后再来介绍它是如何表示 Complex Type 的。Present Stream 是靠压缩和 Encoding 来减少空间开销的</li>
+<li>此外，索引、Stats之类的内容也被统一到了 Stream 中，由 Stream 表示</li>
+</ul>
+</li>
+</ul>
+<p><img src="https://image.mwish.me/blog-image/gpdhpp5sx7.jpeg" alt="gpdhpp5sx7"></p>
+<p>Orc 的 Compression 到处都是，它除了 Postscript，各段都会用 Postscript 指定的 compression 来编码，此外，这里会有一些 <code>is_compression</code> flag， Parquet 的 Page V1 是没有这个东西的，Page V2 才有。压缩效果不好的时候，可以通过这个 flag 来取消压缩。</p>
+<p>在数据层，Orc 针对不同的类型支持了不同的 Encoding 方式，其实我感觉类似 Parquet 了。Present 强调用 Boolean RLE 编码。ORC 支持了：</p>
+<ol>
+<li>RLE</li>
+<li>Dictionary</li>
+</ol>
+<p>这样的编码方式，具体而言，RLE 类似 Parquet 的 RLE，可能也会有 delta 之类的逻辑。Dict 编码会分成多条 Stream 来写。此外，ORC 还有 SECONDARY Stream，用来表示一些异构的值。简单来说：</p>
+<ul>
+<li>Orc 把列拆成了多条 Stream</li>
+<li>优化好了 Stream 的对各种类型的简单编码方式</li>
+<li>用这种简单编码 + 多条流表示类型</li>
+</ul>
+<p>编码方式我就不介绍了，之后专门开个专题啃算了，感觉放这不太好。</p>
+<p>对于 Complex 类型的表示，简单来说如下：</p>
+<ol>
+<li>Struct 只记录 Struct 本身的 PRESENT</li>
+<li>List = Present Stream + Length Stream</li>
+<li>Map = Map 等价于一种很奇怪的 List 和 List 表现一样，但后面有一组 Key 一组 Value</li>
+<li>Union 分成 PRESENT + Tag，后面接不同种类的 Stream</li>
+</ol>
+<h3 id="Statistics-amp-Index"><a href="#Statistics-amp-Index" class="headerlink" title="Statistics &amp; Index"></a>Statistics &amp; Index</h3><p>书接上回，Orc 的 format 支持了一大把不同的 Statistics. Parquet 的 Statistics 靠 bytes 来怼通用性，Orc 则是定义了一堆 adhoc 的东西，但是这并不要紧…</p>
+<figure class="highlight protobuf"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">message </span><span class="title class_">ColumnStatistics</span> &#123;</span><br><span class="line">  <span class="keyword">optional</span> <span class="type">uint64</span> numberOfValues = <span class="number">1</span>;</span><br><span class="line">  <span class="keyword">optional</span> IntegerStatistics intStatistics = <span class="number">2</span>;</span><br><span class="line">  <span class="keyword">optional</span> DoubleStatistics doubleStatistics = <span class="number">3</span>;</span><br><span class="line">  <span class="keyword">optional</span> StringStatistics stringStatistics = <span class="number">4</span>;</span><br><span class="line">  <span class="keyword">optional</span> BucketStatistics bucketStatistics = <span class="number">5</span>;</span><br><span class="line">  <span class="keyword">optional</span> DecimalStatistics decimalStatistics = <span class="number">6</span>;</span><br><span class="line">  <span class="keyword">optional</span> DateStatistics dateStatistics = <span class="number">7</span>;</span><br><span class="line">  <span class="keyword">optional</span> BinaryStatistics binaryStatistics = <span class="number">8</span>;</span><br><span class="line">  <span class="keyword">optional</span> TimestampStatistics timestampStatistics = <span class="number">9</span>;</span><br><span class="line">  <span class="keyword">optional</span> <span class="type">bool</span> hasNull = <span class="number">10</span>;</span><br><span class="line">  <span class="keyword">optional</span> <span class="type">uint64</span> bytesOnDisk = <span class="number">11</span>;</span><br><span class="line">  <span class="keyword">optional</span> CollectionStatistics collectionStatistics = <span class="number">12</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>我们的关键是，Statistics 可能出现在什么地方？</p>
+<figure class="highlight protobuf"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// StripeStatistics (1 per a stripe), which each contain the</span></span><br><span class="line"><span class="comment">// ColumnStatistics for each column.</span></span><br><span class="line"><span class="comment">// This message type is only used in ORC v0 and v1.</span></span><br><span class="line"><span class="keyword">message </span><span class="title class_">StripeStatistics</span> &#123;</span><br><span class="line">  <span class="keyword">repeated</span> ColumnStatistics colStats = <span class="number">1</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// This message type is only used in ORC v0 and v1.</span></span><br><span class="line"><span class="keyword">message </span><span class="title class_">Metadata</span> &#123;</span><br><span class="line">  <span class="keyword">repeated</span> StripeStatistics stripeStats = <span class="number">1</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>你会发现，这里 Statistics 都是 Stripe 级别的。那么有没有更细粒度的 Statistics 呢？有，Row Group Index。</p>
+<p>这里的 RowGroup 和 Parquet 的 Row Group 是不同的概念，类似 Parquet 中的 Page Statistics，不过有一些 trickey 的 RLE 细节：</p>
+<figure class="highlight protobuf"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">message </span><span class="title class_">RowIndexEntry</span> &#123;</span><br><span class="line"> <span class="keyword">repeated</span> <span class="type">uint64</span> positions = <span class="number">1</span> [packed=<span class="literal">true</span>];</span><br><span class="line"> <span class="keyword">optional</span> ColumnStatistics statistics = <span class="number">2</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<blockquote>
+<p>To record positions, each stream needs a sequence of numbers. For uncompressed streams, the position is the byte offset of the RLE run’s start location followed by the number of values that need to be consumed from the run. In compressed streams, the first number is the start of the compression chunk in the stream, followed by the number of decompressed bytes that need to be consumed, and finally the number of values consumed in the RLE.</p>
+</blockquote>
+<p>这个地方就是 hack 到 RLE format 内部了。</p>
+<h3 id="ACID"><a href="#ACID" class="headerlink" title="ACID?"></a>ACID?</h3><p>ORC 是 Hive 的亲儿子，在 format 标注上，它写了一些 Delta。这个感觉翻翻 iceberg 就行了.</p>
+<h2 id="Capacitor-in-Dremel"><a href="#Capacitor-in-Dremel" class="headerlink" title="Capacitor in Dremel"></a>Capacitor in Dremel</h2><p>Capacitor 是 Parquet 的野爹，之所以说不是亲爹…Google 啥时候成过亲爹？Parquet 是 Twitter 和 LinkedIn 一起实际开发的，然后 15 年成了顶级项目，G+ 就喜欢憋大招的。</p>
+<p>Google 这家伙贼喜欢藏大招，但是这里透露的材料还是不错的：</p>
+<ul>
+<li>参考 Storing and Querying Tree-Structured Records in Dremel: <a target="_blank" rel="noopener" href="https://research.google/pubs/pub43119/">https://research.google/pubs/pub43119/</a> 做谓词下推和 encoding + query exec。</li>
+<li>采样数据，存储到 Meta 中，帮助提供了一套 Reordering Record 的方式。这里可以参见 Arxiv: <a target="_blank" rel="noopener" href="https://arxiv.org/abs/1207.2189">https://arxiv.org/abs/1207.2189</a></li>
+</ul>
+<p>在这里，我感觉这里不是单纯的格式了，而是一套自上而下的 Stats/Reorder + Format + Query Exec 融合的系统了。Query Exec 的地方我感觉我可以借鉴一下，但是 Stats + Reorder 我感觉我就不会搞了 Orz。</p>
+<h2 id="HTAP-HSAP-Design"><a href="#HTAP-HSAP-Design" class="headerlink" title="HTAP/HSAP Design"></a>HTAP/HSAP Design</h2><p>在 AP 中，数据经常是下推 Filter，然后扫大量数据。HTAP / HSAP 这种场景，会混杂 Point Lookup 和 Range Filter。对于 Point Lookup 来说，在压缩的 Group 中感觉效果是不太好的，因为这里有个问题是，可能需要走一遍 解压 + Decoding。</p>
+<p>HTAP / HSAP 的场景，在这方面能够选出比较好的格式，需要有 Skipable 的 format，快速找到对应的列。</p>
+<p>SingleStore 的做法在博客中有提到：<a target="_blank" rel="noopener" href="https://www.singlestore.com/blog/winter-2022-universal-storage-part-5/">https://www.singlestore.com/blog/winter-2022-universal-storage-part-5/</a> . 简单说是靠索引 + Encoding Skip 来实现，RLE / LZ4 都是有类似 RLE 的性质的，因为有 RLE 的性质，所以可以在有 Secondary Index to RowId 的情况下，做一些快速的 Skipping。</p>
+<p>在 Procella: Unifying serving and analytical data at YouTube 这篇论文中，作者描述了 HSAP 中的格式 Artus，系统用这个格式来代替 Capacitor。这个格式也是给相似的逻辑设定的，但是相对于 S2DB 这种靠 Secondary Index 的，它这里还是会做一些（主动的）搜索的：</p>
+<ol>
+<li>（类似 S2DB），避免用通用的 compression，倾向于 Seekable format</li>
+<li>Multi-pass adaptive encoding: 先采集 ndv/min-max/sorting 之类的信息，再 adaptive 选择编码方式。Artus 提供了一套 encoding data 的 evaluation: Dict, Index, RLE, Delta 这些方式，同时，格式提供了一个 Score，能根据 (size, speed) 比较好评估这些格式的代价，来做 eval</li>
+<li>采用 Binary Search able 的编码方式，允许用户以 $O(logN)$ 的 Complexity 去搜索<ol>
+<li>$O(1)$ 的 Seek to RowId。这个在等宽 bitpacking 上没啥问题，但是别的 RLE 之类的，需要准备一些稀疏索引（Skip Block），这里 Block Size 通常是 32/128，来保证这个很小（Parquet C++ 现在 是很傻逼的 32 * 4）</li>
+<li>$O(logN + K)$ 的 Primary Key Searching</li>
+</ol>
+</li>
+<li>用 ORC 那种方式来存。我感觉这种格式在 HTAP Nested Search 上有一些优势？毕竟 Parquet 那种 format row-id 对一些东西其实还是要反解 rep/def 的。</li>
+<li>暴露 Dictionary Index 和 RLE 给引擎，方便 Pushdown</li>
+<li>尝试暴露很多元信息，然后按照 pk 切分文件，保证（粗粒度的）过滤性</li>
+<li>支持 inverted index (S2DB 也走了这条路)</li>
+</ol>
+<p>感觉 HTAP 的场景上述还是要支持的。</p>
+<h2 id="AI-The-Old-one-and-The-new-one"><a href="#AI-The-Old-one-and-The-new-one" class="headerlink" title="AI, The Old one and The new one"></a>AI, The Old one and The new one</h2><p>在 AI 领域，有 HDF5 格式之类的老东西，还有新的很多存储系统类似 Feature Store，会存一些稀疏的大宽表，比如下面论文的描述：</p>
+<blockquote>
+<p>For example, it is increasingly common for ML tables to outgrow analytical tables by up to an order of magnitude. ML tables are also typically much wider, and tend to have tens of thousands of features usually stored as large maps.</p>
+</blockquote>
+<p>这个领域可以简单当成可能有稀疏的大宽表，有一些随机访问，但是又是列存？在 这里：</p>
+<ol>
+<li>Shared Foundations 提出了一些元数据优化，因为 Orc / Parquet 列元数据都很大了，但是没提自己是怎么做的</li>
+<li>HDF5 简单的将数据集打包</li>
+<li>lance 是一个新的格式，类似 ORC，坦白的说，它在 PPT 里面写的东西都是垃圾，但是看到它支持了一些 ad-hoc 的 kmeans 之类的东西，还是挺有意思的。</li>
+</ol>
+<h2 id="References"><a href="#References" class="headerlink" title="References"></a>References</h2><ul>
+<li><p>Parquet / Capacitor</p>
+<ul>
+<li>InfluxDB-IOx 的 Parquet 使用 <a target="_blank" rel="noopener" href="https://www.influxdata.com/blog/querying-parquet-millisecond-latency/">https://www.influxdata.com/blog/querying-parquet-millisecond-latency/</a></li>
+<li>Dremel: Interactive Analysis of Web-Scale Datasets: <a target="_blank" rel="noopener" href="https://research.google/pubs/pub36632/">https://research.google/pubs/pub36632/</a></li>
+<li>Storing and Querying Tree-Structured Records in Dremel: <a target="_blank" rel="noopener" href="https://research.google/pubs/pub43119/">https://research.google/pubs/pub43119/</a></li>
+<li><a target="_blank" rel="noopener" href="https://cloud.google.com/blog/products/bigquery/inside-capacitor-bigquerys-next-generation-columnar-storage-format">https://cloud.google.com/blog/products/bigquery/inside-capacitor-bigquerys-next-generation-columnar-storage-format</a><ul>
+<li>值得一提的是，这个文章的老板已经去 firebolt 当老板了</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><p>lance: <a target="_blank" rel="noopener" href="https://github.com/eto-ai/lance">https://github.com/eto-ai/lance</a></p>
+</li>
+<li><p>特征平台（Feature Store）：序论 - 曾中铭的文章 - 知乎 <a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/406897374">https://zhuanlan.zhihu.com/p/406897374</a></p>
+</li>
+<li><p>Guide to File Formats for Machine Learning: Columnar, Training, Inferencing, and the Feature Store <a target="_blank" rel="noopener" href="https://towardsdatascience.com/guide-to-file-formats-for-machine-learning-columnar-training-inferencing-and-the-feature-store-2e0c3d18d4f9">https://towardsdatascience.com/guide-to-file-formats-for-machine-learning-columnar-training-inferencing-and-the-feature-store-2e0c3d18d4f9</a></p>
+</li>
+</ul>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Apache-ORC"><span class="toc-number">1.</span> <span class="toc-text">Apache ORC</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Statistics-amp-Index"><span class="toc-number">1.1.</span> <span class="toc-text">Statistics &amp; Index</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#ACID"><span class="toc-number">1.2.</span> <span class="toc-text">ACID?</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Capacitor-in-Dremel"><span class="toc-number">2.</span> <span class="toc-text">Capacitor in Dremel</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#HTAP-HSAP-Design"><span class="toc-number">3.</span> <span class="toc-text">HTAP&#x2F;HSAP Design</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#AI-The-Old-one-and-The-new-one"><span class="toc-number">4.</span> <span class="toc-text">AI, The Old one and The new one</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#References"><span class="toc-number">5.</span> <span class="toc-text">References</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2023/03/11/Beyond-Parquet-ORC-and-new-file-format/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2023/03/11/Beyond-Parquet-ORC-and-new-file-format/&text=Beyond Parquet: ORC and new file format"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2023/03/11/Beyond-Parquet-ORC-and-new-file-format/&title=Beyond Parquet: ORC and new file format"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2023/03/11/Beyond-Parquet-ORC-and-new-file-format/&is_video=false&description=Beyond Parquet: ORC and new file format"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Beyond Parquet: ORC and new file format&body=Check out this article: http://blog.mwish.me/2023/03/11/Beyond-Parquet-ORC-and-new-file-format/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2023/03/11/Beyond-Parquet-ORC-and-new-file-format/&title=Beyond Parquet: ORC and new file format"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2023/03/11/Beyond-Parquet-ORC-and-new-file-format/&title=Beyond Parquet: ORC and new file format"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2023/03/11/Beyond-Parquet-ORC-and-new-file-format/&title=Beyond Parquet: ORC and new file format"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2023/03/11/Beyond-Parquet-ORC-and-new-file-format/&title=Beyond Parquet: ORC and new file format"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2023/03/11/Beyond-Parquet-ORC-and-new-file-format/&name=Beyond Parquet: ORC and new file format&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2023/03/11/Beyond-Parquet-ORC-and-new-file-format/&t=Beyond Parquet: ORC and new file format"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

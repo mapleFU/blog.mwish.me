@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="开启一个线程不简单，关闭一个线程麻烦事更多. C++ 11 提供了 std::thread 的抽象，C++20 甚至提供了 coroutine. 我们的背后可能是 POSIX thread 在内的各种平台的线程。同时我们也有任务式的线程 api, 例如 future promise 对应的接口。在 Go 语言中，我们甚至能以一种更便捷的方式，以语法支持的形式创建 goroutine, 并以 CSP">
+<meta property="og:type" content="article">
+<meta property="og:title" content="How to exit task">
+<meta property="og:url" content="http://blog.mwish.me/2020/10/18/How-to-exit-task/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="开启一个线程不简单，关闭一个线程麻烦事更多. C++ 11 提供了 std::thread 的抽象，C++20 甚至提供了 coroutine. 我们的背后可能是 POSIX thread 在内的各种平台的线程。同时我们也有任务式的线程 api, 例如 future promise 对应的接口。在 Go 语言中，我们甚至能以一种更便捷的方式，以语法支持的形式创建 goroutine, 并以 CSP">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2020-10-18T09:00:08.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.556Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>How to exit task</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2020/10/21/SDS-Intro-RISC-V-Datapath-4-Pipeline/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2020/10/18/SDS-Intro-RISC-V-Datapath-3-Control-logic-and-metric/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/10/18/How-to-exit-task/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/10/18/How-to-exit-task/&text=How to exit task"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/10/18/How-to-exit-task/&title=How to exit task"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/10/18/How-to-exit-task/&is_video=false&description=How to exit task"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=How to exit task&body=Check out this article: http://blog.mwish.me/2020/10/18/How-to-exit-task/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/10/18/How-to-exit-task/&title=How to exit task"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/10/18/How-to-exit-task/&title=How to exit task"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/10/18/How-to-exit-task/&title=How to exit task"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/10/18/How-to-exit-task/&title=How to exit task"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/10/18/How-to-exit-task/&name=How to exit task&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/10/18/How-to-exit-task/&t=How to exit task"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%80%80%E5%87%BA%E7%9A%84%E7%9B%AE%E7%9A%84"><span class="toc-number">1.</span> <span class="toc-text">退出的目的</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#cancel-%E4%BD%A0%E8%AF%A5%E7%BB%93%E6%9D%9F%E4%BA%86"><span class="toc-number">2.</span> <span class="toc-text">cancel: 你该结束了</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Blocking%EF%BC%9F"><span class="toc-number">3.</span> <span class="toc-text">Blocking？</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%B2%A1%E6%9C%89%E6%97%A0%E7%97%9B%E7%9A%84%E6%96%B9%E5%BC%8F%EF%BC%9A%E5%8F%AF-cancel-%E7%9A%84%E4%BB%BB%E5%8A%A1"><span class="toc-number">4.</span> <span class="toc-text">没有无痛的方式：可 cancel 的任务</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%9A%94%E7%A6%BB%EF%BC%9A%E6%88%96%E8%AE%B8%E6%88%91%E9%9C%80%E8%A6%81%E8%BF%9B%E7%A8%8B"><span class="toc-number">5.</span> <span class="toc-text">隔离：或许我需要进程</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8F%82%E8%80%83"><span class="toc-number">6.</span> <span class="toc-text">参考</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        How to exit task
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2020-10-18T09:00:08.000Z" itemprop="datePublished">2020-10-18</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>开启一个线程不简单，关闭一个线程麻烦事更多. C++ 11 提供了 <code>std::thread</code> 的抽象，C++20 甚至提供了 coroutine. 我们的背后可能是 POSIX thread 在内的各种平台的线程。同时我们也有任务式的线程 api, 例如 <code>future</code> <code>promise</code> 对应的接口。在 Go 语言中，我们甚至能以一种更便捷的方式，以语法支持的形式创建 goroutine, 并以 CSP 的模式来通信。而背后的原生线程是隐匿的。</p>
+<p>对于 C++11 <code>&lt;thread&gt;</code> 而言，线程抽象与 <code>std::thread</code> 是绑定的. 最好的阅读地点在：</p>
+<p><a target="_blank" rel="noopener" href="https://en.cppreference.com/w/cpp/thread/thread">https://en.cppreference.com/w/cpp/thread/thread</a> </p>
+<blockquote>
+<p>delays), starting at the top-level function provided as a <a target="_blank" rel="noopener" href="https://en.cppreference.com/w/cpp/thread/thread/thread">constructor argument</a>. The return value of the top-level function is ignored and if it terminates by throwing an exception, <a target="_blank" rel="noopener" href="https://en.cppreference.com/w/cpp/error/terminate">std::terminate</a> is called. The top-level function may communicate its return value or an exception to the caller via <a target="_blank" rel="noopener" href="https://en.cppreference.com/w/cpp/thread/promise">std::promise</a> or by modifying shared variables (which may require synchronization, see <a target="_blank" rel="noopener" href="https://en.cppreference.com/w/cpp/thread/mutex">std::mutex</a> and <a target="_blank" rel="noopener" href="https://en.cppreference.com/w/cpp/atomic/atomic">std::atomic</a>)</p>
+<p><code>std::thread</code> objects may also be in the state that does not represent any thread (after default construction, move from, <a target="_blank" rel="noopener" href="https://en.cppreference.com/w/cpp/thread/thread/detach">detach</a>, or <a target="_blank" rel="noopener" href="https://en.cppreference.com/w/cpp/thread/thread/join">join</a>), and a thread of execution may be not associated with any <code>thread</code> objects (after <a target="_blank" rel="noopener" href="https://en.cppreference.com/w/cpp/thread/thread/detach">detach</a>).</p>
+<p>No two <code>std::thread</code> objects may represent the same thread of execution; <code>std::thread</code> is not <a target="_blank" rel="noopener" href="https://en.cppreference.com/w/cpp/named_req/CopyConstructible"><em>CopyConstructible</em></a> or <a target="_blank" rel="noopener" href="https://en.cppreference.com/w/cpp/named_req/CopyAssignable"><em>CopyAssignable</em></a>, although it is <a target="_blank" rel="noopener" href="https://en.cppreference.com/w/cpp/named_req/MoveConstructible"><em>MoveConstructible</em></a> and <a target="_blank" rel="noopener" href="https://en.cppreference.com/w/cpp/named_req/MoveAssignable"><em>MoveAssignable</em></a>.</p>
+</blockquote>
+<p>其中，我们也要关注线程的析构：<a target="_blank" rel="noopener" href="https://en.cppreference.com/w/cpp/thread/thread/~thread">https://en.cppreference.com/w/cpp/thread/thread/~thread</a></p>
+<p>在析构的时候，如果线程是 <code>joinable</code> 的，这里会调用 <code>std::terminate</code>: <a target="_blank" rel="noopener" href="https://zh.cppreference.com/w/cpp/error/terminate">https://zh.cppreference.com/w/cpp/error/terminate</a></p>
+<p>当然，你可以用任务式的 api, 例如 <a target="_blank" rel="noopener" href="https://en.cppreference.com/w/cpp/thread/async">https://en.cppreference.com/w/cpp/thread/async</a> , 让程序自己决定什么时候启动线程，指定对应的执行策略。</p>
+<p>阅读上面一段话，你会发现一点：<code>joinable</code> 的 <code>thread</code> 会 <code>terminate</code>. 同时你可能会注意到，C++20 中，提供了   jthread <a target="_blank" rel="noopener" href="https://en.cppreference.com/w/cpp/thread/jthread">https://en.cppreference.com/w/cpp/thread/jthread</a> . 关于使用，其实可以参考 CppCoreGuildlines: <a target="_blank" rel="noopener" href="https://www.modernescpp.com/index.php/c-core-guidelines-taking-care-of-your-child-thread">https://www.modernescpp.com/index.php/c-core-guidelines-taking-care-of-your-child-thread</a></p>
+<p>对，你会开始意识到，开启一个线程或许有一些小坑，但是从线程退出其实更麻烦，你在一个 noexcept 的地方抛出 <code>std::terminate</code>, 那你就等死吧。</p>
+<h2 id="退出的目的"><a href="#退出的目的" class="headerlink" title="退出的目的"></a>退出的目的</h2><p>你可能需要：</p>
+<ol>
+<li><code>anyOf</code>，计算出最快的一个任务</li>
+<li>我不再需要这个任务了</li>
+</ol>
+<p>那么我们可能想到两个方案：</p>
+<ol>
+<li>假装自己是鸵鸟，不管之前别的 thread</li>
+<li>全部 kill/terminate 掉</li>
+</ol>
+<p>第一个在 C++ 可能会有 lifetime 问题哟：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">&#123;</span><br><span class="line">	Resource ...</span><br><span class="line">	<span class="keyword">for</span> i = <span class="number">0</span>; i &lt; <span class="number">10</span>; i++ &#123;</span><br><span class="line">		Compute</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">if</span> (ok) &#123;</span><br><span class="line">		<span class="keyword">return</span></span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>那么你会开始头疼了，同样，假设甚至存在引用计数的时候，对，假设在 Go 语言，你还会面对 <code>Goroutine 泄漏</code> 的问题，你也要开一个 Goroutine, 接受任务完成 flag, 回收可能的资源。</p>
+<p>第二个是 <code>terminate</code>, 或者甚至拿到 native 的 posix api, 来 terminate 它，但是下面问题来了：</p>
+<ol>
+<li>还是资源，资源泄漏</li>
+<li><code>__force_unwind</code> 呢？<code>noexcept</code> 呢？全炸了？</li>
+</ol>
+<p>这里隐含这这么一点：你无法无痛的终止线程</p>
+<h2 id="cancel-你该结束了"><a href="#cancel-你该结束了" class="headerlink" title="cancel: 你该结束了"></a>cancel: 你该结束了</h2><p>现在我们绕开线程，回到线程池，它是怎么终止线程的呢？</p>
+<p>假设我们在一个很大的线程池子里，那么 Pool 要 destruct 了，这是一个很常见的场景。我们看看某些实现，可能会发现 </p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">atomic&lt;<span class="type">bool</span>&gt; stop_flag;</span><br><span class="line"></span><br><span class="line"><span class="built_in">cancel</span>() &#123;</span><br><span class="line">	stop_flag = <span class="literal">true</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="built_in">loop</span>() &#123;</span><br><span class="line">	<span class="keyword">while</span> (stop_flag.<span class="built_in">load</span>()) &#123;</span><br><span class="line">		..</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// handle exit</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p><code>stop_flag</code> 是一种很常见的模式，甚至也可以加上一个共享的池子上的 <code>notify</code> 和 <code>wait</code> 的 cv. 然后cv 自己有 barrier 语义，不过大意都是一样的：你在线程调用的地方提供 cancel flag。当然我们也能够提供 Poison 这样的消息，来保持这个层面的 stop 语义。</p>
+<h2 id="Blocking？"><a href="#Blocking？" class="headerlink" title="Blocking？"></a>Blocking？</h2><p>上面语义是很清晰的，但是如果碰到 IO 呢？又来了：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">try</span></span><br><span class="line">&#123;</span><br><span class="line">  <span class="built_in">do_something</span>();</span><br><span class="line">&#125;</span><br><span class="line"><span class="built_in">catch</span>(thread_interrupted&amp;)</span><br><span class="line">&#123;</span><br><span class="line">  <span class="built_in">handle_interruption</span>();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这里我们又回来了，手动 interrupt，RAII…因为本质上，blocking 这还是个问题。</p>
+<h2 id="没有无痛的方式：可-cancel-的任务"><a href="#没有无痛的方式：可-cancel-的任务" class="headerlink" title="没有无痛的方式：可 cancel 的任务"></a>没有无痛的方式：可 cancel 的任务</h2><p>我们看到了线程控制的困难性，同时，我们也能意识到，语法上 Go 不暴露 <code>thread</code> 本身的接口，所以它会用 context 模式来传递信息：</p>
+<p><a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/107930946">https://zhuanlan.zhihu.com/p/107930946</a></p>
+<p>而C#也提供了类似的接口，要把 cancel 的信息传下去</p>
+<p>这意味着，我们某种意义上，是要对任务进行侵入的，我们可以参考 <a target="_blank" rel="noopener" href="https://github.com/mapleFU/CPP-Concurrency-In-Action-2ed-2019/blob/master/content/chapter9/9.2-chinese.md">C++ Concurrency In Action 第二版</a> ，这里对相关的编程内容进行了入侵。</p>
+<h2 id="隔离：或许我需要进程"><a href="#隔离：或许我需要进程" class="headerlink" title="隔离：或许我需要进程"></a>隔离：或许我需要进程</h2><p>回到之前的问题，我们需要停止，可能某种意义上不止需要“并发执行任务”，还需要“入侵执行任务的逻辑”。这里，我们可以突然想到，一直以来这篇文章都在纠结线程，但是进程由 OS 提供了更好的隔离和通信机制。加入我们引入了某个库，有一个 <code>ComputeHeavy</code> 函数，这个函数会调用很重的计算，那么我们可能不太好侵入。我们可以使用 <code>condition_variable_any</code> 加上 <code>future</code> , 但同时，我们也可以考虑用进程，它提供的是更好的隔离、资源回收等机制。</p>
+<h2 id="参考"><a href="#参考" class="headerlink" title="参考"></a>参考</h2><ol>
+<li><a target="_blank" rel="noopener" href="https://github.com/mapleFU/CPP-Concurrency-In-Action-2ed-2019/blob/master/content/chapter9/9.2-chinese.md">C++ Concurrency In Action 第二版</a></li>
+<li><a target="_blank" rel="noopener" href="https://stackoverflow.com/questions/10834469/terminating-blocking-io-in-linux-c">https://stackoverflow.com/questions/10834469/terminating-blocking-io-in-linux-c</a></li>
+<li><a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/143564479">https://zhuanlan.zhihu.com/p/143564479</a></li>
+</ol>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%80%80%E5%87%BA%E7%9A%84%E7%9B%AE%E7%9A%84"><span class="toc-number">1.</span> <span class="toc-text">退出的目的</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#cancel-%E4%BD%A0%E8%AF%A5%E7%BB%93%E6%9D%9F%E4%BA%86"><span class="toc-number">2.</span> <span class="toc-text">cancel: 你该结束了</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Blocking%EF%BC%9F"><span class="toc-number">3.</span> <span class="toc-text">Blocking？</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%B2%A1%E6%9C%89%E6%97%A0%E7%97%9B%E7%9A%84%E6%96%B9%E5%BC%8F%EF%BC%9A%E5%8F%AF-cancel-%E7%9A%84%E4%BB%BB%E5%8A%A1"><span class="toc-number">4.</span> <span class="toc-text">没有无痛的方式：可 cancel 的任务</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%9A%94%E7%A6%BB%EF%BC%9A%E6%88%96%E8%AE%B8%E6%88%91%E9%9C%80%E8%A6%81%E8%BF%9B%E7%A8%8B"><span class="toc-number">5.</span> <span class="toc-text">隔离：或许我需要进程</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8F%82%E8%80%83"><span class="toc-number">6.</span> <span class="toc-text">参考</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/10/18/How-to-exit-task/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/10/18/How-to-exit-task/&text=How to exit task"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/10/18/How-to-exit-task/&title=How to exit task"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/10/18/How-to-exit-task/&is_video=false&description=How to exit task"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=How to exit task&body=Check out this article: http://blog.mwish.me/2020/10/18/How-to-exit-task/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/10/18/How-to-exit-task/&title=How to exit task"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/10/18/How-to-exit-task/&title=How to exit task"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/10/18/How-to-exit-task/&title=How to exit task"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/10/18/How-to-exit-task/&title=How to exit task"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/10/18/How-to-exit-task/&name=How to exit task&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/10/18/How-to-exit-task/&t=How to exit task"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

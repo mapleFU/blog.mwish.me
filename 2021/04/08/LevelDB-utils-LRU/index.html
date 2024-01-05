@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="面试的时候面试官经常会让你搓个 LRU，boost 这里有个 case: https:&#x2F;&#x2F;www.boost.org&#x2F;doc&#x2F;libs&#x2F;1_67_0&#x2F;boost&#x2F;compute&#x2F;detail&#x2F;lru_cache.hpp 1234567891011121314151617181920212223242526272829303132333435363738&#x2F;&#x2F; a cache which evicts">
+<meta property="og:type" content="article">
+<meta property="og:title" content="LRU, 更多的 LRU">
+<meta property="og:url" content="http://blog.mwish.me/2021/04/08/LevelDB-utils-LRU/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="面试的时候面试官经常会让你搓个 LRU，boost 这里有个 case: https:&#x2F;&#x2F;www.boost.org&#x2F;doc&#x2F;libs&#x2F;1_67_0&#x2F;boost&#x2F;compute&#x2F;detail&#x2F;lru_cache.hpp 1234567891011121314151617181920212223242526272829303132333435363738&#x2F;&#x2F; a cache which evicts">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2021-04-08T07:03:32.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.562Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>LRU, 更多的 LRU</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2021/04/12/Notes-on-C-Copy-Elision/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2021/03/10/Linux-API-mmap-flock/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2021/04/08/LevelDB-utils-LRU/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2021/04/08/LevelDB-utils-LRU/&text=LRU, 更多的 LRU"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2021/04/08/LevelDB-utils-LRU/&title=LRU, 更多的 LRU"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2021/04/08/LevelDB-utils-LRU/&is_video=false&description=LRU, 更多的 LRU"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=LRU, 更多的 LRU&body=Check out this article: http://blog.mwish.me/2021/04/08/LevelDB-utils-LRU/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2021/04/08/LevelDB-utils-LRU/&title=LRU, 更多的 LRU"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2021/04/08/LevelDB-utils-LRU/&title=LRU, 更多的 LRU"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2021/04/08/LevelDB-utils-LRU/&title=LRU, 更多的 LRU"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2021/04/08/LevelDB-utils-LRU/&title=LRU, 更多的 LRU"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2021/04/08/LevelDB-utils-LRU/&name=LRU, 更多的 LRU&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2021/04/08/LevelDB-utils-LRU/&t=LRU, 更多的 LRU"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#LevelDB-LRU"><span class="toc-number">1.</span> <span class="toc-text">LevelDB LRU</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#RocksDB-LRU"><span class="toc-number">2.</span> <span class="toc-text">RocksDB LRU</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%BF%91%E4%BC%BC-LRU-%E5%92%8C%E5%85%B6%E4%BB%96%E6%96%B9%E6%B3%95"><span class="toc-number">3.</span> <span class="toc-text">近似 LRU 和其他方法</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        LRU, 更多的 LRU
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2021-04-08T07:03:32.000Z" itemprop="datePublished">2021-04-08</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>面试的时候面试官经常会让你搓个 LRU，boost 这里有个 case:</p>
+<p><a target="_blank" rel="noopener" href="https://www.boost.org/doc/libs/1_67_0/boost/compute/detail/lru_cache.hpp">https://www.boost.org/doc/libs/1_67_0/boost/compute/detail/lru_cache.hpp</a></p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// a cache which evicts the least recently used item when it is full</span></span><br><span class="line"><span class="keyword">template</span>&lt;<span class="keyword">class</span> <span class="title class_">Key</span>, <span class="keyword">class</span> <span class="title class_">Value</span>&gt;</span><br><span class="line"><span class="keyword">class</span> <span class="title class_">lru_cache</span></span><br><span class="line">&#123;</span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">    <span class="keyword">typedef</span> Key key_type;</span><br><span class="line">    <span class="keyword">typedef</span> Value value_type;</span><br><span class="line">    <span class="keyword">typedef</span> std::list&lt;key_type&gt; list_type;</span><br><span class="line">    <span class="keyword">typedef</span> std::map&lt;</span><br><span class="line">                key_type,</span><br><span class="line">                std::pair&lt;value_type, <span class="keyword">typename</span> list_type::iterator&gt;</span><br><span class="line">            &gt; map_type;</span><br><span class="line"></span><br><span class="line">    <span class="built_in">lru_cache</span>(<span class="type">size_t</span> capacity)</span><br><span class="line">        : <span class="built_in">m_capacity</span>(capacity)</span><br><span class="line">    &#123;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    ~<span class="built_in">lru_cache</span>()</span><br><span class="line">    &#123;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="type">size_t</span> <span class="title">size</span><span class="params">()</span> <span class="type">const</span>；</span></span><br><span class="line"><span class="function">    <span class="type">size_t</span> <span class="title">capacity</span><span class="params">()</span> <span class="type">const</span></span>;</span><br><span class="line">    <span class="function"><span class="type">bool</span> <span class="title">empty</span><span class="params">()</span> <span class="type">const</span></span>;</span><br><span class="line">    <span class="function"><span class="type">bool</span> <span class="title">contains</span><span class="params">(<span class="type">const</span> key_type &amp;key)</span></span>;</span><br><span class="line">    <span class="function"><span class="type">void</span> <span class="title">insert</span><span class="params">(<span class="type">const</span> key_type &amp;key, <span class="type">const</span> value_type &amp;value)</span></span>;</span><br><span class="line">    <span class="function">boost::optional&lt;value_type&gt; <span class="title">get</span><span class="params">(<span class="type">const</span> key_type &amp;key)</span></span>;</span><br><span class="line">    <span class="function"><span class="type">void</span> <span class="title">clear</span><span class="params">()</span></span>;</span><br><span class="line"></span><br><span class="line"><span class="keyword">private</span>:</span><br><span class="line">    <span class="function"><span class="type">void</span> <span class="title">evict</span><span class="params">()</span></span>;</span><br><span class="line"></span><br><span class="line"><span class="keyword">private</span>:</span><br><span class="line">    map_type m_map;</span><br><span class="line">    list_type m_list;</span><br><span class="line">    <span class="type">size_t</span> m_capacity;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>这玩意短小又精悍:</p>
+<ol>
+<li><code>list_type</code> 存储了 <code>key</code> 的 LRU 链表，插入在最前方插入/把中间某个 key 丢到最前面</li>
+<li><code>m_map</code> 存储了 <code>map[key -&gt; (list_iter, value)]</code></li>
+</ol>
+<p>这个相对来说应该是很好理解的。但是这玩意也掩盖了 LRU 的复杂性:</p>
+<ol>
+<li>假设我们 evict, 那么我们要逐出一个元素，然后根据 key 查一下 <code>m_map</code>，complexity 是 O(1) 的，但是仍然需要访问 <code>m_map</code></li>
+<li>如果并发的话，hash 肯定要上一把大锁</li>
+</ol>
+<p>实际上上面两点都有一定的问题。然后对于 LRU 的调用者，还有个“内部”，“外部”的问题，可以参考一下 CMU 15-445 Lab-1 的接口：</p>
+<ul>
+<li>使用的时候可能会把 LRU 某个取出来，作为活跃的、正在使用的对象，使用完之后再丢进 LRU 里头</li>
+</ul>
+<h2 id="LevelDB-LRU"><a href="#LevelDB-LRU" class="headerlink" title="LevelDB LRU"></a>LevelDB LRU</h2><p>LevelDB 实现了侵入式的 LRU, 同时分为了多个 shard。这分别针对了我们上面说的复杂性 (1) 和 (2), 先看看接口：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">LEVELDB_EXPORT Cache* <span class="title">NewLRUCache</span><span class="params">(<span class="type">size_t</span> capacity)</span></span>;</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">LEVELDB_EXPORT</span> Cache &#123;</span><br><span class="line"> <span class="keyword">public</span>:</span><br><span class="line">  <span class="built_in">Cache</span>() = <span class="keyword">default</span>;</span><br><span class="line"></span><br><span class="line">  <span class="built_in">Cache</span>(<span class="type">const</span> Cache&amp;) = <span class="keyword">delete</span>;</span><br><span class="line">  Cache&amp; <span class="keyword">operator</span>=(<span class="type">const</span> Cache&amp;) = <span class="keyword">delete</span>;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// Destroys all existing entries by calling the &quot;deleter&quot;</span></span><br><span class="line">  <span class="comment">// function that was passed to the constructor.</span></span><br><span class="line">  <span class="keyword">virtual</span> ~<span class="built_in">Cache</span>();</span><br><span class="line"></span><br><span class="line">  <span class="comment">// Opaque handle to an entry stored in the cache.</span></span><br><span class="line">  <span class="keyword">struct</span> <span class="title class_">Handle</span> &#123;&#125;;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// Insert a mapping from key-&gt;value into the cache and assign it</span></span><br><span class="line">  <span class="comment">// the specified charge against the total cache capacity.</span></span><br><span class="line">  <span class="comment">//</span></span><br><span class="line">  <span class="comment">// Returns a handle that corresponds to the mapping.  The caller</span></span><br><span class="line">  <span class="comment">// must call this-&gt;Release(handle) when the returned mapping is no</span></span><br><span class="line">  <span class="comment">// longer needed.</span></span><br><span class="line">  <span class="comment">//</span></span><br><span class="line">  <span class="comment">// When the inserted entry is no longer needed, the key and</span></span><br><span class="line">  <span class="comment">// value will be passed to &quot;deleter&quot;.</span></span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> Handle* <span class="title">Insert</span><span class="params">(<span class="type">const</span> Slice&amp; key, <span class="type">void</span>* value, <span class="type">size_t</span> charge,</span></span></span><br><span class="line"><span class="params"><span class="function">                         <span class="type">void</span> (*deleter)(<span class="type">const</span> Slice&amp; key, <span class="type">void</span>* value))</span> </span>= <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// If the cache has no mapping for &quot;key&quot;, returns nullptr.</span></span><br><span class="line">  <span class="comment">//</span></span><br><span class="line">  <span class="comment">// Else return a handle that corresponds to the mapping.  The caller</span></span><br><span class="line">  <span class="comment">// must call this-&gt;Release(handle) when the returned mapping is no</span></span><br><span class="line">  <span class="comment">// longer needed.</span></span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> Handle* <span class="title">Lookup</span><span class="params">(<span class="type">const</span> Slice&amp; key)</span> </span>= <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// Release a mapping returned by a previous Lookup().</span></span><br><span class="line">  <span class="comment">// REQUIRES: handle must not have been released yet.</span></span><br><span class="line">  <span class="comment">// REQUIRES: handle must have been returned by a method on *this.</span></span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> <span class="type">void</span> <span class="title">Release</span><span class="params">(Handle* handle)</span> </span>= <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// Return the value encapsulated in a handle returned by a</span></span><br><span class="line">  <span class="comment">// successful Lookup().</span></span><br><span class="line">  <span class="comment">// REQUIRES: handle must not have been released yet.</span></span><br><span class="line">  <span class="comment">// REQUIRES: handle must have been returned by a method on *this.</span></span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> <span class="type">void</span>* <span class="title">Value</span><span class="params">(Handle* handle)</span> </span>= <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// If the cache contains entry for key, erase it.  Note that the</span></span><br><span class="line">  <span class="comment">// underlying entry will be kept around until all existing handles</span></span><br><span class="line">  <span class="comment">// to it have been released.</span></span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> <span class="type">void</span> <span class="title">Erase</span><span class="params">(<span class="type">const</span> Slice&amp; key)</span> </span>= <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// Return a new numeric id.  May be used by multiple clients who are</span></span><br><span class="line">  <span class="comment">// sharing the same cache to partition the key space.  Typically the</span></span><br><span class="line">  <span class="comment">// client will allocate a new id at startup and prepend the id to</span></span><br><span class="line">  <span class="comment">// its cache keys.</span></span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> <span class="type">uint64_t</span> <span class="title">NewId</span><span class="params">()</span> </span>= <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// Remove all cache entries that are not actively in use.  Memory-constrained</span></span><br><span class="line">  <span class="comment">// applications may wish to call this method to reduce memory usage.</span></span><br><span class="line">  <span class="comment">// Default implementation of Prune() does nothing.  Subclasses are strongly</span></span><br><span class="line">  <span class="comment">// encouraged to override the default implementation.  A future release of</span></span><br><span class="line">  <span class="comment">// leveldb may change Prune() to a pure abstract method.</span></span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> <span class="type">void</span> <span class="title">Prune</span><span class="params">()</span> </span>&#123;&#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// Return an estimate of the combined charges of all elements stored in the</span></span><br><span class="line">  <span class="comment">// cache.</span></span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> <span class="type">size_t</span> <span class="title">TotalCharge</span><span class="params">()</span> <span class="type">const</span> </span>= <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line"> <span class="keyword">private</span>:</span><br><span class="line">  <span class="function"><span class="type">void</span> <span class="title">LRU_Remove</span><span class="params">(Handle* e)</span></span>;</span><br><span class="line">  <span class="function"><span class="type">void</span> <span class="title">LRU_Append</span><span class="params">(Handle* e)</span></span>;</span><br><span class="line">  <span class="function"><span class="type">void</span> <span class="title">Unref</span><span class="params">(Handle* e)</span></span>;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">struct</span> <span class="title class_">Rep</span>;</span><br><span class="line">  Rep* rep_;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>先做个阅读理解：</p>
+<ol>
+<li><code>struct Handle</code>  是一个没有定义任何成员的类型，<code>Cache::Handle*</code> 其实被我们当成一个特殊的地址处理，可以参考 <code>LRUHandle</code> 的定义. 可以看到，第一个成员是 value. 我们在 <code>LRUCache</code> 返回的时候用 <code>reinterpret_cast&lt;Cache::Handle&gt;(lru_hanle_ptr)</code>, 然后对应地址最前面就是 <code>value</code>。当然这个也可以通过 <code>Cache::Value</code> 访问</li>
+<li><code>Lookup</code> 发生的时候，LRUCache 的元素会被标记 <code>ref</code>, <code>Release</code> 的时候，会被标记为 <code>Unref</code>. </li>
+<li><code>Insert</code> 带 Deleter 这个比较正常，charge 相对来说不好理解一些，可以和 Shard 一起理解，每个 shard 不是按<code>Handle</code> 个数算的，而是按 <code>charge</code> 算的。然后 block cache (<code>options.block_cache</code> 配置，存储 table 相关的 content ) 里面，每个 <code>block</code> 单位是一个 block 的 size, TableCache （对 SST 文件的句柄 cache）里面，charge 对应是 1.</li>
+<li><code>NewID</code> 这个玩意实际上和实现的逻辑有关，在 block cache 里，<code>key</code> 被编码成 64bit 的 cache id (per table) 和 64bit 的 block 偏移量，所以需要每个 block cache 能生成出 一个 unique id.</li>
+</ol>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">struct</span> <span class="title class_">LRUHandle</span> &#123;</span><br><span class="line">  <span class="type">void</span>* value;</span><br><span class="line">  <span class="built_in">void</span> (*deleter)(<span class="type">const</span> Slice&amp;, <span class="type">void</span>* value);</span><br><span class="line">  LRUHandle* next_hash;</span><br><span class="line">  LRUHandle* next;</span><br><span class="line">  LRUHandle* prev;</span><br><span class="line">  <span class="comment">// charge 是一个统计量，在 block_cache 中，这个统计量是 size().</span></span><br><span class="line">  <span class="comment">// 在 TableCache 中，这个统计量是1.</span></span><br><span class="line">  <span class="comment">// 注：TableCache 和 block 不是同一个对象。</span></span><br><span class="line">  <span class="type">size_t</span> charge;  <span class="comment">// TODO(opt): Only allow uint32_t?</span></span><br><span class="line">  <span class="type">size_t</span> key_length;</span><br><span class="line">  <span class="type">bool</span> in_cache;     <span class="comment">// Whether entry is in the cache.</span></span><br><span class="line">  <span class="type">uint32_t</span> refs;     <span class="comment">// References, including cache reference, if present.</span></span><br><span class="line">  <span class="type">uint32_t</span> hash;     <span class="comment">// Hash of key(); used for fast sharding and comparisons</span></span><br><span class="line">  <span class="type">char</span> key_data[<span class="number">1</span>];  <span class="comment">// Beginning of key</span></span><br><span class="line"></span><br><span class="line">  <span class="function">Slice <span class="title">key</span><span class="params">()</span> <span class="type">const</span> </span>&#123;</span><br><span class="line">    <span class="comment">// next_ is only equal to this if the LRU handle is the list head of an</span></span><br><span class="line">    <span class="comment">// empty list. List heads never have meaningful keys.</span></span><br><span class="line">    <span class="built_in">assert</span>(next != <span class="keyword">this</span>);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> <span class="built_in">Slice</span>(key_data, key_length);</span><br><span class="line">  &#125;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>我们来瞅瞅具体的 LRUCache 结构体：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">class</span> <span class="title class_">LRUCache</span> &#123;</span><br><span class="line"> <span class="keyword">public</span>:</span><br><span class="line">  <span class="built_in">LRUCache</span>();</span><br><span class="line">  ~<span class="built_in">LRUCache</span>();</span><br><span class="line"></span><br><span class="line">  <span class="comment">// Separate from constructor so caller can easily make an array of LRUCache</span></span><br><span class="line">  <span class="function"><span class="type">void</span> <span class="title">SetCapacity</span><span class="params">(<span class="type">size_t</span> capacity)</span> </span>&#123; capacity_ = capacity; &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// Like Cache methods, but with an extra &quot;hash&quot; parameter.</span></span><br><span class="line">  <span class="function">Cache::Handle* <span class="title">Insert</span><span class="params">(<span class="type">const</span> Slice&amp; key, <span class="type">uint32_t</span> hash, <span class="type">void</span>* value,</span></span></span><br><span class="line"><span class="params"><span class="function">                        <span class="type">size_t</span> charge,</span></span></span><br><span class="line"><span class="params"><span class="function">                        <span class="type">void</span> (*deleter)(<span class="type">const</span> Slice&amp; key, <span class="type">void</span>* value))</span></span>;</span><br><span class="line">  <span class="function">Cache::Handle* <span class="title">Lookup</span><span class="params">(<span class="type">const</span> Slice&amp; key, <span class="type">uint32_t</span> hash)</span></span>;</span><br><span class="line">  <span class="function"><span class="type">void</span> <span class="title">Release</span><span class="params">(Cache::Handle* handle)</span></span>;</span><br><span class="line">  <span class="function"><span class="type">void</span> <span class="title">Erase</span><span class="params">(<span class="type">const</span> Slice&amp; key, <span class="type">uint32_t</span> hash)</span></span>;</span><br><span class="line">  <span class="function"><span class="type">void</span> <span class="title">Prune</span><span class="params">()</span></span>;</span><br><span class="line">  <span class="comment">// charge 属于用户逻辑了。</span></span><br><span class="line">  <span class="function"><span class="type">size_t</span> <span class="title">TotalCharge</span><span class="params">()</span> <span class="type">const</span> </span>&#123;</span><br><span class="line">    <span class="function">MutexLock <span class="title">l</span><span class="params">(&amp;mutex_)</span></span>;</span><br><span class="line">    <span class="keyword">return</span> usage_;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line"> <span class="keyword">private</span>:</span><br><span class="line">  <span class="function"><span class="type">void</span> <span class="title">LRU_Remove</span><span class="params">(LRUHandle* e)</span></span>;</span><br><span class="line">  <span class="function"><span class="type">void</span> <span class="title">LRU_Append</span><span class="params">(LRUHandle* list, LRUHandle* e)</span></span>;</span><br><span class="line">  <span class="function"><span class="type">void</span> <span class="title">Ref</span><span class="params">(LRUHandle* e)</span></span>;</span><br><span class="line">  <span class="function"><span class="type">void</span> <span class="title">Unref</span><span class="params">(LRUHandle* e)</span></span>;</span><br><span class="line">  <span class="function"><span class="type">bool</span> <span class="title">FinishErase</span><span class="params">(LRUHandle* e)</span> <span class="title">EXCLUSIVE_LOCKS_REQUIRED</span><span class="params">(mutex_)</span></span>;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// Initialized before use.</span></span><br><span class="line">  <span class="type">size_t</span> capacity_;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// mutex_ protects the following state.</span></span><br><span class="line">  <span class="keyword">mutable</span> port::Mutex mutex_;</span><br><span class="line">  <span class="function"><span class="type">size_t</span> usage_ <span class="title">GUARDED_BY</span><span class="params">(mutex_)</span></span>;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// Dummy head of LRU list.</span></span><br><span class="line">  <span class="comment">// lru.prev is newest entry, lru.next is oldest entry.</span></span><br><span class="line">  <span class="comment">// Entries have refs==1 and in_cache==true.</span></span><br><span class="line">  <span class="function">LRUHandle lru_ <span class="title">GUARDED_BY</span><span class="params">(mutex_)</span></span>;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// Dummy head of in-use list.</span></span><br><span class="line">  <span class="comment">// Entries are in use by clients, and have refs &gt;= 2 and in_cache==true.</span></span><br><span class="line">  <span class="function">LRUHandle in_use_ <span class="title">GUARDED_BY</span><span class="params">(mutex_)</span></span>;</span><br><span class="line"></span><br><span class="line">  <span class="function">HandleTable table_ <span class="title">GUARDED_BY</span><span class="params">(mutex_)</span></span>;</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line">LRUCache::<span class="built_in">LRUCache</span>() : <span class="built_in">capacity_</span>(<span class="number">0</span>), <span class="built_in">usage_</span>(<span class="number">0</span>) &#123;</span><br><span class="line">  <span class="comment">// Make empty circular linked lists.</span></span><br><span class="line">  lru_.next = &amp;lru_;</span><br><span class="line">  lru_.prev = &amp;lru_;</span><br><span class="line">  in_use_.next = &amp;in_use_;</span><br><span class="line">  in_use_.prev = &amp;in_use_;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<ol>
+<li><code>LRUCache</code> 包含两大部分，<code>in_use_</code> （客户端正在使用的双向链表）和 <code>lru_</code> （ LRU 逻辑），这里和 LRUHandle 的逻辑有相关，LRUHandle 上有 <code>ref_</code>, 表示引用计数。<code>lru_</code> 也相当于我们之前 boost 那里的 <code>m_list_</code></li>
+</ol>
+<p>不过 <code>LRUHandle</code> 上还有个迷之字段 <code>next_hash</code>, 然后 HandleTable 又是什么样的呢？这就是今天的坑点了：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">class</span> <span class="title class_">HandleTable</span> &#123;</span><br><span class="line"> <span class="keyword">public</span>:</span><br><span class="line">  <span class="built_in">HandleTable</span>() : <span class="built_in">length_</span>(<span class="number">0</span>), <span class="built_in">elems_</span>(<span class="number">0</span>), <span class="built_in">list_</span>(<span class="literal">nullptr</span>) &#123; <span class="built_in">Resize</span>(); &#125;</span><br><span class="line">  ~<span class="built_in">HandleTable</span>() &#123; <span class="keyword">delete</span>[] list_; &#125;</span><br><span class="line"></span><br><span class="line">  <span class="function">LRUHandle* <span class="title">Lookup</span><span class="params">(<span class="type">const</span> Slice&amp; key, <span class="type">uint32_t</span> hash)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">return</span> *<span class="built_in">FindPointer</span>(key, hash);</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="function">LRUHandle* <span class="title">Insert</span><span class="params">(LRUHandle* h)</span> </span>&#123;</span><br><span class="line">    LRUHandle** ptr = <span class="built_in">FindPointer</span>(h-&gt;<span class="built_in">key</span>(), h-&gt;hash);</span><br><span class="line">    LRUHandle* old = *ptr;</span><br><span class="line">    h-&gt;next_hash = (old == <span class="literal">nullptr</span> ? <span class="literal">nullptr</span> : old-&gt;next_hash);</span><br><span class="line">    *ptr = h;</span><br><span class="line">    <span class="keyword">if</span> (old == <span class="literal">nullptr</span>) &#123;</span><br><span class="line">      ++elems_;</span><br><span class="line">      <span class="keyword">if</span> (elems_ &gt; length_) &#123;</span><br><span class="line">        <span class="comment">// Since each cache entry is fairly large, we aim for a small</span></span><br><span class="line">        <span class="comment">// average linked list length (&lt;= 1).</span></span><br><span class="line">        <span class="built_in">Resize</span>();</span><br><span class="line">      &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> old;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="function">LRUHandle* <span class="title">Remove</span><span class="params">(<span class="type">const</span> Slice&amp; key, <span class="type">uint32_t</span> hash)</span> </span>&#123;</span><br><span class="line">    LRUHandle** ptr = <span class="built_in">FindPointer</span>(key, hash);</span><br><span class="line">    LRUHandle* result = *ptr;</span><br><span class="line">    <span class="keyword">if</span> (result != <span class="literal">nullptr</span>) &#123;</span><br><span class="line">      *ptr = result-&gt;next_hash;</span><br><span class="line">      --elems_;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> result;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line"> <span class="keyword">private</span>:</span><br><span class="line">  <span class="comment">// The table consists of an array of buckets where each bucket is</span></span><br><span class="line">  <span class="comment">// a linked list of cache entries that hash into the bucket.</span></span><br><span class="line">  <span class="type">uint32_t</span> length_;</span><br><span class="line">  <span class="type">uint32_t</span> elems_;</span><br><span class="line">  LRUHandle** list_;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// Return a pointer to slot that points to a cache entry that</span></span><br><span class="line">  <span class="comment">// matches key/hash.  If there is no such cache entry, return a</span></span><br><span class="line">  <span class="comment">// pointer to the trailing slot in the corresponding linked list.</span></span><br><span class="line">  <span class="function">LRUHandle** <span class="title">FindPointer</span><span class="params">(<span class="type">const</span> Slice&amp; key, <span class="type">uint32_t</span> hash)</span> </span>&#123;</span><br><span class="line">    LRUHandle** ptr = &amp;list_[hash &amp; (length_ - <span class="number">1</span>)];</span><br><span class="line">    <span class="keyword">while</span> (*ptr != <span class="literal">nullptr</span> &amp;&amp; ((*ptr)-&gt;hash != hash || key != (*ptr)-&gt;<span class="built_in">key</span>())) &#123;</span><br><span class="line">      ptr = &amp;(*ptr)-&gt;next_hash;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> ptr;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="function"><span class="type">void</span> <span class="title">Resize</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="type">uint32_t</span> new_length = <span class="number">4</span>;</span><br><span class="line">    <span class="keyword">while</span> (new_length &lt; elems_) &#123;</span><br><span class="line">      new_length *= <span class="number">2</span>;</span><br><span class="line">    &#125;</span><br><span class="line">    LRUHandle** new_list = <span class="keyword">new</span> LRUHandle*[new_length];</span><br><span class="line">    <span class="built_in">memset</span>(new_list, <span class="number">0</span>, <span class="built_in">sizeof</span>(new_list[<span class="number">0</span>]) * new_length);</span><br><span class="line">    <span class="type">uint32_t</span> count = <span class="number">0</span>;</span><br><span class="line">    <span class="keyword">for</span> (<span class="type">uint32_t</span> i = <span class="number">0</span>; i &lt; length_; i++) &#123;</span><br><span class="line">      LRUHandle* h = list_[i];</span><br><span class="line">      <span class="keyword">while</span> (h != <span class="literal">nullptr</span>) &#123;</span><br><span class="line">        LRUHandle* next = h-&gt;next_hash;</span><br><span class="line">        <span class="type">uint32_t</span> hash = h-&gt;hash;</span><br><span class="line">        LRUHandle** ptr = &amp;new_list[hash &amp; (new_length - <span class="number">1</span>)];</span><br><span class="line">        h-&gt;next_hash = *ptr;</span><br><span class="line">        *ptr = h;</span><br><span class="line">        h = next;</span><br><span class="line">        count++;</span><br><span class="line">      &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="built_in">assert</span>(elems_ == count);</span><br><span class="line">    <span class="keyword">delete</span>[] list_;</span><br><span class="line">    list_ = new_list;</span><br><span class="line">    length_ = new_length;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>别看这个结构很复杂，实际上就是个链式 hash. 开辟了一个数组，然后用 <code>next_hash</code> 表示链，这个类似 absl 的 <code>flat_hash_set</code>, 而 set 的成员则是 <code>LRUHandle</code>, 那么这个时候，evict 的时候，可以直接通过 <code>hash</code> 和查表来定位。</p>
+<p>相对 boost 的实现来说，这里可以算绕了个大圈子，但是 Google 表示这里有 5% 的性能收益（boost 可能受限于 hash table 的结构, 有空间上的开销和局部性上的开销）。</p>
+<p>那么，还有一个问题是，为什么 <code>LRUHandle</code> 只存有 <code>next_hash</code>, 没有 <code>prev_hash</code>? 如果有 <code>prev_hash</code>, 那么 Erase 的时候甚至不需要查表。这里可以看看 <code>Insert</code> 代码：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">LRUHandle* <span class="title">Insert</span><span class="params">(LRUHandle* h)</span> </span>&#123;</span><br><span class="line">  LRUHandle** ptr = <span class="built_in">FindPointer</span>(h-&gt;<span class="built_in">key</span>(), h-&gt;hash);</span><br><span class="line">  LRUHandle* old = *ptr;</span><br><span class="line">  h-&gt;next_hash = (old == <span class="literal">nullptr</span> ? <span class="literal">nullptr</span> : old-&gt;next_hash);</span><br><span class="line">  *ptr = h;</span><br><span class="line">  <span class="keyword">if</span> (old == <span class="literal">nullptr</span>) &#123;</span><br><span class="line">    ++elems_;</span><br><span class="line">    <span class="keyword">if</span> (elems_ &gt; length_) &#123;</span><br><span class="line">      <span class="comment">// Since each cache entry is fairly large, we aim for a small</span></span><br><span class="line">      <span class="comment">// average linked list length (&lt;= 1).</span></span><br><span class="line">      <span class="built_in">Resize</span>();</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="keyword">return</span> old;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p> 这里大概要求 <code>next_hash</code> 链表不会很长, 然后不加上这个来节省空间。</p>
+<h2 id="RocksDB-LRU"><a href="#RocksDB-LRU" class="headerlink" title="RocksDB LRU"></a>RocksDB LRU</h2><p>RocksDB 的 LRU 大致支持类似 LevelDB 的 LRU, 但是它支持类似 2-LRU，会在一定条件下，把 LRU 丢到高优队列中：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br></pre></td><td class="code"><pre><span class="line">  <span class="keyword">enum</span> <span class="title class_">Flags</span> : <span class="type">uint8_t</span> &#123;</span><br><span class="line">    <span class="comment">// Whether this entry is referenced by the hash table.</span></span><br><span class="line">    IN_CACHE = (<span class="number">1</span> &lt;&lt; <span class="number">0</span>),</span><br><span class="line">    <span class="comment">// Whether this entry is high priority entry.</span></span><br><span class="line">    IS_HIGH_PRI = (<span class="number">1</span> &lt;&lt; <span class="number">1</span>),</span><br><span class="line">    <span class="comment">// Whether this entry is in high-pri pool.</span></span><br><span class="line">    IN_HIGH_PRI_POOL = (<span class="number">1</span> &lt;&lt; <span class="number">2</span>),</span><br><span class="line">    <span class="comment">// Whether this entry has had any lookups (hits).</span></span><br><span class="line">    HAS_HIT = (<span class="number">1</span> &lt;&lt; <span class="number">3</span>),</span><br><span class="line">  &#125;;</span><br><span class="line">  </span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">LRUCacheShard::LRU_Insert</span><span class="params">(LRUHandle* e)</span> </span>&#123;</span><br><span class="line">  <span class="built_in">assert</span>(e-&gt;next == <span class="literal">nullptr</span>);</span><br><span class="line">  <span class="built_in">assert</span>(e-&gt;prev == <span class="literal">nullptr</span>);</span><br><span class="line">  <span class="type">size_t</span> total_charge = e-&gt;<span class="built_in">CalcTotalCharge</span>(metadata_charge_policy_);</span><br><span class="line">  <span class="keyword">if</span> (high_pri_pool_ratio_ &gt; <span class="number">0</span> &amp;&amp; (e-&gt;<span class="built_in">IsHighPri</span>() || e-&gt;<span class="built_in">HasHit</span>())) &#123;</span><br><span class="line">    <span class="comment">// Inset &quot;e&quot; to head of LRU list.</span></span><br><span class="line">    e-&gt;next = &amp;lru_;</span><br><span class="line">    e-&gt;prev = lru_.prev;</span><br><span class="line">    e-&gt;prev-&gt;next = e;</span><br><span class="line">    e-&gt;next-&gt;prev = e;</span><br><span class="line">    e-&gt;<span class="built_in">SetInHighPriPool</span>(<span class="literal">true</span>);</span><br><span class="line">    high_pri_pool_usage_ += total_charge;</span><br><span class="line">    <span class="built_in">MaintainPoolSize</span>();</span><br><span class="line">  &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">    <span class="comment">// Insert &quot;e&quot; to the head of low-pri pool. Note that when</span></span><br><span class="line">    <span class="comment">// high_pri_pool_ratio is 0, head of low-pri pool is also head of LRU list.</span></span><br><span class="line">    e-&gt;next = lru_low_pri_-&gt;next;</span><br><span class="line">    e-&gt;prev = lru_low_pri_;</span><br><span class="line">    e-&gt;prev-&gt;next = e;</span><br><span class="line">    e-&gt;next-&gt;prev = e;</span><br><span class="line">    e-&gt;<span class="built_in">SetInHighPriPool</span>(<span class="literal">false</span>);</span><br><span class="line">    lru_low_pri_ = e;</span><br><span class="line">  &#125;</span><br><span class="line">  lru_usage_ += total_charge;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h2 id="近似-LRU-和其他方法"><a href="#近似-LRU-和其他方法" class="headerlink" title="近似 LRU 和其他方法"></a>近似 LRU 和其他方法</h2><p>可以看到，这里的 LRU 是带锁实现的。HashTable + doubly linked list 让它的并发变得比较麻烦。这里可以参考一下一些近似的 LRU 算法，在算法本身的性能上有相对好一些的开销：</p>
+<ol>
+<li>redis 的 LRU<ol>
+<li>这里的 LRU 感觉一点都不 LRU，只是产生一个 LRU 时间，采样 key, 然后处理掉“ Least Recent Used” 的数据，是一个与概率的结合，本身靠采样 + 随机性实现</li>
+</ol>
+</li>
+<li>RocksDB 的 clock 算法<ol>
+<li>这里 clock 本身相对 LRU 来说好并行很多，RocksDB 这里用了 <code>tbb</code> 中的库来实现。</li>
+</ol>
+</li>
+</ol>
+<p>此外，也有 <a target="_blank" rel="noopener" href="https://en.wikipedia.org/wiki/Adaptive_replacement_cache">Adaptive replacement cache</a> 这样的策略，或者 LFU 这样的策略。可以配合 bench 和 pprof ，配合自己的需求使用。</p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#LevelDB-LRU"><span class="toc-number">1.</span> <span class="toc-text">LevelDB LRU</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#RocksDB-LRU"><span class="toc-number">2.</span> <span class="toc-text">RocksDB LRU</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%BF%91%E4%BC%BC-LRU-%E5%92%8C%E5%85%B6%E4%BB%96%E6%96%B9%E6%B3%95"><span class="toc-number">3.</span> <span class="toc-text">近似 LRU 和其他方法</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2021/04/08/LevelDB-utils-LRU/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2021/04/08/LevelDB-utils-LRU/&text=LRU, 更多的 LRU"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2021/04/08/LevelDB-utils-LRU/&title=LRU, 更多的 LRU"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2021/04/08/LevelDB-utils-LRU/&is_video=false&description=LRU, 更多的 LRU"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=LRU, 更多的 LRU&body=Check out this article: http://blog.mwish.me/2021/04/08/LevelDB-utils-LRU/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2021/04/08/LevelDB-utils-LRU/&title=LRU, 更多的 LRU"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2021/04/08/LevelDB-utils-LRU/&title=LRU, 更多的 LRU"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2021/04/08/LevelDB-utils-LRU/&title=LRU, 更多的 LRU"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2021/04/08/LevelDB-utils-LRU/&title=LRU, 更多的 LRU"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2021/04/08/LevelDB-utils-LRU/&name=LRU, 更多的 LRU&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2021/04/08/LevelDB-utils-LRU/&t=LRU, 更多的 LRU"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

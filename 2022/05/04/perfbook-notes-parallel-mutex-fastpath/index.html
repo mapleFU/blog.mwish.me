@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="在介绍完硬件后，perfbook 用 scalable-counter 为例子，介绍了并发数据结构的设计。这里面有一些大概的要点：  Partition 根据 Core 或者线程来 Partition。比如 counter、allocator。malloc() 和 inc() 可能不指定具体的 key，因此这个资源可以池化，绑定在 CPU、Thread 之类的对象上 根据 key 来 partit">
+<meta property="og:type" content="article">
+<meta property="og:title" content="perfbook notes: parallel, mutex, fastpath">
+<meta property="og:url" content="http://blog.mwish.me/2022/05/04/perfbook-notes-parallel-mutex-fastpath/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="在介绍完硬件后，perfbook 用 scalable-counter 为例子，介绍了并发数据结构的设计。这里面有一些大概的要点：  Partition 根据 Core 或者线程来 Partition。比如 counter、allocator。malloc() 和 inc() 可能不指定具体的 key，因此这个资源可以池化，绑定在 CPU、Thread 之类的对象上 根据 key 来 partit">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/28AFE9DD-5AFE-4E26-B965-00AEEE83CF9E.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/1D331DF5-8280-4232-A5B6-EAF9995CCB4F.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/AE328AD5-DBF0-4D0A-B31A-9FDA957675F4.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/C3AA88D1-78AC-46A8-BF6C-060C7549F7FC.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/7C9EAE64-1FBE-4A4C-AEBD-768E34E0E202.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/34EEB050-4CC0-4255-A116-376142A6C045.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/12F8C1A4-EEE5-44F3-8CE6-993E5F0DA147.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/824F4B98-460F-4941-8B38-CA14CAA45F52.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/0A3C39FC-F2C3-40CD-A690-36F9A0F9913E.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/E39EA9B2-16C2-4AB7-818F-191C8D87BB12.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/1E3AAC09-C5B8-42E7-9BBE-8888FB3DE74E.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/71BAD532-A9D2-4D47-84B9-A9074CA1C090.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/9B314C2B-1C22-4762-B899-E8B620EDC014.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/291A6825-116C-48B6-8507-E0D42EC990DD.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/465B1D27890482CA56D68CE6529B4E3D.png">
+<meta property="article:published_time" content="2022-05-04T08:29:01.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.567Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/28AFE9DD-5AFE-4E26-B965-00AEEE83CF9E.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>perfbook notes: parallel, mutex, fastpath</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2022/05/24/perfbook-notes-defered-processing/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2022/05/04/perfbook-notes-hardware/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2022/05/04/perfbook-notes-parallel-mutex-fastpath/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2022/05/04/perfbook-notes-parallel-mutex-fastpath/&text=perfbook notes: parallel, mutex, fastpath"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2022/05/04/perfbook-notes-parallel-mutex-fastpath/&title=perfbook notes: parallel, mutex, fastpath"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2022/05/04/perfbook-notes-parallel-mutex-fastpath/&is_video=false&description=perfbook notes: parallel, mutex, fastpath"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=perfbook notes: parallel, mutex, fastpath&body=Check out this article: http://blog.mwish.me/2022/05/04/perfbook-notes-parallel-mutex-fastpath/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2022/05/04/perfbook-notes-parallel-mutex-fastpath/&title=perfbook notes: parallel, mutex, fastpath"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2022/05/04/perfbook-notes-parallel-mutex-fastpath/&title=perfbook notes: parallel, mutex, fastpath"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2022/05/04/perfbook-notes-parallel-mutex-fastpath/&title=perfbook notes: parallel, mutex, fastpath"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2022/05/04/perfbook-notes-parallel-mutex-fastpath/&title=perfbook notes: parallel, mutex, fastpath"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2022/05/04/perfbook-notes-parallel-mutex-fastpath/&name=perfbook notes: parallel, mutex, fastpath&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2022/05/04/perfbook-notes-parallel-mutex-fastpath/&t=perfbook notes: parallel, mutex, fastpath"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Counting"><span class="toc-number">1.</span> <span class="toc-text">Counting</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#statistical-counter"><span class="toc-number">1.1.</span> <span class="toc-text">statistical counter</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Approximate-Limit-Counters"><span class="toc-number">1.2.</span> <span class="toc-text">Approximate Limit Counters</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Exact-Limit-Counters"><span class="toc-number">1.3.</span> <span class="toc-text">Exact Limit Counters</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%AE%A8%E8%AE%BA"><span class="toc-number">1.4.</span> <span class="toc-text">讨论</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Partition-and-Synchronization-Design"><span class="toc-number">2.</span> <span class="toc-text">Partition and Synchronization Design</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Design-Criteria"><span class="toc-number">2.1.</span> <span class="toc-text">Design Criteria</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Synchronization-Granularity"><span class="toc-number">2.2.</span> <span class="toc-text">Synchronization Granularity</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Parallel-Fastpath"><span class="toc-number">2.3.</span> <span class="toc-text">Parallel Fastpath</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Locking"><span class="toc-number">3.</span> <span class="toc-text">Locking</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%AD%BB%E9%94%81%E9%81%BF%E5%85%8D%E5%92%8C-Lock-Hierarchy"><span class="toc-number">3.1.</span> <span class="toc-text">死锁避免和 Lock Hierarchy</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Types-of-Locks"><span class="toc-number">3.2.</span> <span class="toc-text">Types of Locks</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Exclusive-Lock"><span class="toc-number">3.2.1.</span> <span class="toc-text">Exclusive Lock</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Reader-Writer-Lock"><span class="toc-number">3.2.2.</span> <span class="toc-text">Reader-Writer Lock</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%9B%B4%E7%BB%86%E7%9A%84%E9%94%81%E8%AF%AD%E4%B9%89"><span class="toc-number">3.2.3.</span> <span class="toc-text">更细的锁语义</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%94%81%E7%9A%84%E5%AE%9E%E7%8E%B0"><span class="toc-number">3.3.</span> <span class="toc-text">锁的实现</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Lock-Based-Existence-Guarantees"><span class="toc-number">3.4.</span> <span class="toc-text">Lock-Based Existence Guarantees</span></a></li></ol></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        perfbook notes: parallel, mutex, fastpath
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2022-05-04T08:29:01.000Z" itemprop="datePublished">2022-05-04</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>在介绍完硬件后，perfbook 用 scalable-counter 为例子，介绍了并发数据结构的设计。这里面有一些大概的要点：</p>
+<ol>
+<li>Partition<ol>
+<li>根据 Core 或者线程来 Partition。比如 counter、allocator。<code>malloc()</code> 和 <code>inc()</code> 可能不指定具体的 key，因此这个资源可以池化，绑定在 CPU、Thread 之类的对象上</li>
+<li>根据 key 来 partition。<code>get(key)</code> 本身可以做一些 Partition，来保证粒度</li>
+</ol>
+</li>
+<li>Fastpath、Slowpath 和开销<ol>
+<li>理想情况下，所有操作开销都很低，但是不可能，所以要有个 trade-off</li>
+<li>「开销」可以根据操作的粒度来权衡，不能说「锁操作很重」「atomic 很轻」就行，而要对比临界区、执行 Path 的内容和执行时间，来考量这个开销是不是过大。</li>
+<li>可以区分 Fastpath 和 Slowpath，很少情况执行</li>
+</ol>
+</li>
+<li>Batching<ol>
+<li>将操作批量处理</li>
+</ol>
+</li>
+</ol>
+<p>这里先用 <code>counting</code> 做了一个入门介绍，然后引入了 Paritition/Synchronize Design，最后介绍了一些 Locking 和 Locking 相关的设计。</p>
+<h2 id="Counting"><a href="#Counting" class="headerlink" title="Counting"></a>Counting</h2><p>Scalable Counting 是一个比较开放的问题，这里列举了下面的需求：</p>
+<ol>
+<li>Statistics</li>
+<li>Approximate limit / Exact limit</li>
+<li>Ref-count</li>
+</ol>
+<p>最朴素的思路当然是 <code>std::atomic&lt;uint64_t&gt;</code> 一把梭。但是它不是 scalable 的，回顾一下我们上一节描述的，可能它要保证操作的时候，数据由你的 Cacheline 保护：</p>
+<p><img src="https://image.mwish.me/blog-image/28AFE9DD-5AFE-4E26-B965-00AEEE83CF9E.png" alt="28AFE9DD-5AFE-4E26-B965-00AEEE83CF9E"></p>
+<p><img src="https://image.mwish.me/blog-image/1D331DF5-8280-4232-A5B6-EAF9995CCB4F.png" alt="1D331DF5-8280-4232-A5B6-EAF9995CCB4F"></p>
+<p>这里就有个严肃的同步问题。而且可能是跨 socket 的。当然可以保证这里的统计信息是准的。这里下面有几种 counter :</p>
+<ol>
+<li>statistical counter: 统计，计算总和，很可能不准，但非常高效</li>
+<li>Approximate Limit Counters: 少许超过 limit 限制也可以</li>
+<li>Exact Limit Counters: 不允许超过限制</li>
+</ol>
+<p>这里程序用了 Per-CPU，这个在内核其实不难做，在用户态的话，可以参考 <code>TCMalloc</code> 用的 <code>rseq(2)</code>：</p>
+<ol>
+<li><a target="_blank" rel="noopener" href="https://www.efficios.com/blog/2019/02/08/linux-restartable-sequences/">https://www.efficios.com/blog/2019/02/08/linux-restartable-sequences/</a></li>
+<li><a target="_blank" rel="noopener" href="https://google.github.io/tcmalloc/rseq.html">https://google.github.io/tcmalloc/rseq.html</a></li>
+</ol>
+<p>相对于 Per-CPU，一些地方会使用 Per-Thread 的程序。perfbook 介绍了为什么没有提供 Per-Thread 设施：</p>
+<blockquote>
+<p>A key limitation that the Linux kernel imposes is a compile-time maximum bound on the number of CPUs, namely, <code>CONFIG_NR_CPUS</code>, along with a typically tighter boot-time bound of <code>nr_cpu_ids</code>. In contrast, in user space, there is not necessarily a hard-coded upper limit on the number of threads.</p>
+</blockquote>
+<p>一般的用户程序可能会用 Doubly List 来挂一些统计信息。</p>
+<h3 id="statistical-counter"><a href="#statistical-counter" class="headerlink" title="statistical counter"></a>statistical counter</h3><p>一种方式是，用 Per-CPU 或者<strong>固定</strong>大小的 Array，然后每个线程/CPU 用 <code>WRITE_ONCE</code> 写本地 counter，读的时候读起来所有的 counter。这个地方统计不一定完全准确，因为统计的时候可能 counter 还会增加。这种方法几乎是 Linear scalable 的，但是受限于 <strong>固定大小</strong>。</p>
+<p>Counter 可能可以根据 TLS 来实现。<code>inc</code> 对应的操作应用在 <code>TLS</code> 上，线程销毁的时候，会获取 <code>lock</code>, 然后把操作挂靠在 <code>global_count</code> 上。读取的时候，需要读取 每个线程的 count + <code>global_count</code>。这里具体代码如下：<a target="_blank" rel="noopener" href="https://github.com/paulmckrcu/perfbook/blob/master/CodeSamples/count/count_tstat.c">https://github.com/paulmckrcu/perfbook/blob/master/CodeSamples/count/count_tstat.c</a></p>
+<p>这里有一个小瓶颈在于，读取 <code>global_count</code> 可能需要锁。线程销毁也需要锁，这个是<strong>准确的，但是不 scalable</strong>。这里可以考虑 <strong>Eventual consistency</strong>，达到最终一致性即可：<a target="_blank" rel="noopener" href="https://github.com/paulmckrcu/perfbook/blob/master/CodeSamples/count/count_stat_eventual.c">https://github.com/paulmckrcu/perfbook/blob/master/CodeSamples/count/count_stat_eventual.c</a></p>
+<p>这里引入了一个<strong>额外的线程</strong>来处理数据，读的时候只需要读取 <code>global_count</code>，写也只要直接写，额外的线程会定期把值合并到 <code>global_count</code>.</p>
+<p>这些实现能够牺牲准确性，但是提供近线形的可扩展性。</p>
+<h3 id="Approximate-Limit-Counters"><a href="#Approximate-Limit-Counters" class="headerlink" title="Approximate Limit Counters"></a>Approximate Limit Counters</h3><blockquote>
+<p>Suppose further that these structures are short-lived, that this limit is rarely exceeded, and that this limit is approximate in that it is OK to exceed it sometimes by some bounded amount.</p>
+</blockquote>
+<p>这里会有频繁的 <code>inc(size)</code> 和 <code>dec(size)</code> 操作，希望不要越界过于离谱。</p>
+<p>一个简单的想法是，比如计数是 10000，有 100 个线程，就每个 100 个。但是这对任何有 skew 的 workload 都太垃圾了。这里有一个方法，是上面一个方法的修改版：</p>
+<ol>
+<li>正常分配的时候，每个线程会有一部分剩余的 <code>counter</code> 分配器，它有 <code>countermax</code> 和 <code>counter</code>。正常情况（fast path) 会 <code>++counter</code>，然后保证 <code>counter &lt; countermax</code></li>
+<li>(Slow path): 如果 <code>counter == countermax</code>，那么这里会把 <code>counter</code> 中的一半移动给 <code>globalcount</code>，再回到 (1). 这里还涉及到一个限制，我们会有 <code>globalcountmax</code>, 如果 <code>globalcount</code> 超过了 max，那么计数器就溢出了。</li>
+<li>(slow path): 如果 <code>counter == 0</code>, 且还需要减少，类似 (2)，从 <code>globalcount</code> 来 Steal.</li>
+</ol>
+<p><img src="https://image.mwish.me/blog-image/AE328AD5-DBF0-4D0A-B31A-9FDA957675F4.png" alt="AE328AD5-DBF0-4D0A-B31A-9FDA957675F4"></p>
+<p>具体代码：<a target="_blank" rel="noopener" href="https://github.com/paulmckrcu/perfbook/blob/master/CodeSamples/count/count_lim_app.c">https://github.com/paulmckrcu/perfbook/blob/master/CodeSamples/count/count_lim_app.c</a></p>
+<p>这里在 add, sub 的时候可能会有超限制的情况。导致无法推进。为什么呢？这里可能会有能分配，但是实际上分配不出的情况：</p>
+<p><img src="https://image.mwish.me/blog-image/C3AA88D1-78AC-46A8-BF6C-060C7549F7FC.png" alt="C3AA88D1-78AC-46A8-BF6C-060C7549F7FC"></p>
+<p>这里，<code>0</code> 需要增加，但是可能别的 <code>countermax</code> 还有剩余，但是它申请不出来了。</p>
+<h3 id="Exact-Limit-Counters"><a href="#Exact-Limit-Counters" class="headerlink" title="Exact Limit Counters"></a>Exact Limit Counters</h3><p>如果要能准确分配，这必定涉及 slowpath 下向别的 counter 索要内容。这个就涉及跨线程交互了，这里提供了两种方案。方案1是全部走原子指令：</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://github.com/paulmckrcu/perfbook/blob/master/CodeSamples/count/count_lim_atomic.c">https://github.com/paulmckrcu/perfbook/blob/master/CodeSamples/count/count_lim_atomic.c</a></li>
+</ul>
+<p>这个的 <code>read_count</code> 不一定完全准，但是上线和下界都是准确的，缺点是所有写操作基本都是个 CAS。</p>
+<p>这里还用信号和状态机做了个比较复杂的系统，大概思路是：</p>
+<ol>
+<li>本线程的添加是 <code>WRITE_ONCE</code> 原子即可（类比于 <code>relaxed</code> ）</li>
+<li>Slowpath 需要走 <code>pthread_kill</code>，别的线程收到信号后，会自己提交信息</li>
+<li>因为信号是可重入的，所以需要写一个很复杂的状态机，如下图：</li>
+</ol>
+<p><img src="https://image.mwish.me/blog-image/7C9EAE64-1FBE-4A4C-AEBD-768E34E0E202.png" alt="7C9EAE64-1FBE-4A4C-AEBD-768E34E0E202"></p>
+<h3 id="讨论"><a href="#讨论" class="headerlink" title="讨论"></a>讨论</h3><p><img src="https://image.mwish.me/blog-image/34EEB050-4CC0-4255-A116-376142A6C045.png" alt="34EEB050-4CC0-4255-A116-376142A6C045"></p>
+<ol>
+<li>Partitioning promotes performance and scalability.</li>
+<li>Partial partitioning, that is, partitioning applied only to common code paths, works almost as well.</li>
+<li>Batch Updates</li>
+<li>Read-only code paths should remain read-only: Spurious synchronization writes to shared memory kill performance and scalability, as seen in the count_end.c row of Table 5.1. （记得我们的 eventual 吗？）</li>
+<li>Parallel performance and scalability is usually a balancing act: Beyond a certain point, optimizing some code paths will degrade others.</li>
+<li>Diﬀerent levels of performance and scalability will aﬀect algorithm and data-structure design, as do a large number of other factors. Figure 5.1 illustrates this point: Atomic increment might be completely acceptable for a two-CPU system, but be completely inadequate for an eight-CPU system.</li>
+</ol>
+<p>后面又总结了三点：</p>
+<p>(1) partitioning over CPUs or threads, (2) batching so that more work can be done by each expensive synchronization operations, and (3) weakening synchronization operations where feasible.</p>
+<h2 id="Partition-and-Synchronization-Design"><a href="#Partition-and-Synchronization-Design" class="headerlink" title="Partition and Synchronization Design"></a>Partition and Synchronization Design</h2><p>这里介绍的是 Partition 相关的设计。介绍了哲学家用餐问题和双端队列。这里有几个要考量的点：</p>
+<ol>
+<li>performance</li>
+<li>scalability</li>
+<li>response time</li>
+</ol>
+<p>对于哲学家进餐问题，很多地方会考虑 Dijkstra 的编号算法。这里有一个问题是这个算法可能有活锁，可能真的没人在推进。一种可靠的方式是固定谁拿什么叉子，直接 scalable 了。</p>
+<p>另一个问题是双端队列。对于 Compound Double-Ended Queue，这里类似 Btree 的 iterator，会规定一个获取锁的方向：</p>
+<p><img src="https://image.mwish.me/blog-image/12F8C1A4-EEE5-44F3-8CE6-993E5F0DA147.png" alt="12F8C1A4-EEE5-44F3-8CE6-993E5F0DA147"></p>
+<p>获取锁的方向都是 左-&gt;右，如果右向左前进，需要先释放自己的锁，拿到左边，再 grab 回来（感觉这还涉及 data-ownership 的问题，哎…）。</p>
+<p>关于这种队列，还有一个最先插入一些元素的问题，也就是队列是空的、只有一个元素的时候应该怎么操作。参考：<a target="_blank" rel="noopener" href="https://github.com/paulmckrcu/perfbook/blob/46ff2e75ea1b645dabc7405884ddf666f94b4b07/CodeSamples/SMPdesign/locktdeq.c">https://github.com/paulmckrcu/perfbook/blob/46ff2e75ea1b645dabc7405884ddf666f94b4b07/CodeSamples/SMPdesign/locktdeq.c</a></p>
+<p>这里做的还是比较 hack 的。有一个讨论是关于这个 queue 的语义（如果你写 Rust，其实会见到什么 mpmc 之类的，或者一些 Linearizable 之类的）：</p>
+<blockquote>
+<p>In fact, as noted by Dice et al. [DLM + 10], an unsynchronized single-threaded double-ended queue signiﬁcantly outperforms any of the parallel implementations they studied.</p>
+<p>Furthermore, these strict FIFO queues are strictly FIFO only with respect to linearization points [HW90]  that are not visible to the caller, in fact, in these examples, the linearization points are buried in the lock-based critical sections.</p>
+<p>All that said, if you are pushing all the data used by your concurrent program through a single queue, you really need to rethink your overall design.</p>
+</blockquote>
+<h3 id="Design-Criteria"><a href="#Design-Criteria" class="headerlink" title="Design Criteria"></a>Design Criteria</h3><p>这里考虑的是一些并发的设计原则，其实还是比较重要的。包括临界区大小，对什么上锁之类的。以前我确实只会觉得「xx并发好」「xx有瓶颈」，但是没有比较细的思考这些问题。</p>
+<p>第一个是什么让你竟然需要并发，可能是：</p>
+<ol>
+<li>Speedup (这里考虑阿姆达尔定律)</li>
+<li>Contention: CPU 数量上来之后，会不会有 Lock/Memory 等资源的竞争</li>
+<li>Work-to-Synchronization Ratio: 并发可能有 message latency, locking primitives, atomic instructions, memory barrier 的开销。如果临界区之类的里面的东西比同步开销操作重，那就可以（ for example: <a target="_blank" rel="noopener" href="https://github.com/apache/incubator-brpc/issues/363）">https://github.com/apache/incubator-brpc/issues/363）</a></li>
+<li>Read-to-Write Ratio: A data structure that is rarely updated may often be replicated rather than partitioned</li>
+<li>Complexity: 可能并行的程序会复杂很多，其实一个工业界很贴近的例子就是 Redis，可以考虑一下给 Redis 增加并行之后会有什么问题</li>
+</ol>
+<p><img src="https://image.mwish.me/blog-image/824F4B98-460F-4941-8B38-CA14CAA45F52.png" alt="824F4B98-460F-4941-8B38-CA14CAA45F52"></p>
+<h3 id="Synchronization-Granularity"><a href="#Synchronization-Granularity" class="headerlink" title="Synchronization Granularity"></a>Synchronization Granularity</h3><p>如果程序全是串行的，那么卵粒度都没有，不过：</p>
+<p><img src="https://image.mwish.me/blog-image/0A3C39FC-F2C3-40CD-A690-36F9A0F9913E.png" alt="0A3C39FC-F2C3-40CD-A690-36F9A0F9913E"></p>
+<p>（我觉得很反我作为一个 16 年才学计算机的人的直觉就是，不改代码程序竟然会越跑越快…可能这就是摩尔定律吧）</p>
+<p>最常见的方式被这里称为 <strong>Code Locking</strong>，就是我们最常见的：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">C::func</span><span class="params">()</span> </span>&#123;</span><br><span class="line">	<span class="function">std::lock_guard&lt;std::mutex&gt; <span class="title">l</span><span class="params">(mu_)</span></span>;</span><br><span class="line">	...</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>对整个代码段上锁。</p>
+<p>另一种被称为 <strong>data locking</strong>:</p>
+<blockquote>
+<p>You should use data locking when contention must be reduced, and where synchronization overhead is not limiting speedups.</p>
+</blockquote>
+<p>这里 lock 可能会被绑定在某个 <code>bucket</code> 或者结构上，类似分桶 hashing，或者 Linux 的 <code>dcache</code>，可以当作这里比 code locking 提供了更细的粒度，给某个 <code>key</code> 对应的 <code>bucket</code> 或者更细的粒度提供锁定。</p>
+<p>这里还有个 data ownership 的问题，比方说给某个线程/CPU 划分一些数据。这个的问题是，回忆到 counting，这里要处理 skew、hotspot 和一些必要的跨线程通信的问题。</p>
+<h3 id="Parallel-Fastpath"><a href="#Parallel-Fastpath" class="headerlink" title="Parallel Fastpath"></a>Parallel Fastpath</h3><p>对于并发来说，设计细粒度的并发策略实际上是很难的。一个粗粒度的并发结构会让人想到「一把大锁」，而细粒度的结构则可能从各种 corner case、原语甚至到一些内存回收策略。</p>
+<p>fastpath 思路其实在之前的 counter 系统中就基本提到了，就是在常规路径下开销很小，只有必要的时候引入一些重的开销。下面提到了一些使用 fastpath 的场景：</p>
+<p><img src="https://image.mwish.me/blog-image/E39EA9B2-16C2-4AB7-818F-191C8D87BB12.png" alt="E39EA9B2-16C2-4AB7-818F-191C8D87BB12"></p>
+<ul>
+<li>Read-Write Locking: 当<strong>同步开销很小</strong> （例如同步相对于临界区非常小，这点很重要）的时候，可以引入 reader-write locking。当然，这里没有暗示任何实现（RW Lock 可能会有各种各样的实现）</li>
+<li>Hierarchical Locking: 有一个 粗粒度锁 — 细粒度锁的层次。这里引入了多余的锁，但是减小了一定情况下的冲突。当在细粒度锁上操作其实还比较重的时候，这种方式并行化了它的访问。</li>
+<li>Resource Allocator Caches: 这个 pattern 通常是那种不具名的资源，有一些 per-CPU 的资源，和一些全局的资源。具体可以参考 <code>TCMalloc</code> 、<code>JeMalloc</code> 、<code>MiMalloc</code>甚至 <code>PtMalloc</code>.</li>
+</ul>
+<p>我就不一一举例了，这里还有个 pool:</p>
+<p><img src="https://image.mwish.me/blog-image/1E3AAC09-C5B8-42E7-9BBE-8888FB3DE74E.png" alt="1E3AAC09-C5B8-42E7-9BBE-8888FB3DE74E"></p>
+<p>当然，现实中的池子可能会有各种的 size-class，能够把内存返回给系统（<code>munmap</code> 或者 <code>sbrk</code> 缩小），这里也举了一些实际上并发的例子，他们通常是混合的：</p>
+<p><img src="https://image.mwish.me/blog-image/71BAD532-A9D2-4D47-84B9-A9074CA1C090.png" alt="71BAD532-A9D2-4D47-84B9-A9074CA1C090"></p>
+<h2 id="Locking"><a href="#Locking" class="headerlink" title="Locking"></a>Locking</h2><p>Locking 是最通用的并发同步手段，尽管可能会有下面的问题：</p>
+<blockquote>
+<p>Locking stands accused of inciting deadlocks, convoying, starvation, unfairness, data races, and all manner of other concurrency sins. </p>
+</blockquote>
+<p>这里有一些 pattern:</p>
+<ol>
+<li>使用 lock hierarchy 来做死锁避免</li>
+<li>用工具来检测死锁</li>
+<li>用一些对 locking 的模式很友好的数据结构</li>
+<li>使用一些上面介绍的 partition 来减少 lock contention</li>
+<li>和别的工具协调，只在 slowpath 等地方使用 lock 甚至避免 lock</li>
+<li>好好地 bench lock 是不是真有问题，会不会影响你（有一些测 contention 的工具什么的）</li>
+</ol>
+<h3 id="死锁避免和-Lock-Hierarchy"><a href="#死锁避免和-Lock-Hierarchy" class="headerlink" title="死锁避免和 Lock Hierarchy"></a>死锁避免和 Lock Hierarchy</h3><p>死锁和活锁一直是比较让人头疼的问题，尤其是，如果你跑在一个 stackless coroutine 上，那你 debug 都会要靠一些 user-space 的 locking，把人整吐。</p>
+<p>Locking Hierarchies 描述的是锁的层级、获取锁的顺序。比如先拿大锁 -&gt; 拿细锁 -&gt; 放大锁，如果细锁要 grab 大锁估计要涉及一些协议，比如先把自己放了，然后获取下来再查查自己有没有被改。</p>
+<p>这里作者引入了一些问题（在 7.1.1），即，library function 和 lock 应该怎么适配，比如你编写了一个并行算法代码，然后把它们中的内容丢到了库里，然后库没有按照你的 hierachy 锁，而是 xjb 乱锁，这就造成了死锁问题（不过笔者认为，现实场景应该很少会这样把带锁内容丢进库？作者也认为应该在这种函数之前释放锁）。作者为了讨论这个引入了 <strong>Local Locking Hierarchies</strong> 和 <strong>Layered Locking Hierarchies</strong>：</p>
+<p><img src="https://image.mwish.me/blog-image/9B314C2B-1C22-4762-B899-E8B620EDC014.png" alt="9B314C2B-1C22-4762-B899-E8B620EDC014"></p>
+<p>对于 Local Locking Hierarchy, 要获得下一个锁之前，都释放掉未知的锁，那么我们就不会有这种问题了。当然，这表示最多持有 1把锁，可能和层次目标比起来怪怪的。</p>
+<p>Layered Locking Hierarchy 在库这里也引入了获取锁的层次，来达成目标：</p>
+<p><img src="https://image.mwish.me/blog-image/291A6825-116C-48B6-8507-E0D42EC990DD.png" alt="291A6825-116C-48B6-8507-E0D42EC990DD"></p>
+<p>以上描述的都是在层次逻辑上「可以避免死锁」的方案，就是程序本来不应该有冲突，可以让他们没有。但是有的时候，程序就正经就该有冲突，比如：</p>
+<ol>
+<li>并发 BTree 有一个左向右的迭代器，有一个右向左的迭代器</li>
+<li>不同层次的系统（比如网络协议栈）里面有一个下降的，有一个上升的</li>
+</ol>
+<p>这里可以引入 <strong>conditional locking</strong>，来让某个方向的 locking 做试探性的上锁，正如：</p>
+<blockquote>
+<p>One way to avoid deadlocks in this case is to impose a locking hierarchy, but when it is necessary to acquire a lock out of order, acquire it conditionally</p>
+</blockquote>
+<p>相对于上面的锁定方案，还有一种粗暴但有效的方案：Acquire Needed Locks First。这就在处理前都悲观的都嗯锁上，类似 2PL，或者 TiDB 的悲观锁模型。这种方式可能会带来活锁的问题，这些系统需要很强的能力来处理 Transaction abort，能够 abort/回滚掉事务。</p>
+<p>最后一种方案比较 hacking，就是类似 local locking hierarchy，一个时间同一个地方只持有一把锁。感觉这个需要把并发设计的非常细心。</p>
+<p>最后，这里讨论了一下 <code>lock</code>/<code>unlock</code> 和 <code>signal</code> 配合的语义，这可能会让系统变得非常复杂（信号可重入感觉是个非常蛋疼的问题）。</p>
+<p>此外，还有 livelock 相关的问题，也会导致 starvation：长时间内米有一个 worker 在正常工作。这可能可以引入一个发现这些问题的 <strong>contention manger</strong>，然后引入一些 <code>backoff</code> 策略，比如指数退避。有一种大力出奇迹的方案，就是设置一个退避次数，乐观这样重试，不行就上个全局锁，悲观执行。</p>
+<p>还有一些奇怪的 unfairness 问题，比如某个 core 或者什么会不会比别的 core 更容易拿到锁；同时，锁也会有比较重的 cache miss，我们可以看看之前的 <code>Hardware</code> 那节的情况。最简单的 <code>spinlock</code> 都每次会走一个 <code>acq</code> 的 CAS，这个也看同步和执行之间的开销对比来决定了。</p>
+<h3 id="Types-of-Locks"><a href="#Types-of-Locks" class="headerlink" title="Types of Locks"></a>Types of Locks</h3><p>锁定通常通过 <code>atomic</code> (用户态不推荐 spinlock )、<code>futex</code> 加上一些用户态的 flag 实现。这里可能不会直接用 pthread 的工具，比如数据库的 Page。</p>
+<p>用户态实现一般基于 <code>futex</code>，有的地方会引入一些花活，比如 <code>MCS Lock</code> ，或者 <code>WTF::ParkingLot</code> 这种并发设施。但不管基于什么，这里有一些共性的问题需要讨论。包括锁的互斥、读写和它们的语义。</p>
+<h4 id="Exclusive-Lock"><a href="#Exclusive-Lock" class="headerlink" title="Exclusive Lock"></a>Exclusive Lock</h4><p>经典的锁，这里语义可能有：</p>
+<ol>
+<li>Strict FIFO</li>
+<li>Approximate FIFO</li>
+<li>FIFO within priority level</li>
+<li>Random</li>
+<li>Unfair</li>
+</ol>
+<p>不同的锁可以有不同的策略，越上面的，保证越强、代价越高。</p>
+<h4 id="Reader-Writer-Lock"><a href="#Reader-Writer-Lock" class="headerlink" title="Reader-Writer Lock"></a>Reader-Writer Lock</h4><p>我们经常被介绍说读写锁会引入巨大开销，这是因为读写锁实现的时候可能要引入额外的逻辑甚至额外的锁，这些信息甚至锁的维护开销是比较大的。</p>
+<blockquote>
+<p>The classic reader-writer lock implementation involves a set of counters and ﬂags that are manipulated atomically. This type of implementation suﬀers from the same problem as does exclusive locking for short critical sections: The overhead of acquiring and releasing the lock is about two orders of magnitude greater than the overhead of a simple instruction.</p>
+<p>Of course, if the critical section is long enough, the overhead of acquiring and releasing the lock becomes negligible. However, because only one thread at a time can be manipulating the lock, the required critical-section size increases with the number of CPUs.</p>
+<p>The canonical use case for readerwriter locking involves very long read-side critical sections, preferably measured in hundreds of microseconds or even milliseconds.</p>
+</blockquote>
+<p>Brpc 也是因为这个原因，不太在库里写 bthread 的 rwlock。</p>
+<p>Rw lock 可能有不同的语义和不同的实现，然后通用实现几乎都不那么令人满意，所以需要根据自己的需求来定制：</p>
+<ol>
+<li>读者优先的实现，可能会永久饿死某个 writer</li>
+<li>Batch-fair 的实现，读者和写者都会互相 Batch 的来访问</li>
+<li>写者优先的实现</li>
+</ol>
+<h4 id="更细的锁语义"><a href="#更细的锁语义" class="headerlink" title="更细的锁语义"></a>更细的锁语义</h4><p><img src="https://image.mwish.me/blog-image/465B1D27890482CA56D68CE6529B4E3D.png" alt="465B1D27890482CA56D68CE6529B4E3D"></p>
+<p>作者这里举例了 VAX/VMS DLM。笔者作为 DB RD，觉得这里其实可以参考 Btree 各种 Latch 协议，比如 SX Latch 什么的。笔者认为，这里关键点是：</p>
+<ol>
+<li>知道什么可以和什么并发，画出并发的图</li>
+<li>弄清楚这样开销是否合适，类似 RW-Latch 那个问题，它的开销比通常的互斥锁高了几倍。这是值得的吗？</li>
+</ol>
+<h3 id="锁的实现"><a href="#锁的实现" class="headerlink" title="锁的实现"></a>锁的实现</h3><p>这部分可以看看我爹 rsygg（征婚中）写的： <a target="_blank" rel="noopener" href="https://github.com/rsy56640/triviality/tree/master/content/%E8%B0%88%E8%B0%88%E5%B9%B6%E5%8F%91#mutex">https://github.com/rsy56640/triviality/tree/master/content/%E8%B0%88%E8%B0%88%E5%B9%B6%E5%8F%91#mutex</a> 或者 futex is trickey</p>
+<p>不过这部分其实更多介绍的是用户层次的锁实现，偏向策略而非机制。</p>
+<p>Atomic + CAS 自然可以实现锁，在 low contention 的时候甚至可以工作的很好、也有很小的 meory footprint，但是在高占用的情况下可能就炸了。</p>
+<p>ticket lock 实现了 strict FIFO 的语义，它的活跃度可能值得商榷。而解锁中，为了不一次通知所有的等待者，则需要引入一些 queue （想象 futex 的语义），这样它只需要通知该唤醒的线程。不过这些策略会导致在 low-contention 的情况下，增大锁相关的开销。</p>
+<p>此外，这里还有优先级反转的问题，占锁的线程如果是个低优先级的线程的话，这里就会有奇怪的问题，比如它被调度走整个系统就没人工作了。这里有两种方案：占锁了就不能被调度走；使用优先级反转。</p>
+<p>这里作者还提到了不用原子指令实现 lock 的方案，我只能说真的牛逼。</p>
+<p>最后：</p>
+<blockquote>
+<p>The Linux kernel now uses queued spinlocks [Cor14b], but because of the complexity of implementations that provide good performance across the range of contention levels, the path has not always been smooth [Mar18, Dea18].</p>
+<p>Nevertheless, you should carefully consider this important safety tip: Use the standard synchronization primitives whenever humanly possible. The big advantage of the standard synchronization primitives over roll-your-own eﬀorts is that the standard primitives are typically much less bug-prone.8</p>
+</blockquote>
+<h3 id="Lock-Based-Existence-Guarantees"><a href="#Lock-Based-Existence-Guarantees" class="headerlink" title="Lock-Based Existence Guarantees"></a>Lock-Based Existence Guarantees</h3><p>Existence 比较奇怪，不过这里讨论的内容挺正经的：</p>
+<ol>
+<li>Global/Static local variable 的 existance</li>
+<li>Global/Static local variable 的加载</li>
+<li>Heap 上变量的存在性，比方说给数据库 <code>LockManager</code> 的一个请求，会被放到队列里，等待通知。这个被通知完之后，可能被回收</li>
+</ol>
+<p>这里可以：</p>
+<ul>
+<li>把 Lock 或者一个标志和对象抽开，然后用这个对象来识别</li>
+</ul>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Counting"><span class="toc-number">1.</span> <span class="toc-text">Counting</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#statistical-counter"><span class="toc-number">1.1.</span> <span class="toc-text">statistical counter</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Approximate-Limit-Counters"><span class="toc-number">1.2.</span> <span class="toc-text">Approximate Limit Counters</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Exact-Limit-Counters"><span class="toc-number">1.3.</span> <span class="toc-text">Exact Limit Counters</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%AE%A8%E8%AE%BA"><span class="toc-number">1.4.</span> <span class="toc-text">讨论</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Partition-and-Synchronization-Design"><span class="toc-number">2.</span> <span class="toc-text">Partition and Synchronization Design</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Design-Criteria"><span class="toc-number">2.1.</span> <span class="toc-text">Design Criteria</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Synchronization-Granularity"><span class="toc-number">2.2.</span> <span class="toc-text">Synchronization Granularity</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Parallel-Fastpath"><span class="toc-number">2.3.</span> <span class="toc-text">Parallel Fastpath</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Locking"><span class="toc-number">3.</span> <span class="toc-text">Locking</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%AD%BB%E9%94%81%E9%81%BF%E5%85%8D%E5%92%8C-Lock-Hierarchy"><span class="toc-number">3.1.</span> <span class="toc-text">死锁避免和 Lock Hierarchy</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Types-of-Locks"><span class="toc-number">3.2.</span> <span class="toc-text">Types of Locks</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Exclusive-Lock"><span class="toc-number">3.2.1.</span> <span class="toc-text">Exclusive Lock</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Reader-Writer-Lock"><span class="toc-number">3.2.2.</span> <span class="toc-text">Reader-Writer Lock</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%9B%B4%E7%BB%86%E7%9A%84%E9%94%81%E8%AF%AD%E4%B9%89"><span class="toc-number">3.2.3.</span> <span class="toc-text">更细的锁语义</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%94%81%E7%9A%84%E5%AE%9E%E7%8E%B0"><span class="toc-number">3.3.</span> <span class="toc-text">锁的实现</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Lock-Based-Existence-Guarantees"><span class="toc-number">3.4.</span> <span class="toc-text">Lock-Based Existence Guarantees</span></a></li></ol></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2022/05/04/perfbook-notes-parallel-mutex-fastpath/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2022/05/04/perfbook-notes-parallel-mutex-fastpath/&text=perfbook notes: parallel, mutex, fastpath"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2022/05/04/perfbook-notes-parallel-mutex-fastpath/&title=perfbook notes: parallel, mutex, fastpath"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2022/05/04/perfbook-notes-parallel-mutex-fastpath/&is_video=false&description=perfbook notes: parallel, mutex, fastpath"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=perfbook notes: parallel, mutex, fastpath&body=Check out this article: http://blog.mwish.me/2022/05/04/perfbook-notes-parallel-mutex-fastpath/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2022/05/04/perfbook-notes-parallel-mutex-fastpath/&title=perfbook notes: parallel, mutex, fastpath"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2022/05/04/perfbook-notes-parallel-mutex-fastpath/&title=perfbook notes: parallel, mutex, fastpath"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2022/05/04/perfbook-notes-parallel-mutex-fastpath/&title=perfbook notes: parallel, mutex, fastpath"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2022/05/04/perfbook-notes-parallel-mutex-fastpath/&title=perfbook notes: parallel, mutex, fastpath"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2022/05/04/perfbook-notes-parallel-mutex-fastpath/&name=perfbook notes: parallel, mutex, fastpath&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2022/05/04/perfbook-notes-parallel-mutex-fastpath/&t=perfbook notes: parallel, mutex, fastpath"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

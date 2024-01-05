@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="本文是一篇关于 MVCC 的综述，将 MVCC 分为了 protocol, version storage, index-management, gc 四个部分, 在 Peleton 上实现了各种 protocol, 进行试验，然后 benchmark。benchmark 结果是：protocol 上看争用，读多写少争用多的话，2PL&#x2F;OCC 反而不太行；N2O 几乎总是比 O2N 好，不过 O2">
+<meta property="og:type" content="article">
+<meta property="og:title" content="[VLDB&#39;17] An Empirical Evaluation of In-Memory Multi-Version Concurrency Control">
+<meta property="og:url" content="http://blog.mwish.me/2022/07/03/An-Empirical-Evaluation-of-In-Memory-Multi-Version-Concurrency-Control/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="本文是一篇关于 MVCC 的综述，将 MVCC 分为了 protocol, version storage, index-management, gc 四个部分, 在 Peleton 上实现了各种 protocol, 进行试验，然后 benchmark。benchmark 结果是：protocol 上看争用，读多写少争用多的话，2PL&#x2F;OCC 反而不太行；N2O 几乎总是比 O2N 好，不过 O2">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/97119CA8-7614-4F6F-841C-386E9B579756.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/fig-5-03.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/undo_logical.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/31C650E4-80D1-4C76-8A9A-91F8EDD7E522.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/15916E36-99FF-406A-BB36-49819AC7A8B9.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/FA5699F5-1384-4BA3-AC77-C8D32D8CD423.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/F713048B-C6A6-4F32-A7B9-243DDADFF4BA.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/8B61A2DA-C237-4696-9295-C4EE2572D9C3.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/2807BAAE-7689-48B9-8508-8BA2D8906FA0.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/67ADE0DE-EE4C-4A1A-A354-EDFE8E4039AB.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/64C7B2DB-DD5C-40EF-AAE3-AF420AB6A390.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/D55A6BAD-A2D6-47C8-BC96-8C547903ACB2.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/fig-6-01.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/undo_log_disk_structure.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/wt-mem-low.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/992D5709-7238-47B6-8015-E218C786A055.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/9E78FAF1-5133-435A-82C0-C1AF21FCACAE.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/index-only-scan.png">
+<meta property="article:published_time" content="2022-07-02T18:00:00.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.554Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/97119CA8-7614-4F6F-841C-386E9B579756.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>[VLDB&#39;17] An Empirical Evaluation of In-Memory Multi-Version Concurrency Control</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2022/07/03/%E6%AF%95%E4%B8%9A%E4%B8%A4%E5%B9%B4%E8%AE%B0/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2022/06/12/Notes-folly-ThreadLocalPtr/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2022/07/03/An-Empirical-Evaluation-of-In-Memory-Multi-Version-Concurrency-Control/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2022/07/03/An-Empirical-Evaluation-of-In-Memory-Multi-Version-Concurrency-Control/&text=[VLDB&#39;17] An Empirical Evaluation of In-Memory Multi-Version Concurrency Control"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2022/07/03/An-Empirical-Evaluation-of-In-Memory-Multi-Version-Concurrency-Control/&title=[VLDB&#39;17] An Empirical Evaluation of In-Memory Multi-Version Concurrency Control"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2022/07/03/An-Empirical-Evaluation-of-In-Memory-Multi-Version-Concurrency-Control/&is_video=false&description=[VLDB&#39;17] An Empirical Evaluation of In-Memory Multi-Version Concurrency Control"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=[VLDB&#39;17] An Empirical Evaluation of In-Memory Multi-Version Concurrency Control&body=Check out this article: http://blog.mwish.me/2022/07/03/An-Empirical-Evaluation-of-In-Memory-Multi-Version-Concurrency-Control/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2022/07/03/An-Empirical-Evaluation-of-In-Memory-Multi-Version-Concurrency-Control/&title=[VLDB&#39;17] An Empirical Evaluation of In-Memory Multi-Version Concurrency Control"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2022/07/03/An-Empirical-Evaluation-of-In-Memory-Multi-Version-Concurrency-Control/&title=[VLDB&#39;17] An Empirical Evaluation of In-Memory Multi-Version Concurrency Control"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2022/07/03/An-Empirical-Evaluation-of-In-Memory-Multi-Version-Concurrency-Control/&title=[VLDB&#39;17] An Empirical Evaluation of In-Memory Multi-Version Concurrency Control"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2022/07/03/An-Empirical-Evaluation-of-In-Memory-Multi-Version-Concurrency-Control/&title=[VLDB&#39;17] An Empirical Evaluation of In-Memory Multi-Version Concurrency Control"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2022/07/03/An-Empirical-Evaluation-of-In-Memory-Multi-Version-Concurrency-Control/&name=[VLDB&#39;17] An Empirical Evaluation of In-Memory Multi-Version Concurrency Control&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2022/07/03/An-Empirical-Evaluation-of-In-Memory-Multi-Version-Concurrency-Control/&t=[VLDB&#39;17] An Empirical Evaluation of In-Memory Multi-Version Concurrency Control"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-3"><a class="toc-link" href="#DBMS-Meta-Data"><span class="toc-number">1.</span> <span class="toc-text">DBMS Meta-Data</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Concurrency-Control-Protocol"><span class="toc-number"></span> <span class="toc-text">Concurrency Control Protocol</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#MVTO"><span class="toc-number">1.</span> <span class="toc-text">MVTO</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#MVOCC"><span class="toc-number">2.</span> <span class="toc-text">MVOCC</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#MV2PL"><span class="toc-number">3.</span> <span class="toc-text">MV2PL</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Serialization-Certi%EF%AC%81er"><span class="toc-number">4.</span> <span class="toc-text">Serialization Certiﬁer</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%AE%A8%E8%AE%BA"><span class="toc-number">5.</span> <span class="toc-text">讨论</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Version-Storage"><span class="toc-number"></span> <span class="toc-text">Version Storage</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Append-only-Storage"><span class="toc-number">1.</span> <span class="toc-text">Append-only Storage</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Time-Travel-Storage"><span class="toc-number">2.</span> <span class="toc-text">Time-Travel Storage</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Delta-Main-Storage"><span class="toc-number">3.</span> <span class="toc-text">Delta-Main Storage</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%AE%A8%E8%AE%BA-1"><span class="toc-number">4.</span> <span class="toc-text">讨论</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Garbage-Collection"><span class="toc-number"></span> <span class="toc-text">Garbage Collection</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Tuple-level-Garbage-Collection"><span class="toc-number">1.</span> <span class="toc-text">Tuple-level Garbage Collection</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Transaction-level-Garbage-Collection"><span class="toc-number">2.</span> <span class="toc-text">Transaction-level Garbage Collection</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%AE%A8%E8%AE%BA-2"><span class="toc-number">3.</span> <span class="toc-text">讨论</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#PostgreSQL-%E7%9A%84-Vacuum"><span class="toc-number">3.1.</span> <span class="toc-text">PostgreSQL 的 Vacuum</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#InnoDB-%E7%9A%84-Purge"><span class="toc-number">3.2.</span> <span class="toc-text">InnoDB 的 Purge</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%85%B6%E4%BB%96"><span class="toc-number">3.3.</span> <span class="toc-text">其他</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Index-Management"><span class="toc-number"></span> <span class="toc-text">Index Management</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%AE%A8%E8%AE%BA-3"><span class="toc-number">1.</span> <span class="toc-text">讨论</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8F%82%E8%80%83"><span class="toc-number"></span> <span class="toc-text">参考</span></a>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        [VLDB&#39;17] An Empirical Evaluation of In-Memory Multi-Version Concurrency Control
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2022-07-02T18:00:00.000Z" itemprop="datePublished">2022-07-03</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>本文是一篇关于 MVCC 的综述，将 MVCC 分为了 protocol, version storage, index-management, gc 四个部分, 在 Peleton 上实现了各种 protocol, 进行试验，然后 benchmark。benchmark 结果是：protocol 上看争用，读多写少争用多的话，2PL/OCC 反而不太行；N2O 几乎总是比 O2N 好，不过 O2N 可以GC；Delta 占用的空间小一些（Delta 类似 MySQL Undo log buffer）；Txn Level GC 好一些，但实现难度高一些。</p>
+<p>当初第一次看的时候大概懂了大意，不过当时对 MVCC 没看过什么代码，也没有什么基本理解，最近看 WiredTiger/PostgreSQL/InnoDB 的时候感觉理解了一些 context，回头写一点总结，也混杂一些我对 WT/PG/InnoDB 的理解。</p>
+<p>关于 MVCC，有的地方实际怀疑它是否牺牲了空间以换取了不知道有没有的性能，关于这些争论，我个人想法类似 Hekaton 论文里面的理解：MVCC 可能在冲突低的情况下降低了性能和局部性，但是增强了系统对抗一些混合负载的能力。同时，MVCC 方便支持一些 Time-Traver 查询（类似 MySQL / PG 的 PITR 系统）。</p>
+<p>之所以有这篇论文，是因为 MVCC 虽然历史悠久，但是几乎所有新系统都自己嗯造了一套，所以需要衡量一下对应的 design choice 和 trade-off</p>
+<h3 id="DBMS-Meta-Data"><a href="#DBMS-Meta-Data" class="headerlink" title="DBMS Meta-Data"></a>DBMS Meta-Data</h3><p>论文讲数据分为下列数据，感觉是作者在 Peloton 实现的数据：</p>
+<p><img src="https://image.mwish.me/blog-image/97119CA8-7614-4F6F-841C-386E9B579756.png" alt="97119CA8-7614-4F6F-841C-386E9B579756"></p>
+<p>事务需要一个独立的，单调递增的标记来识别，文中记作 $T_{id}$ .</p>
+<p>同时，物理的版本包括了 <code>txn-id</code>, 两个时间戳和版本指针，事务 id 类似 Hekaton 的，最高位表示是否有 write-lock，然后论文用 CAS 做修改，我们可以对比一下 PostgreSQL 和 InnoDB 的记录：</p>
+<ul>
+<li>PostgreSQL 的 xmax(类似 end-ts ) 充当了 txn-id 作用，表示对对象上锁。论文里可能有多个 in-flight 的事务在同一条记录上，所以感觉引入一个 txn-id 也没啥问题。此外，PostgreSQL 的行还引入了 info bits，避免查事务表来确定 <code>txn</code> 的状态，所以相当于上面 txn-id 和 end-ts 做到了一起，PG 有一个 <code>c_tid</code>，相当于上面的 pointer，指向自己或者更新的版本。</li>
+</ul>
+<p><img src="https://image.mwish.me/blog-image/fig-5-03.png" alt="fig-5-03"></p>
+<ul>
+<li>PostgreSQL 的 txn-id 和时间是 32-bit 的，所以最大也就4亿，占有空间小，但是需要 FREEZE （冻结版本）和 Vacuum（回收）来处理。InnoDB 可能需要用户提供的 gtid 什么的。它只有一个类似 ts 的字段，因为比它小的就会走 undo chain。<strong>PG 需要 x-min, x-max; 但 InnoDB 用 txn-id + roll_pointer</strong> 做了逻辑上一样的事情。那删除会怎么样呢？InnoDB 记录刚被删除会挂上一个 delete-mark，然后指向 undo 上的 delete 记录。</li>
+<li>InnoDB 只有一个 txn-id，大于就读它，否则就走上文 pointer 的字段，如下图。这些字段被称为 hidden columns。此外，InnoDB Undo 实际上存放的是<strong>逻辑日志</strong></li>
+</ul>
+<p><img src="https://image.mwish.me/blog-image/undo_logical.png" alt="undo_logical"></p>
+<p><img src="https://image.mwish.me/blog-image/31C650E4-80D1-4C76-8A9A-91F8EDD7E522.png" alt="31C650E4-80D1-4C76-8A9A-91F8EDD7E522"></p>
+<p>总的来说，感觉这篇论文还是偏内存数据库一些，然后考虑了并发更新什么的。</p>
+<h2 id="Concurrency-Control-Protocol"><a href="#Concurrency-Control-Protocol" class="headerlink" title="Concurrency Control Protocol"></a>Concurrency Control Protocol</h2><p>在论文中，cc 相当于定义了：</p>
+<ol>
+<li>是否允许 txn 访问或者更新一个 tuple</li>
+<li>允许 txn 来 commit 自身的提交</li>
+</ol>
+<p>经典的 Concurrency control 包括我们熟悉的内容：</p>
+<ol>
+<li><p>Transaction, OCC and Modern Hardware: <a href="https://blog.mwish.me/2022/01/28/Transaction-OCC-and-modern-hardware/">https://blog.mwish.me/2022/01/28/Transaction-OCC-and-modern-hardware/</a></p>
+</li>
+<li><p>事务: 并发控制协议: 2PL &amp;&amp; TS: <a href="https://blog.mwish.me/2020/11/15/transaction-concurrency-control/">https://blog.mwish.me/2020/11/15/transaction-concurrency-control/</a></p>
+</li>
+</ol>
+<p>可能是出于实现粒度和学术追求，论文只考虑 Tuple Level MVCC + Serializable。实践中，感觉这些级别还是比较高，有比较多的场景还是 SI / RR + SELECT for update 这种。同时，论文也放弃了中心化的 Lock Manager，这样的东西很容易成为一个性能上的瓶颈。</p>
+<h3 id="MVTO"><a href="#MVTO" class="headerlink" title="MVTO"></a>MVTO</h3><p>类似 TS 协议: <a href="https://blog.mwish.me/2020/11/15/transaction-concurrency-control/#TS">https://blog.mwish.me/2020/11/15/transaction-concurrency-control/#TS</a> </p>
+<p><img src="https://image.mwish.me/blog-image/15916E36-99FF-406A-BB36-49819AC7A8B9.png" alt="15916E36-99FF-406A-BB36-49819AC7A8B9"></p>
+<p>论文 figure 2.a 做了一个图示，读会更新对应的 <code>ReadTS</code>, 这是一个额外需要的字段，读会增加这个字段的内容，然后写的时候写入的版本不仅需要自己是唯一的写，要比最大的读取版本高，否则就视作读了不合法的数据。</p>
+<p>实际上，这里感觉只有读最新的版本会对事务更新产生影响，然后这个并发感觉需要控制的比较好。</p>
+<h3 id="MVOCC"><a href="#MVOCC" class="headerlink" title="MVOCC"></a>MVOCC</h3><p>我写过一段比较长的文章来介绍 OCC，参考：<a href="https://blog.mwish.me/2022/01/28/Transaction-OCC-and-modern-hardware/#MVOCC">https://blog.mwish.me/2022/01/28/Transaction-OCC-and-modern-hardware/#MVOCC</a></p>
+<p>MVOCC 有一点好，就是 OCC 是 read - verification - write 三个阶段。对于 MVOCC 而言，可以给每个数据带上一个 begin-ts 和 end-ts，这里就不用拷贝事务的 private space 了，取而代之的是 GC 问题。</p>
+<p>论文描述了它的 MVOCC 算法，原先的实现中，靠拷贝读写集 + 验证来解决，而现在可以当作读的 ts 和提交 ts 之间做验证，看这段时间有没有被别人改过。相对 OCC，MVOCC 很多时候甚至直观一些。</p>
+<ol>
+<li>Read phase: 拿到一个读取用的 txn-id 和 ts，用来读取数据，写入的时候只能写入没有写入冲突的数据。读取记录到 read-set 中</li>
+<li>Validation phase: 拿到 commit ts, 看 read-set 有没有被别人更新（因为 ts 是递增的，进 validation 说明，只有发现 commit-ts 在 read-ts 和自己的 commit-ts 之间的记录，才需要改掉）</li>
+<li>提交，把 MVCC 记录提交</li>
+</ol>
+<p><img src="https://image.mwish.me/blog-image/FA5699F5-1384-4BA3-AC77-C8D32D8CD423.png" alt="FA5699F5-1384-4BA3-AC77-C8D32D8CD423"></p>
+<p>显然，上述算法…可能饿死 long runing read-only txn…</p>
+<h3 id="MV2PL"><a href="#MV2PL" class="headerlink" title="MV2PL"></a>MV2PL</h3><p>作者的实现中，它使用了 no-wait 来实现 2PL 的冲突处理，在读的时候加读锁，写的时候加写锁。这些都在 tuple 上用计数器实现，本质上有点点小类似 ts 协议，只不过 ts 是读的时候 inc counter，2PL 是写上写锁 + 写锁和读的计数器互斥。发现有别人在写就直接 abort 自己，满粗暴的。</p>
+<p><img src="https://image.mwish.me/blog-image/F713048B-C6A6-4F32-A7B9-243DDADFF4BA.png" alt="F713048B-C6A6-4F32-A7B9-243DDADFF4BA"></p>
+<h3 id="Serialization-Certiﬁer"><a href="#Serialization-Certiﬁer" class="headerlink" title="Serialization Certiﬁer"></a>Serialization Certiﬁer</h3><p>类似 SSI，识别 dangerous structure，来做处理。 </p>
+<h3 id="讨论"><a href="#讨论" class="headerlink" title="讨论"></a>讨论</h3><ul>
+<li>MV2PL / MVTS 的读要改 counter / lock，有一些负载，同时会导致一些伪阳性的 abort。</li>
+<li>MVOCC 的算法可能导致长读事务饿死</li>
+</ul>
+<p>相关的，有一些优化的提案：</p>
+<ol>
+<li>speculatively read uncommitted versions. Hekaton 用了这个. 如果事务冲突少, 这是良药, 否则就是毒药。为了做 cascading abort, 这里还要做一些 dependency graph 之类的，这难免会是个有些中心化的结构。</li>
+<li>eagerly update, Hekaton 也做了这个优化，缺点同 (1)</li>
+</ol>
+<h2 id="Version-Storage"><a href="#Version-Storage" class="headerlink" title="Version Storage"></a>Version Storage</h2><p>这里的内容包含：</p>
+<ol>
+<li>数据库怎么存储不同的物理版本</li>
+<li>每个版本包含的信息</li>
+</ol>
+<p>DBMS 可以包含一个 latch-free 的同一个 tuple 的版本单链表（latch-free 的双链表是很难的），版本链的头可以是 newest 或者 oldest 的事务。</p>
+<h3 id="Append-only-Storage"><a href="#Append-only-Storage" class="headerlink" title="Append-only Storage"></a>Append-only Storage</h3><p>在 PostgreSQL, Hekaton, MemSQL 采用的是这种策略：</p>
+<p><img src="https://image.mwish.me/blog-image/8B61A2DA-C237-4696-9295-C4EE2572D9C3.png" alt="8B61A2DA-C237-4696-9295-C4EE2572D9C3"></p>
+<p>O2N 和 N2O 分别是旧到新 — 新到旧。</p>
+<p>O2N 的好处是，没有更新索引字段的话，索引是不用修改的，但是这个时候 DBMS 可能要走很长的版本链来查找记录，然后走 chain 查找还是比较慢的，所以这里依赖比较频繁的 GC 来保证性能。</p>
+<p>N2O 需要在索引值没变更的时候也更新索引，造成了一定的开销。</p>
+<p>另一个问题是对 non-inline attributes 的处理，比如 MySQL 的 BLOB 或者 PG 的 TOAST，不同的版本可能可以共享同一个 BLOB，DB 维护它的 RC，来避免 BLOB 上的开销。</p>
+<p><img src="https://image.mwish.me/blog-image/2807BAAE-7689-48B9-8508-8BA2D8906FA0.png" alt="2807BAAE-7689-48B9-8508-8BA2D8906FA0"></p>
+<p>PostgreSQL 的 TOAST 有类似的技术：</p>
+<blockquote>
+<p>The TOAST management code is triggered only when a row value to be stored in a table is wider than <code>TOAST_TUPLE_THRESHOLD</code> bytes (normally 2 kB). The TOAST code will compress and/or move field values out-of-line until the row value is shorter than <code>TOAST_TUPLE_TARGET</code> bytes (also normally 2 kB, adjustable) or no more gains can be had. During an UPDATE operation, values of unchanged fields are normally preserved as-is; so an UPDATE of a row with out-of-line values incurs no TOAST costs if none of the out-of-line values change.</p>
+</blockquote>
+<h3 id="Time-Travel-Storage"><a href="#Time-Travel-Storage" class="headerlink" title="Time-Travel Storage"></a>Time-Travel Storage</h3><p><img src="https://image.mwish.me/blog-image/67ADE0DE-EE4C-4A1A-A354-EDFE8E4039AB.png" alt="67ADE0DE-EE4C-4A1A-A354-EDFE8E4039AB"></p>
+<p>类似 Append-Only Storage，但版本分成了主表和别的存储，存一个主表，Time-Travel Table 存放不同的版本。需要更新的时候，这里需要在 time-travel table 中申请空间，然后把数据拷贝过去，然后改主表。没改 index key 的话，index 是不需要更新的。</p>
+<h3 id="Delta-Main-Storage"><a href="#Delta-Main-Storage" class="headerlink" title="Delta-Main Storage"></a>Delta-Main Storage</h3><p><img src="https://image.mwish.me/blog-image/64C7B2DB-DD5C-40EF-AAE3-AF420AB6A390.png" alt="64C7B2DB-DD5C-40EF-AAE3-AF420AB6A390"></p>
+<p>HyPer, MySQL 和 Oracle 使用了这种方法，相对 Time-travel Storage，这里存储的是 Delta 的内容，而非全部内容。对 Update 密集的负载，这种逻辑相对来说性能很好，但是对读来说，这会有一定的问题。</p>
+<p>笔者认为，这里可以考虑类似 logging 那种 physical / logical 类似的区别，不用和 time-travel 分太开？</p>
+<h3 id="讨论-1"><a href="#讨论-1" class="headerlink" title="讨论"></a>讨论</h3><p>这里具体的 pros &amp; cons 只能做一个 case by case 的分析，对于 TP workload, append-only 在没啥 overwrite 的情况下工作的不错，因为有着不错的局部性，有版本链就炸给你看。这种方式同时也加重了 index 管理的难度。</p>
+<p>PostgreSQL 是现实 Append-Only Storage + N2O，写入的数据会更新 <code>xmax</code> 和 <code>ctid</code>，指向最新的数据，索引不会更改。当索引引用的 Tuple 最新版本被删，然后所有事务都读不到它的时候，所以会标记 <code>LP_DEAD</code> 来实现懒惰删除，等待 vacuum 进程 GC。</p>
+<p>InnoDB 使用了 Delta-Main 的方式，主表是一个索引，Undo 段负责回滚。Undo 写的是逻辑更新，其实就是 delta 存储。</p>
+<p>WiredTiger 会</p>
+<p>TBD</p>
+<h2 id="Garbage-Collection"><a href="#Garbage-Collection" class="headerlink" title="Garbage Collection"></a>Garbage Collection</h2><p>GC 是 MVCC 比较重要又比较 hack 的一块，也有 Purge/Vacuum 这些关键词来描述他们。大部分面向用户的介绍材料很少提及 GC 是怎么工作的。</p>
+<p>总的来说，GC 大概分为三步：</p>
+<ol>
+<li>识别不再需要的版本</li>
+<li>把他们从 version chain 摘除，然后处理索引对应的情况</li>
+<li>回收空间</li>
+</ol>
+<p>可能系统会有一个活跃事务 txn-id 下界，会根据这个回收，也有系统会有一些细粒度的回收，比如 HyPer / SAP HANA 的回收，或者 crdb 的 protect ts。当然，txn-id 作为中心化 allocator 本身会比较费。有一些粗粒度的方式，比如用 epoch 来批量做事务的回收。</p>
+<p>本论文讲 GC 分为：</p>
+<ul>
+<li>Tuple Level GC</li>
+<li>Transaction-level GC</li>
+</ul>
+<p><img src="https://image.mwish.me/blog-image/D55A6BAD-A2D6-47C8-BC96-8C547903ACB2.png" alt="D55A6BAD-A2D6-47C8-BC96-8C547903ACB2"></p>
+<h3 id="Tuple-level-Garbage-Collection"><a href="#Tuple-level-Garbage-Collection" class="headerlink" title="Tuple-level Garbage Collection"></a>Tuple-level Garbage Collection</h3><p>这里细分为 Background Vacuuming (VAC) 和 Cooperative Cleaning (COOP)。</p>
+<p>VAC 会有后台的 GC 进程来清除。有一种草台的方式是这个进程检测有哪些版本进行删除，然后清除，这种方式对于比较大的库来说性能肯定拉了。文中提出了两种优化方式：</p>
+<ol>
+<li>把对应的失败版本注册到某个 lock-free 的地方，然后清除进程直接清除这些版本</li>
+<li>标注哪些数据块需要清除，然后跳过不需要 GC的那些块（PostgreSQL 的实现逻辑类似这样）</li>
+</ol>
+<p>Cooperative Cleaning (COOP) 会在 N2O 系统中，遍厉的时候回收。PG 感觉因为 Tuple 位置是固定的，所以虽然 N2O，但是没办法这么做。还有个问题，就是这种回收如果没 touch 到对应的版本，就不回收了。Hekaton 碰到过这个问题，解决方式是加上了个 VAC。</p>
+<p>最后，这节源论文介绍很少，但我个人意见是，这里 pattern 还是挺多的。比如 Compaction 的时候回收、标注回收的 Page、把回收的版本挂起来等等。</p>
+<h3 id="Transaction-level-Garbage-Collection"><a href="#Transaction-level-Garbage-Collection" class="headerlink" title="Transaction-level Garbage Collection"></a>Transaction-level Garbage Collection</h3><p>事务 track 对应的读写集，然后在单个事务或者一堆事务的 epoch 结束的时候做 GC。缺点是 track 空间，优点则是及时的回收。</p>
+<h3 id="讨论-2"><a href="#讨论-2" class="headerlink" title="讨论"></a>讨论</h3><p>Tuple-level Garbage Collection + VAC 应该是最常见的实现方法。增加 GC 的线程一般都能提升 GC 系统的性能，而 long-running txn 可能会影响 GC，这需要一些细粒度的 GC 实现。</p>
+<p>PostgreSQL 和 MySQL InnoDB 都维护了事务的列表、最低和最高的事务水位，我们用 txn-table, active-txn-list, min-txn 和 max-txn 表示。</p>
+<h4 id="PostgreSQL-的-Vacuum"><a href="#PostgreSQL-的-Vacuum" class="headerlink" title="PostgreSQL 的 Vacuum"></a>PostgreSQL 的 Vacuum</h4><p>对于 PG 来说，它做的是一个比较复杂的多阶段的删除，用的 Tuple-level GC + VAC，具体可见 Vacuum 相关的材料（Lazy Vacuum, Full Vacuum）</p>
+<ul>
+<li>对于事务的记录，PostgreSQL 维护在 clog 里面，这可以当作一个事务表。它根据事务 id 的顺序存在各个 Page 上，缓存在内存的 slru 中。当事务推进的时候，可以 Truncate 前面的事务记录来回收空间，推进系统事务</li>
+<li>PostgreSQL 的 <code>xmax</code> 如果被标记且 tuple 没有被上锁，那么这个 tuple 是被删除的，如果 <code>xmax</code> 小于 <code>min-txn</code>，那这个 tuple 在逻辑上不会被任何事务看见，虽然物理上它还存在</li>
+<li>GC 过程中，PostgreSQL 会扫描所有 dead 的 tuple，然后清除它们，这里首先有一个 visibilitymap, 对应代码在 <code>backend/access/heap/visibilitymap</code>。如果某个 Page 被改了，有 Tuple 可能需要 GC，就会给 vm 记一下，然后这样的 Page 才需要被清理，这段过程中，索引的数据会被清除，如下面的图。</li>
+<li>索引数据清除之后，Heap Tuple 的数据会被标记删除，但是 slot 上的位置还是会留着。</li>
+<li>更新对应的 VM，移除 clog 等事务表信息。</li>
+</ul>
+<p><img src="https://image.mwish.me/blog-image/fig-6-01.png" alt="fig-6-01"></p>
+<h4 id="InnoDB-的-Purge"><a href="#InnoDB-的-Purge" class="headerlink" title="InnoDB 的 Purge"></a>InnoDB 的 Purge</h4><p>对于 MySQL InnoDB 来说，它的 GC 在 Purge Undo 里，Index Page 的回收我不是很熟悉，就不献丑了，前面已经说过了</p>
+<p><img src="https://image.mwish.me/blog-image/undo_log_disk_structure.png" alt="undo_log_disk_structure"></p>
+<p>InnoDB 的 Undo 存在 Page 上，对这个 Page 的操作是需要写 <code>mtr</code> 和 redo 的。事务可以申请需要写 undo log，然后系统会给它分配对应的 undo page。同时，没有清除的事务会挂在 history list 上。通过扫描 history list，来回收这些版本。</p>
+<h4 id="其他"><a href="#其他" class="headerlink" title="其他"></a>其他</h4><p>WiredTiger 的 GC 比较简单，在 Reconcile 的时候，每个 tuple 会把「所有事务都可见」的数据当作 base，把不可见的版本 GC 掉</p>
+<p><img src="https://image.mwish.me/blog-image/wt-mem-low.png" alt="wt-mem-low"></p>
+<h2 id="Index-Management"><a href="#Index-Management" class="headerlink" title="Index Management"></a>Index Management</h2><p><img src="https://image.mwish.me/blog-image/992D5709-7238-47B6-8015-E218C786A055.png" alt="992D5709-7238-47B6-8015-E218C786A055"></p>
+<p>DBMS 的索引更新和实现有关，比如 MySQL InnoDB 有 Cluster Index 和 Secondary Index，然后可能还有 Covering Index。PostgreSQL 则是 index + heap table。</p>
+<p>「更新」也是个很奇怪的事情，我们可以区分一下：</p>
+<ul>
+<li>更新的字段跟索引没关系</li>
+<li>更新了索引的字段</li>
+</ul>
+<p>实际上，在 MVCC 系统中，很多索引字段被更新了，基本上要插入一条新的记录，同时旧的记录也要保留，这给 <code>checkUnique</code> 带来了不小麻烦。PostgreSQL 做了一个 <code>LP_DEAD</code>，来给这种被更新的索引做优化，andy 的 slide 也提到了这个问题：</p>
+<p><img src="https://image.mwish.me/blog-image/9E78FAF1-5133-435A-82C0-C1AF21FCACAE.png" alt="9E78FAF1-5133-435A-82C0-C1AF21FCACAE"></p>
+<p>论文引入了 indirection 和 direction 的方式:</p>
+<ul>
+<li>indirection 引入了一个间接层，这个间接层可以是 TupleID 或者 Primary Key. 相对来说，PrimaryKey 空间开销大一些，TupleID 维护则复杂一些。这个怎么理解呢？<ul>
+<li>索引存的是 <code>&lt;IndexKeys, PrimaryKey&gt;</code>，那么，根据 PK 可以找到唯一的主键。当然，如果 pk 很大，这里空间放大会有，如果 pk 是 int 之类的，感觉也没啥开销啊（</li>
+</ul>
+</li>
+<li>direction 则是 PG 的方案，直接指向物理空间</li>
+</ul>
+<h3 id="讨论-3"><a href="#讨论-3" class="headerlink" title="讨论"></a>讨论</h3><p>作者评价如下：</p>
+<blockquote>
+<p>The logical pointer approach is better for write-intensive workloads, as the DBMS updates the secondary indexes only when a transaction modiﬁes the indexes attributes. Reads are potentially slower, however, because the DBMS traverses version chains and perform additional key comparisons. Likewise, using physical pointers is better for read-intensive workloads because an index entry points to the exact version. But it is slower for update operations because this scheme requires the DBMS to insert an entry into every secondary index for each new version, which makes update operations slower.</p>
+</blockquote>
+<p>这里还有个 Index Only Scan 的问题，你看，对于数据 <code>(a, b, c)</code> 有索引 <code>(b)</code>, 然后用户只 get <code>b</code>，本来是个很简单的问题，但你的索引上如果不维护 MVCC 信息的话，可能就寄了。</p>
+<p>这里可以参考 PostgreSQL 的 Index Only Scan，借助了我们上一节说的 vm 系统:</p>
+<p><img src="https://image.mwish.me/blog-image/index-only-scan.png" alt="index-only-scan"></p>
+<h2 id="参考"><a href="#参考" class="headerlink" title="参考"></a>参考</h2><p>PostgreSQL 部分：</p>
+<ul>
+<li><p><a target="_blank" rel="noopener" href="https://www.interdb.jp/pg">https://www.interdb.jp/pg</a></p>
+</li>
+<li><p><a target="_blank" rel="noopener" href="https://blog.yasking.org/a/postgresql-vacuum.html">PosrgreSQL 学习计划——Vacuum 清理机制</a> <a target="_blank" rel="noopener" href="https://blog.yasking.org/a/postgresql-vacuum.html">https://blog.yasking.org/a/postgresql-vacuum.html</a></p>
+</li>
+</ul>
+<p>InnoDB 部分：</p>
+<ul>
+<li><p>MySQL · 源码分析 · InnoDB的read view，回滚段和purge过程简介 <a target="_blank" rel="noopener" href="http://mysql.taobao.org/monthly/2018/03/01/">http://mysql.taobao.org/monthly/2018/03/01/</a></p>
+</li>
+<li><p>MySQL · 引擎特性· InnoDB之UNDO LOG介绍 <a target="_blank" rel="noopener" href="http://mysql.taobao.org/monthly/2021/12/02/">http://mysql.taobao.org/monthly/2021/12/02/</a></p>
+</li>
+</ul>
+<p>感谢原论文：An Empirical Evaluation of In-Memory Multi-Version Concurrency Control</p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-3"><a class="toc-link" href="#DBMS-Meta-Data"><span class="toc-number">1.</span> <span class="toc-text">DBMS Meta-Data</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Concurrency-Control-Protocol"><span class="toc-number"></span> <span class="toc-text">Concurrency Control Protocol</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#MVTO"><span class="toc-number">1.</span> <span class="toc-text">MVTO</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#MVOCC"><span class="toc-number">2.</span> <span class="toc-text">MVOCC</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#MV2PL"><span class="toc-number">3.</span> <span class="toc-text">MV2PL</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Serialization-Certi%EF%AC%81er"><span class="toc-number">4.</span> <span class="toc-text">Serialization Certiﬁer</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%AE%A8%E8%AE%BA"><span class="toc-number">5.</span> <span class="toc-text">讨论</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Version-Storage"><span class="toc-number"></span> <span class="toc-text">Version Storage</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Append-only-Storage"><span class="toc-number">1.</span> <span class="toc-text">Append-only Storage</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Time-Travel-Storage"><span class="toc-number">2.</span> <span class="toc-text">Time-Travel Storage</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Delta-Main-Storage"><span class="toc-number">3.</span> <span class="toc-text">Delta-Main Storage</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%AE%A8%E8%AE%BA-1"><span class="toc-number">4.</span> <span class="toc-text">讨论</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Garbage-Collection"><span class="toc-number"></span> <span class="toc-text">Garbage Collection</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Tuple-level-Garbage-Collection"><span class="toc-number">1.</span> <span class="toc-text">Tuple-level Garbage Collection</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Transaction-level-Garbage-Collection"><span class="toc-number">2.</span> <span class="toc-text">Transaction-level Garbage Collection</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%AE%A8%E8%AE%BA-2"><span class="toc-number">3.</span> <span class="toc-text">讨论</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#PostgreSQL-%E7%9A%84-Vacuum"><span class="toc-number">3.1.</span> <span class="toc-text">PostgreSQL 的 Vacuum</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#InnoDB-%E7%9A%84-Purge"><span class="toc-number">3.2.</span> <span class="toc-text">InnoDB 的 Purge</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%85%B6%E4%BB%96"><span class="toc-number">3.3.</span> <span class="toc-text">其他</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Index-Management"><span class="toc-number"></span> <span class="toc-text">Index Management</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%AE%A8%E8%AE%BA-3"><span class="toc-number">1.</span> <span class="toc-text">讨论</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8F%82%E8%80%83"><span class="toc-number"></span> <span class="toc-text">参考</span></a>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2022/07/03/An-Empirical-Evaluation-of-In-Memory-Multi-Version-Concurrency-Control/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2022/07/03/An-Empirical-Evaluation-of-In-Memory-Multi-Version-Concurrency-Control/&text=[VLDB&#39;17] An Empirical Evaluation of In-Memory Multi-Version Concurrency Control"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2022/07/03/An-Empirical-Evaluation-of-In-Memory-Multi-Version-Concurrency-Control/&title=[VLDB&#39;17] An Empirical Evaluation of In-Memory Multi-Version Concurrency Control"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2022/07/03/An-Empirical-Evaluation-of-In-Memory-Multi-Version-Concurrency-Control/&is_video=false&description=[VLDB&#39;17] An Empirical Evaluation of In-Memory Multi-Version Concurrency Control"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=[VLDB&#39;17] An Empirical Evaluation of In-Memory Multi-Version Concurrency Control&body=Check out this article: http://blog.mwish.me/2022/07/03/An-Empirical-Evaluation-of-In-Memory-Multi-Version-Concurrency-Control/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2022/07/03/An-Empirical-Evaluation-of-In-Memory-Multi-Version-Concurrency-Control/&title=[VLDB&#39;17] An Empirical Evaluation of In-Memory Multi-Version Concurrency Control"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2022/07/03/An-Empirical-Evaluation-of-In-Memory-Multi-Version-Concurrency-Control/&title=[VLDB&#39;17] An Empirical Evaluation of In-Memory Multi-Version Concurrency Control"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2022/07/03/An-Empirical-Evaluation-of-In-Memory-Multi-Version-Concurrency-Control/&title=[VLDB&#39;17] An Empirical Evaluation of In-Memory Multi-Version Concurrency Control"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2022/07/03/An-Empirical-Evaluation-of-In-Memory-Multi-Version-Concurrency-Control/&title=[VLDB&#39;17] An Empirical Evaluation of In-Memory Multi-Version Concurrency Control"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2022/07/03/An-Empirical-Evaluation-of-In-Memory-Multi-Version-Concurrency-Control/&name=[VLDB&#39;17] An Empirical Evaluation of In-Memory Multi-Version Concurrency Control&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2022/07/03/An-Empirical-Evaluation-of-In-Memory-Multi-Version-Concurrency-Control/&t=[VLDB&#39;17] An Empirical Evaluation of In-Memory Multi-Version Concurrency Control"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

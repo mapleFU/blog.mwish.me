@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="An Efficient Management Method and High Concurrency index Using Write-Ahead Logging">
+<meta property="og:type" content="article">
+<meta property="og:title" content="ARIES&#x2F;IM">
+<meta property="og:url" content="http://blog.mwish.me/2022/04/30/ARIES-IM/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="An Efficient Management Method and High Concurrency index Using Write-Ahead Logging">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/3243D20E-840B-42F1-9221-1963EAA12616.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/0C7F9D1B-691F-4186-ACA5-5D537870631F.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/AFE6B33F-70C6-472E-8F22-49A49FAFC5F0.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/DCEB073D-03B6-482E-8207-E1ADFF2A70F0.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/2A164111-9675-4BB3-B8E8-8A14C35A62DF.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/C8A02D69-79C9-45EA-8109-998CB32759D4.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/9658AEDC-3E91-4745-82C4-6ECFDB454404.png">
+<meta property="article:published_time" content="2022-04-29T18:28:47.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.559Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/3243D20E-840B-42F1-9221-1963EAA12616.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>ARIES/IM</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2022/05/01/Delta-Lake-Lakehouse/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2022/04/20/Notes-LLAMA/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2022/04/30/ARIES-IM/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2022/04/30/ARIES-IM/&text=ARIES/IM"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2022/04/30/ARIES-IM/&title=ARIES/IM"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2022/04/30/ARIES-IM/&is_video=false&description=ARIES/IM"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=ARIES/IM&body=Check out this article: http://blog.mwish.me/2022/04/30/ARIES-IM/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2022/04/30/ARIES-IM/&title=ARIES/IM"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2022/04/30/ARIES-IM/&title=ARIES/IM"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2022/04/30/ARIES-IM/&title=ARIES/IM"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2022/04/30/ARIES-IM/&title=ARIES/IM"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2022/04/30/ARIES-IM/&name=ARIES/IM&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2022/04/30/ARIES-IM/&t=ARIES/IM"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Concurrency-Control"><span class="toc-number">1.</span> <span class="toc-text">Concurrency Control</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Fetch"><span class="toc-number">1.1.</span> <span class="toc-text">Fetch</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Fetch-next"><span class="toc-number">1.2.</span> <span class="toc-text">Fetch next</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Insert"><span class="toc-number">1.3.</span> <span class="toc-text">Insert</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Delete"><span class="toc-number">1.4.</span> <span class="toc-text">Delete</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#SMO"><span class="toc-number">1.5.</span> <span class="toc-text">SMO</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%AE%A8%E8%AE%BA"><span class="toc-number">1.6.</span> <span class="toc-text">讨论</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Recovery-in-ARIES-IM"><span class="toc-number">2.</span> <span class="toc-text">Recovery in ARIES&#x2F;IM</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BC%98%E5%8C%96%E5%92%8C%E5%85%B6%E4%BB%96%E5%8D%8F%E8%AE%AE"><span class="toc-number">3.</span> <span class="toc-text">优化和其他协议</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Reference"><span class="toc-number">4.</span> <span class="toc-text">Reference</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        ARIES/IM
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2022-04-29T18:28:47.000Z" itemprop="datePublished">2022-04-30</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p><code>&lt;ARIES/IM: An Efficient Management Method and High Concurrency index Using Write-Ahead Logging&gt;</code> 描述了 ARIES 是如何维护索引相关的 Latch 和 Lock 的。在 B+Tree 上可能会涉及 IO 、SMO 等情况，在这种情况下，对一个树的查询要保证高性能、并发安全。</p>
+<p>ARIES/IM 在索引和 Lock 上的想法是：</p>
+<ol>
+<li>Data Lock, 只在 Data 上上锁，Index 上不上锁</li>
+<li>为了并发，尽量少的获取要等待到 Commit 阶段的 Locking</li>
+<li>允许查找/删除/插入和 SMO 一起执行</li>
+</ol>
+<p>ARIES/IM 本身使用 ARIES 做恢复，会对 Page 进行 Redo 和 Undo，ARIES/IM 保证这些都是 Page 级别上执行的。</p>
+<p>2/3 都比较常见，(1) 需要额外解释一下，我们从 hedengcheng 的 slide 里面引一张 InnoDB 锁的图：</p>
+<p><img src="https://image.mwish.me/blog-image/3243D20E-840B-42F1-9221-1963EAA12616.png" alt="3243D20E-840B-42F1-9221-1963EAA12616"></p>
+<p>这里的锁是 Index + Data(Primary Key), 然后查询使用的 Index 也需要上锁。ARIES/IM 这里只需要给 Primary Key 或者 Heap Tuple 上锁。</p>
+<p>ARIES/IM 论文应该使用的是 Heap Tuple 模型。在论文中，索引的叶子结点包含 <code>&lt;key-value, recordID&gt;</code>, 模型中，叶子结点被双向链接，非叶子结点有指向下层的指针和对应的 <code>high key</code>。非叶子结点的 High Key 一定比下层的 High Key 大。</p>
+<p>ARIES/IM 提供了下列的索引原语：</p>
+<ol>
+<li><code>Fetch(Key or Partial-key, starting-condition)</code>, <code>starting-condition</code> 包含 <code>Eq</code> 、<code>GT</code> 和 <code>GTE</code>，然后拿到整个 Key</li>
+<li><code>FetchNext(stopping-condition)</code>: 对 <code>Fetch</code> 的结果，然拿到下一个 key</li>
+<li><code>Insert(key-value, RID)</code>: 插入 <code>(key-value, RID)</code> 对. 对于 <code>unique</code> 的索引来说，这里需要查找到这个 <code>key</code> 是否重复，儿对于 <code>nonunique index</code>, <code>(key-value, RID)</code> 对需要查找是否重复</li>
+<li><code>Delete(key)</code> 删 <code>key</code> (这个接口我觉得怪怪的，是不是还得加个 <code>RID</code>?)</li>
+</ol>
+<p>那么，这套东西考虑并发和 Recover，可能有下列的问题：</p>
+<ol>
+<li>对 Index 需要记录什么样的日志，来保证完整（不丢数据）、高性能恢复</li>
+<li>SMO 在发生的时候崩溃了，恢复的时候保证没有问题</li>
+<li>如何提升 Page 上访问的并发度</li>
+<li><strong>假如事务在 Rollback 的时候，已经完成了某个 SMO，它可以不用 UNDO 这个 SMO</strong></li>
+<li>如 Figure1，如何保证 SMO 发生的时候，Page 被移动到了别的地方，这个时候，如果要 rollback T1，这种基于 Page 的 Undo 可能会啥都删不掉，需要从上层来做一个 Logical Undo。需要能够阻止或者检测出这种结果</li>
+<li>(5) 讲述的是插入 - SMO - abort 的情况，同样这里还有 删除 - SMO - abort 的情况，也要能够正确恢复</li>
+<li>怎么防止 Rollback 的时候，事务出现 Deadlock</li>
+<li>怎么设计不同级别的锁</li>
+<li>RR 的隔离级别下，怎么做谓词锁</li>
+<li>怎么保证一个 Unique Index 中，A 删掉了一个 Key，B 需要插入同一个 Key，而 A 可能 Abort 的情况</li>
+<li>SMO 发生的同时，Tree Traversal 也能正确执行</li>
+</ol>
+<p><img src="https://image.mwish.me/blog-image/0C7F9D1B-691F-4186-ACA5-5D537870631F.png" alt="0C7F9D1B-691F-4186-ACA5-5D537870631F"></p>
+<p>关于 ARIES Recover 可以参考我之前的 Blog: <a href="https://blog.mwish.me/2021/08/07/Database-Recover-System/">https://blog.mwish.me/2021/08/07/Database-Recover-System/</a></p>
+<h2 id="Concurrency-Control"><a href="#Concurrency-Control" class="headerlink" title="Concurrency Control"></a>Concurrency Control</h2><p>这部分的 Concurrency Control 不涉及 Recover. 有一部分 <code>Del_Bit</code> 和 Recover 有关，可以不用理解。</p>
+<p>这里贴一下 Data-Only Lock 相关的上锁规则：</p>
+<p><img src="https://image.mwish.me/blog-image/AFE6B33F-70C6-472E-8F22-49A49FAFC5F0.png" alt="AFE6B33F-70C6-472E-8F22-49A49FAFC5F0"></p>
+<p>细心的你可能发现了，这里还有个 index-specific locking，ARIES/IM 认为 index-specific locking 可能可以提升并发能力，但是会增加实现的复杂性和维护锁的代价。</p>
+<p>在支持 RR / 维护 Unique Index 的时候，在删除或者插入一个 key 的时候，需要对下一个 key 上锁，这种策略被称为 <code>next-key locking</code>. 在 <code>Fetch</code> 和 <code>Fetch Next</code> 的时候，若 Key 不存在，也要考虑这个问题。</p>
+<p>Latching: Latching 维护了 Page 和 B+Tree 物理结构上的一致性。在 Index 访问的时候，不会 Grab 数据页的 Latch。获得 Latch 的顺序是下降获取的，这个流程要遵循 <strong>Latch Coupling</strong>:</p>
+<ol>
+<li>先锁定根节点，从根节点下降</li>
+<li>按照锁叶子结点 — 切换 — 下降 — 释放父节点锁的过程进行下降。中间全都是 S Latch，到根节点的时候，根据操作类型来决定是 S 还是 X</li>
+</ol>
+<p>这里还有 SMO 对应的处理，当一个 Txn 执行 Split 的时候，别的事务要保证正确处理。ARIES/IM 会要求「向右分裂」，即把 higher key 移动到下一个节点。然后 Bottom-Up 的分裂，Bottom-Up 这个顺序和查找的时候下降的顺序是相反的，为了避免 Latch 的死锁，ARIES/IM 引入了 <code>SM_Bit</code>，然后在 SMO 的时候会做 <code>SM_Bit</code> 标记，随之释放锁 - 上升。而下降的时候会注意到 <code>SM_Bit</code>, 进行一些别的操作，等待 SMO 完成。</p>
+<p>那「别的操作」 是什么呢？ARIES/IM 引入了一个 B+Tree 级别的 <code>RWLatch</code>: <code>TreeLatch</code>，供 SMO 同步使用，SMO 会 <code>Grab X Latch on TreeLatch</code>，然后下降的时候，如果注意到了 <code>SM_Bit</code>，这里需要放锁 -&gt; <code>Grab S Latch on TreeLatch</code>，等待 SMO 完成. 然后如果某个节点拿到了 <code>S Latch</code>，这里它就可以清掉 <code>SM_Bit</code> 了，因为 SMO 已经完成了。这个 <code>TreeLatch</code> 同时也保证了写入的串行性。</p>
+<p>上面的部分是算法的大意，下面这里要讲一讲具体怎么实现，值得一提的是，下面的部分有一个 <code>Del_Bit</code>，这个和 Recover 有关，先不用管，然后论文估摸着是假设 Page 全在内存中，没有考虑不在内存中的情况。</p>
+<h3 id="Fetch"><a href="#Fetch" class="headerlink" title="Fetch"></a>Fetch</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><span class="line">/* for simplicity, root = leaf case not specified here */</span><br><span class="line">S latch root and note root&#x27;s page_LSN</span><br><span class="line">Child := Root</span><br><span class="line">Parent := NIL</span><br><span class="line"></span><br><span class="line">// 下降</span><br><span class="line">Descend:</span><br><span class="line">  IF child is a leaf AND Op is (insert OR delete) THEN</span><br><span class="line">  	X latch child</span><br><span class="line">  ELSE S latch child</span><br><span class="line">  Node child&#x27;s page_LSN</span><br><span class="line">  IF child is a nonleaf page:</span><br><span class="line">  	IF nonempty child &amp; ((input key &lt;= highest key in child) OR (input key &gt; highest key in child &amp; SM_Bit == 0)):</span><br><span class="line">  		// 操作是安全的, 可以进行</span><br><span class="line">  		IF Parent != NIL:</span><br><span class="line">  			unlatch parent</span><br><span class="line">  		Parent := Child</span><br><span class="line">  		Child := Page_Search(Child)</span><br><span class="line">  		goto Descent</span><br><span class="line">  	ELSE:</span><br><span class="line">  		// input key 比 highest key 大, 且 SM_Bit 被标记了, 说明有 SMO</span><br><span class="line">  		Unlatch parent &amp; child</span><br><span class="line">  		S latch TreeLatch for instant duration // 主动锁 TreeLatch, 等待 SMO 结束</span><br><span class="line">  		Unwind recursion based on noted page_LSNs, and Descend // 根据 page_LSNs 回滚</span><br><span class="line">  ELSE:</span><br><span class="line">  	Case Op:</span><br><span class="line">  		Fetch: // 上 S latch 什么的</span><br><span class="line">  		Insert: // 上 X latch 什么的</span><br><span class="line">  		Delete: // ...</span><br><span class="line">   	END</span><br></pre></td></tr></table></figure>
+<p>上面表现了一个 <code>Descend</code> 的流程，具体还有一个 Fetch 的流程：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">Find requested or next higher key(maybe on NextPage)</span><br><span class="line">Unlatch parent</span><br><span class="line">Request conditional S lock on found key</span><br><span class="line">IF lock granted:</span><br><span class="line">	Unlatch child &amp; return found key</span><br><span class="line">ELSE:</span><br><span class="line">	Note LSN and key position and unlatch child // 有别的占锁了</span><br><span class="line">	Request unconditional lock on key</span><br><span class="line">	Once lock granted backup &amp; search if needed</span><br></pre></td></tr></table></figure>
+<p>这里 Lock 需要拿到了 Latch 再上, 保证正确性。而为了保证 next-key locking，甚至可能要捞右侧的 Page。在获取下一个页面的 Page 的时候，上一个页面的 Latch 不能被释放。</p>
+<p>这里还有个特点就是捞 Page 的时候会记 <code>Page_LSN</code>，没被更新的话就该咋样咋样，Page 被更新了就要重来，检查一下发生什么事了。</p>
+<p><code>conditional</code> 应该是「没获取到就失败」，而「unconditional」是一直等待获取到。这里的 Lock 是 Commit Duration 的。如果拿到了最后都没有，应该要对一个最高 Key 的特殊 Maximum 记录上锁。</p>
+<h3 id="Fetch-next"><a href="#Fetch-next" class="headerlink" title="Fetch next"></a>Fetch next</h3><p>Fetch next流程首先定位一个key，然后记下 <code>Page_LSN</code> 和位置，然后不断顺序遍历符合范围查找要求的key，每次返回一个符合要求的key时都需要记录相应的page_lsn。下一次查找时需要比较page_lsn，若page_lsn变更，说明页被修改，此时需要再次走一次 Fetch，来重新定位。</p>
+<h3 id="Insert"><a href="#Insert" class="headerlink" title="Insert"></a>Insert</h3><p>如果 Leaf Page 有足够空间，这里会定位到相同或者比自己大的 key 上，然后 Grab X Lock，进行插入的 key 的 locking。上锁后，再进行 unique check。这个锁是 Commit Duration 的。</p>
+<p>这里还要对 next-key 进行 X lock，来保证锁定。这个可能还会需要锁定下一页。这个 lock 是 instant 的，它只用来避免 RR 上出现 Phantom Data。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">IF SM_BIT | Del_Bit THEN:</span><br><span class="line">	Instant S latch tree, set Bits to &#x27;0&#x27;</span><br><span class="line">Unlatch parent</span><br><span class="line">Find key &gt; insert key &amp; X lock it for instant duration</span><br><span class="line"></span><br><span class="line">Insert key, log and update page_LSN</span><br><span class="line">Release child latch</span><br></pre></td></tr></table></figure>
+<p>如果需要分裂，为了维护 B+Tree 结构，这个需要把邻居节点捞上来（维护双向链表），然后把涉及的 Page 全部弄到内存中，再 Grab X Lock，进行 SMO。这里我们只需要了解 SMO 会创建一个 sibling page，然后处理结构，标记 <code>SM_Bit</code>，层层向上。</p>
+<h3 id="Delete"><a href="#Delete" class="headerlink" title="Delete"></a>Delete</h3><p>Delete 会对 Next-Key 上 Commit Duration X Lock，用来防止之前问题 (10) 等场景。此外还有一些用于恢复的逻辑，比如删除边界值的时候，需要给整个 Tree 上锁；同时需要引入 <code>Del_Bit</code>。之后会在 Recovery 里面讨论这些个细节</p>
+<p>这里实现的不一定是标准的 B+Tree，只有删空一个 Page 的时候，才会执行 DeletePage 的 SMO。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">IF SM_Bit == 1:</span><br><span class="line">	Instant S latch TreeNode and set SM_Bit to 0</span><br><span class="line">Set Delete_Bit to 1</span><br><span class="line">Unlatch parent</span><br><span class="line">Find key &gt; delete key &amp; X lock it for commit duration</span><br><span class="line">IF delete key is smallest/largest on page:</span><br><span class="line">	S latch tree and set Delete_Bit to 0</span><br><span class="line">Delete key, log and update page_LSN</span><br><span class="line">Release child latch and tree latch, if held.</span><br></pre></td></tr></table></figure>
+<h3 id="SMO"><a href="#SMO" class="headerlink" title="SMO"></a>SMO</h3><p><img src="https://image.mwish.me/blog-image/DCEB073D-03B6-482E-8207-E1ADFF2A70F0.png" alt="DCEB073D-03B6-482E-8207-E1ADFF2A70F0"></p>
+<p>SMO 重点是和 Insert/Delete 一起考虑并发。还有一些 Del_Bit 的 hacking。</p>
+<h3 id="讨论"><a href="#讨论" class="headerlink" title="讨论"></a>讨论</h3><p>为什么 Delete 要 Commit Duration；Insert 只要 Instant Duration 呢？实际上，没有提交的 Insert 对外部是一条可见记录，而 Delete 则是看不到了（记录直接没了）。所以插入的时候放个 <code>&lt;key, value, RID&gt;</code>记录在这，看看后面是不是有记录，然后嗯插就行，反正自己上面有把锁。删除的时候清掉 <code>&lt;Key, value, RID&gt;</code>，自己 <code>RID</code> 别人也锁不了了，就只能嗯锁下一个。</p>
+<h2 id="Recovery-in-ARIES-IM"><a href="#Recovery-in-ARIES-IM" class="headerlink" title="Recovery in ARIES/IM"></a>Recovery in ARIES/IM</h2><p>论文之前的问题也提到了 Recovery，SMO 由 Delete/Insert 触发。如果 SMO 做完了，而事务 Abort 了，SMO 会照常推进下去，如图：</p>
+<p><img src="https://image.mwish.me/blog-image/2A164111-9675-4BB3-B8E8-8A14C35A62DF.png" alt="2A164111-9675-4BB3-B8E8-8A14C35A62DF"></p>
+<p><img src="https://image.mwish.me/blog-image/C8A02D69-79C9-45EA-8109-998CB32759D4.png" alt="C8A02D69-79C9-45EA-8109-998CB32759D4"></p>
+<p>在 Rollback 的时候，Delete/Insert 可以被撤销，对于 Delete，Redo 的时候反正先 Delete 了，SMO，然后再对整个树插入；Insert 的时候，插入的记录再被滚掉。如果 SMO 没有写 <code>Dummy CLR</code>，那么 SMO 会被回滚。在 <code>SMO</code> 期间，操作需要对 <code>TreeLatch</code> 同步，所以对 Page 回滚是安全的。</p>
+<p>当然，你会注意到，<strong>不是所有操作都能在这个流程中做到对 Page 回滚的</strong>。如 Figure 10，当这个事务失败但 SMO 成功的时候，Page 都没了，怎么回滚呢？这个时候，ARIES/IM 策略是 <strong>尽量对 Page 物理回滚，不行的话整个树下来做逻辑删除</strong>，具体而言，假设事务在 $t_1$ 时刻进行，$t_2$ 时刻 Undo，需要执行 Logical Undo 的规则是：</p>
+<ol>
+<li>Undo Delete 的时候，Page 没有足够空间进行插入，说明 t1-t2 期间，有一个事务占有了删除的空间</li>
+<li>Undo 的时候，key 不属于原来的 Page，说明 t1-t2 期间，有一个别的 SMO</li>
+<li>不知道 Key 是否属于原来的 Page：在 Undo 的时候，可能插入了一堆相同的记录，导致不确定具体啥情况</li>
+<li>Undo Insert 可能导致原来的 Page 变空。这显然不科学，说明 <strong>t1-t2 之间有一个对边界 key 的删除</strong>。</li>
+</ol>
+<p>在 Undo 阶段可能也有 SMO。一般的 Undo 的 CLR 是只有最终镜像的，但是 SMO 可能失败，所以 SMO 的 Undo 也需要完整的日志。</p>
+<p>在执行阶段，Undo 的时候如果要 SMO 也需要 <code>X TreeLatch</code>，来串行处理。</p>
+<p>对于一个 SMO，当持久化 <code>Dummy CLR</code> 日志的时候，才能释放 <code>X TreeLatch</code> (表示这次 SMO 已经完成，可以恢复）。</p>
+<p>这里 ARIES/IM 还需要保证 Undo 是能够进行的，这个点有点奇怪，为什么 Undo 会不能进行呢？可以参考下图：</p>
+<p><img src="https://image.mwish.me/blog-image/9658AEDC-3E91-4745-82C4-6ECFDB454404.png" alt="9658AEDC-3E91-4745-82C4-6ECFDB454404"></p>
+<p>一个 SMO 可能导致 Delete 的 Undo 是不可进行的！这个未完成的 SMO 会导致对 Delete 的恢复无法从根节点找到。这个时候你可以发现 <code>Del_Bit</code> 和串行化 SMO 的妙处了。</p>
+<p>我们回到需要执行 Logical Undo 的规则 和 <code>Delete</code> <code>Insert</code> 的代码，可以看到，<code>TreeLatch</code> 这里承担了一个很重要的同步点，来保证并发的安全性。当你需要删除、删边界 key、SMO 的时候，都要主动拿一下 Latch 来强制同步。</p>
+<h2 id="优化和其他协议"><a href="#优化和其他协议" class="headerlink" title="优化和其他协议"></a>优化和其他协议</h2><p>可以看到，上述一个复杂点是，删除的时候如果物理删除了，可能回滚的时候有额外的功夫。Graefe Goetz 提出过一个逻辑删除。即删除不实际从 Page 上抹除这条记录，而是一个标记删除，来解决问题。不过我不是很清楚这样删了之后，需要用什么条件来 GC 这些数据。</p>
+<p>标记删除需要和 Purge 的流程联动起来，这里可能还会需要一些 mtr，比方说标记删除后，确定某个事务的 Garbage 记录可以被回收，那可以写个 mtr 把 Page 上的这个垃圾记录回收掉。感觉这个稍微有点类似 MVCC？</p>
+<p>论文里没有提到根节点分裂的情况，但实际上这是一个比较复杂的 case，可能也需要 grab 一把锁来解决。</p>
+<p>InnoDB 的 Btree 感觉相对没这么细，不过也可以看的出来为啥。感觉在那上面改并发类似一个不可能完成的任务了…</p>
+<p>关于这些，可以看 alibaba 的数据库月报：</p>
+<ol>
+<li><a target="_blank" rel="noopener" href="http://mysql.taobao.org/monthly/2020/06/02/">http://mysql.taobao.org/monthly/2020/06/02/</a></li>
+<li><a target="_blank" rel="noopener" href="http://mysql.taobao.org/monthly/2020/05/02/">http://mysql.taobao.org/monthly/2020/05/02/</a></li>
+<li><a target="_blank" rel="noopener" href="http://mysql.taobao.org/monthly/2020/11/02/">http://mysql.taobao.org/monthly/2020/11/02/</a></li>
+<li><a target="_blank" rel="noopener" href="http://mysql.taobao.org/monthly/2021/12/04/">http://mysql.taobao.org/monthly/2021/12/04/</a></li>
+</ol>
+<p>可以看到，MySQL 5.6 的 InnoDB 这里会有一个 Btree Latch，然后在下降的时候可能要 S Latch 它，然后下降，下降之后，根据有没有 SMO，来判定剩下来的操作是否要 Latch 整个树。同时，这里只有叶子结点上有 Latch，non-leaf page 是不会上锁的。</p>
+<p>InnoDB 在 MySQL 8.0 引入了 SX Lock（类似 rwlatch？），也引入了 non-leaf page lock，不过仍然是比较粗粒度的锁。</p>
+<h2 id="Reference"><a href="#Reference" class="headerlink" title="Reference"></a>Reference</h2><ul>
+<li>ARIES/IM: An Efficient Management Method and High Concurrency index Using Write-Ahead Logging</li>
+<li>二手文章 ARIES/IM: <a target="_blank" rel="noopener" href="http://mysql.taobao.org/monthly/2020/05/03/">http://mysql.taobao.org/monthly/2020/05/03/</a></li>
+</ul>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Concurrency-Control"><span class="toc-number">1.</span> <span class="toc-text">Concurrency Control</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Fetch"><span class="toc-number">1.1.</span> <span class="toc-text">Fetch</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Fetch-next"><span class="toc-number">1.2.</span> <span class="toc-text">Fetch next</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Insert"><span class="toc-number">1.3.</span> <span class="toc-text">Insert</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Delete"><span class="toc-number">1.4.</span> <span class="toc-text">Delete</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#SMO"><span class="toc-number">1.5.</span> <span class="toc-text">SMO</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%AE%A8%E8%AE%BA"><span class="toc-number">1.6.</span> <span class="toc-text">讨论</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Recovery-in-ARIES-IM"><span class="toc-number">2.</span> <span class="toc-text">Recovery in ARIES&#x2F;IM</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BC%98%E5%8C%96%E5%92%8C%E5%85%B6%E4%BB%96%E5%8D%8F%E8%AE%AE"><span class="toc-number">3.</span> <span class="toc-text">优化和其他协议</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Reference"><span class="toc-number">4.</span> <span class="toc-text">Reference</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2022/04/30/ARIES-IM/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2022/04/30/ARIES-IM/&text=ARIES/IM"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2022/04/30/ARIES-IM/&title=ARIES/IM"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2022/04/30/ARIES-IM/&is_video=false&description=ARIES/IM"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=ARIES/IM&body=Check out this article: http://blog.mwish.me/2022/04/30/ARIES-IM/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2022/04/30/ARIES-IM/&title=ARIES/IM"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2022/04/30/ARIES-IM/&title=ARIES/IM"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2022/04/30/ARIES-IM/&title=ARIES/IM"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2022/04/30/ARIES-IM/&title=ARIES/IM"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2022/04/30/ARIES-IM/&name=ARIES/IM&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2022/04/30/ARIES-IM/&t=ARIES/IM"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

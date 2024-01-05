@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="对于一个 DB 系统而言，大概要考虑这些错误：  transaction failure Logical error: 例如 db 的资源不够，输入错误等问题 System error:  数据库系统进入了诸如死锁之类的状态   System Crash: 硬件故障或者系统故障，可能导致持久存储上的数据损坏。（与这个相反，程序崩溃之后，不会影响持久数据的假设，成为 fail-stop assump">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Database Recover System">
+<meta property="og:url" content="http://blog.mwish.me/2021/08/07/Database-Recover-System/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="对于一个 DB 系统而言，大概要考虑这些错误：  transaction failure Logical error: 例如 db 的资源不够，输入错误等问题 System error:  数据库系统进入了诸如死锁之类的状态   System Crash: 硬件故障或者系统故障，可能导致持久存储上的数据损坏。（与这个相反，程序崩溃之后，不会影响持久数据的假设，成为 fail-stop assump">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/B7CC2AA7-1F2E-4AF0-A477-C69B4143FE4D.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/3237a0f02b383bd05a61a0f21696d722119.jpg">
+<meta property="og:image" content="https://image.mwish.me/blog-image/B9C1A5D0-F0ED-40FF-9241-D0217C9E0F3D.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/8F0DB468-C10C-494F-94EA-B07F6CB31D27.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/7A403DB0-0619-47BE-B172-3A6CF821350C.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/5730DEF8-A0F4-4034-8ADC-FCCD841C7709.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/680871EA-B3FF-4A6B-AA3F-27AD38EFE3B9.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/DDBA46660D2612F7B7B0E79ACA89B8C3.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/48E33312-9C7C-489B-986E-DE0726829AEC.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/E922642E-C55C-446D-824D-55CE92802225.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/0FCE87D0-00D0-4ABE-824D-D917EFCD47B8.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/BEC1863C-DDBE-4E43-9C58-B8998B652C4D.png">
+<meta property="article:published_time" content="2021-08-06T18:01:46.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.555Z">
+<meta property="article:author" content="mwish">
+<meta property="article:tag" content="database">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/B7CC2AA7-1F2E-4AF0-A477-C69B4143FE4D.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>Database Recover System</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2021/11/01/SSD-as-Cache-and-CacheLib/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2021/08/01/FAST-16-WiscKey/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2021/08/07/Database-Recover-System/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2021/08/07/Database-Recover-System/&text=Database Recover System"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2021/08/07/Database-Recover-System/&title=Database Recover System"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2021/08/07/Database-Recover-System/&is_video=false&description=Database Recover System"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Database Recover System&body=Check out this article: http://blog.mwish.me/2021/08/07/Database-Recover-System/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2021/08/07/Database-Recover-System/&title=Database Recover System"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2021/08/07/Database-Recover-System/&title=Database Recover System"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2021/08/07/Database-Recover-System/&title=Database Recover System"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2021/08/07/Database-Recover-System/&title=Database Recover System"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2021/08/07/Database-Recover-System/&name=Database Recover System&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2021/08/07/Database-Recover-System/&t=Database Recover System"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AD%98%E5%82%A8%E6%A8%A1%E5%9E%8B"><span class="toc-number">1.</span> <span class="toc-text">存储模型</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Recover-and-Atomicity"><span class="toc-number">2.</span> <span class="toc-text">Recover and Atomicity</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#WAL-Protocol"><span class="toc-number">2.1.</span> <span class="toc-text">WAL Protocol</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Checkpoints-ckpt"><span class="toc-number">3.</span> <span class="toc-text">Checkpoints (ckpt)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Recover-Processing"><span class="toc-number">4.</span> <span class="toc-text">Recover Processing</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%AD%A3%E5%B8%B8%E4%BA%8B%E5%8A%A1-abort-%E7%9A%84%E5%9B%9E%E6%BB%9A"><span class="toc-number">4.1.</span> <span class="toc-text">正常事务 abort 的回滚</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#System-Crash-%E5%90%8E%E7%9A%84%E6%81%A2%E5%A4%8D"><span class="toc-number">4.2.</span> <span class="toc-text">System Crash 后的恢复</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Buffer-Pool-amp-GroupCommit-amp-WAL"><span class="toc-number">5.</span> <span class="toc-text">Buffer Pool &amp; GroupCommit &amp; WAL</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Lock-Release-and-Logical-Undo"><span class="toc-number">6.</span> <span class="toc-text">Lock Release and Logical Undo</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#ARIES"><span class="toc-number"></span> <span class="toc-text">ARIES</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Commit"><span class="toc-number">0.1.</span> <span class="toc-text">Commit</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Abort"><span class="toc-number">0.2.</span> <span class="toc-text">Abort</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Fuzzy-Checkpoint"><span class="toc-number">1.</span> <span class="toc-text">Fuzzy Checkpoint</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Big-Picture"><span class="toc-number">1.1.</span> <span class="toc-text">Big Picture</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Recover"><span class="toc-number">1.2.</span> <span class="toc-text">Recover</span></a></li></ol></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Database Recover System
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2021-08-06T18:01:46.000Z" itemprop="datePublished">2021-08-07</time>
+        
+      
+    </div>
+
+
+      
+
+      
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/database/" rel="tag">database</a>
+    </div>
+
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>对于一个 DB 系统而言，大概要考虑这些错误：</p>
+<ol>
+<li>transaction failure<ol>
+<li>Logical error: 例如 db 的资源不够，输入错误等问题</li>
+<li>System error:  数据库系统进入了诸如死锁之类的状态</li>
+</ol>
+</li>
+<li>System Crash: 硬件故障或者系统故障，可能导致持久存储上的数据损坏。（与这个相反，程序崩溃之后，不会影响持久数据的假设，成为 fail-stop assumption）。精心设计的系统即使出现逻辑 bug，也会有一些 <code>assert</code> 等方式，让系统不至于出现数据损坏，所以这个模型还是可信的。</li>
+<li>Disk failure: 简单说就是盘坏了。</li>
+</ol>
+<p>今天这里不会介绍 HA 和 replica 相关的内容，因此，对于磁盘丢失数据我们略过不表。系统希望从崩溃的状态恢复的话，应该可以很粗糙的被分为两个阶段：</p>
+<ol>
+<li>系统正常运行的时候需要做的事情，用于在出现故障的时候，恢复系统的状态</li>
+<li>系统出现故障后，恢复系统的状态。</li>
+</ol>
+<p>（系统的状态可以简单理解成 ACID 或者给用户提供的语义。）</p>
+<h3 id="存储模型"><a href="#存储模型" class="headerlink" title="存储模型"></a>存储模型</h3><p>这个标题名称似乎有些让人困惑，但实际上，后续很多算法都需要依赖一个靠谱的存储层。对于单机 RDBMS 而言，它提供的语义可能类似 block. 并且，可以简单拆分成下面几项：</p>
+<ol>
+<li>volatile storage</li>
+<li>non-volatile storage</li>
+<li>stable storage</li>
+</ol>
+<p>(1) 类似于我们的 memory system, (2) 可以视作简单的盘。(3) 提供了一种数据很难丢失、损坏的语义。通常来说，需要靠 RAID/备份等方式来实现 (3) 这样稳定的存储/块存储语义。同时，写盘也可能出现问题，在写入存储的时候，可能有下列的 case:</p>
+<ol>
+<li>sucessful completion</li>
+<li>total failure</li>
+<li>partial failure</li>
+</ol>
+<p>(3) 实际上是很多问题的来源，为了解决这种 case，需要 CRC/double write 等不同方式。</p>
+<p>下面这里抽象了一下写盘的语义。</p>
+<p><img src="https://image.mwish.me/blog-image/B7CC2AA7-1F2E-4AF0-A477-C69B4143FE4D.png" alt="B7CC2AA7-1F2E-4AF0-A477-C69B4143FE4D"></p>
+<h3 id="Recover-and-Atomicity"><a href="#Recover-and-Atomicity" class="headerlink" title="Recover and Atomicity"></a>Recover and Atomicity</h3><ul>
+<li>Force: 事务完成之后，修改的 page 是否强制要求刷盘</li>
+<li>Steal: 事务完成之前，能否把 Page 刷盘</li>
+</ul>
+<p><img src="https://image.mwish.me/blog-image/3237a0f02b383bd05a61a0f21696d722119.jpg" alt="3237a0f02b383bd05a61a0f21696d722119"></p>
+<p>不妨看看上面的图，实际上做了一个很清晰的定量分析。等等，这是不是说，没有 log 也行呢？</p>
+<p>实际上 BoltDB(虽然只是个 kv) 就提供了这样的能力，它不需要写 wal。本身依靠 cow 来实现这些逻辑：</p>
+<ol>
+<li>系统限制只有一个写事务</li>
+<li>每次修改后，会在新的存储空间上做写入 Page</li>
+<li>commit 的时候，强制刷盘，并且更新 meta，保证下次读到对应的内容</li>
+</ol>
+<p>实际上，它的 Recover 也简单，看一下 2个元数据块是否正常，两个都不正常就节哀了，一个不正常挑正常的，两个都正常挑事务 id 大的。</p>
+<p>如果允许并发写的话，问题需要麻烦很多，早期的 sqlite 对这种模式提供了支持：</p>
+<ol>
+<li>事务会把修改前的 Page 写到 Journal File 空间上</li>
+<li>恢复的时候，会用 Journal File 上的 Page 来提供恢复</li>
+</ol>
+<p>以上类似 cow 或者 shadow paging 的方式可以比较简单的实现一些事物的语义，同时，它们相对于 logging protocol 来说可能开销是更大的。它相当于 force + no steal：</p>
+<p><img src="https://image.mwish.me/blog-image/B9C1A5D0-F0ED-40FF-9241-D0217C9E0F3D.png" alt="B9C1A5D0-F0ED-40FF-9241-D0217C9E0F3D"></p>
+<h4 id="WAL-Protocol"><a href="#WAL-Protocol" class="headerlink" title="WAL Protocol"></a>WAL Protocol</h4><p>这里提供了物理日志和 wal 协议，这里，日志包含: <code>&lt; txn id, object id, Before Value (for undo), after value( for redo)&gt;</code>, 这里可以记作 <code>&lt;T_i, X_j, V_1, V_2&gt;</code> （我感觉这个是一个很简化的模型了，是不是还要处理 delete/insert 之类的）. 同时，这里需要和事务有关的信息, 比如: <code>&lt;Txn i begin&gt;</code> <code>&lt;Txn i Commit&gt;</code> <code>&lt;Txn i Abort&gt;</code>。 log 需要被写到 stable storage 中。</p>
+<p>另一点要说的就是对 block 的写入，我们回到 steal/force 的 case:</p>
+<ol>
+<li>可能事务完成前就刷了写入过的盘，这个时候，假设事务 abort 了，显然，我们需要 <code>undo</code> 这些变更</li>
+<li>可能事务完成后，没有写入 block，这个时候，假设事务 commit 了，显然，我们需要 redo 这些变更</li>
+</ol>
+<p>同时，需要考虑的还有 concurrency control 的语义：同一个 <code>object</code>, 被 txn1 写入之后，在 txn1 commit/abort 之前被 txn2 写入了应该怎么办呢？幸运的是，如果我们采用的是 strict 2PL 协议，这里并不会有这种情况。而 ts 协议大部分时候也避免了这种情况。当然，后面我们会提到，如果希望提前 release lock, 有什么方法能补救这个 case。</p>
+<p><img src="https://image.mwish.me/blog-image/8F0DB468-C10C-494F-94EA-B07F6CB31D27.png" alt="8F0DB468-C10C-494F-94EA-B07F6CB31D27"></p>
+<p>上述是一个对应的序列，那么，能够看到对应的 log:</p>
+<p><img src="https://image.mwish.me/blog-image/7A403DB0-0619-47BE-B172-3A6CF821350C.png" alt="7A403DB0-0619-47BE-B172-3A6CF821350C"></p>
+<p>假设在上述任何一个节点 system crash 了，我们都要走下面两个状态：</p>
+<ol>
+<li><code>redo(T_i)</code>: 这个过程在从前往后扫 wal 的时候发生，对于任何一个 start 的记录，它会把日志中的操作 replay 一遍。</li>
+<li><code>undo(T_i)</code>: 这里不仅要 <code>undo</code> 对应的记录，也要写下对应的 undo 相关的恢复日志 (比如 <code>&lt;T_i, record, before value&gt;</code>，完成的时候也需要写 <code>&lt;T_i, abort&gt;</code>, 防止下次 recover 的时候，还需要恢复这样的状态。</li>
+</ol>
+<p>所以，这里有个简单的 recover 协议：</p>
+<ol>
+<li>T_i 在有 <code>start</code>, 但是没有 <code>commit</code>, 也没有 <code>abort</code> 的时候，需要被 undo</li>
+<li>在事务有对应 <code>commit</code> 或者 <code>abort</code> 的时候需要 redo。<code>abort</code> 的时候为什么要 redo 呢？因为我们刚看到，abort 的时候需要把恢复对应的日志写下来，再 abort。</li>
+</ol>
+<h3 id="Checkpoints-ckpt"><a href="#Checkpoints-ckpt" class="headerlink" title="Checkpoints (ckpt)"></a>Checkpoints (ckpt)</h3><p>上面的内容暗示了日志的全量 scan, 实际上日志肯定要 GC 的，这里给出了一种方法：ckpt, 它暗示之前的 wal 都不重要了：</p>
+<ol>
+<li>把所有留在内存中的日志写到 storage 上</li>
+<li>把所有的 dirty block 写到 storage 上</li>
+<li>写下 <code>&lt;checkpoint &#123;active Txn1, active Txn2, ...&#125;&gt;</code> 日志，表示还活跃的 txn 有哪些。</li>
+</ol>
+<p>这些活跃事务之前的 txn 都已经在 block 中了。那么，恢复的时候，只要找到最近的一条 ckpt 日志，然后开始恢复即可。</p>
+<p>当然，这在性能上带来了一些问题：把所有 dirty block 写到 storage 上，再写 ckpt 日志的时候，事务如果再进行更新并写 log，就会导致 ckpt 之前会有一些不在 disk 上的 log, 导致 ckpt 并没有这么有用。这里可以用 fuzzy checkpoint 来尝试解决这个问题。</p>
+<h3 id="Recover-Processing"><a href="#Recover-Processing" class="headerlink" title="Recover Processing"></a>Recover Processing</h3><p>上述几个部分主要描述的是“系统正常工作的时候，如果希望后来系统是可以 Recover 的，需要做什么</p>
+<h4 id="正常事务-abort-的回滚"><a href="#正常事务-abort-的回滚" class="headerlink" title="正常事务 abort 的回滚"></a>正常事务 abort 的回滚</h4><p>如果 <code>Ti</code> 需要被 rollback, 那么它会反向 scan 日志，对于每一条 <code>&lt;Ti, Xj, V1, V2&gt;</code> 的日志。逻辑大概是：</p>
+<ol>
+<li>Xj 被还原到 V1</li>
+<li>写下一条 <code>&lt;Ti, Xj, V1&gt;</code> 的恢复日志。这条日志是不需要被 undo 的。这些日志被称为 compensation log records (CLRs).</li>
+<li>一旦 <code>&lt;Ti, start&gt;</code> 的开始日志被反向 scan 找到，日志恢复结束，写一条 <code>&lt;Ti abort&gt;</code> 的日志。</li>
+</ol>
+<h4 id="System-Crash-后的恢复"><a href="#System-Crash-后的恢复" class="headerlink" title="System Crash 后的恢复"></a>System Crash 后的恢复</h4><ol>
+<li>redo 阶段中，先需要找到最近的一个 ckpt，然后 replay redo logs</li>
+<li>同时，这里应该需要维护一个需要被补充 abort 的事务状态表 undo-list。ckpt 有一个活跃状态列表，同时，事务 start 的时候，会被加到这个列表里，有事务对应的 commit 和 abort 的日志时，可以从这个列表中排出。</li>
+<li>这个时候有一个 undo-list, 对着这个 undo-list 反向 scan, 进行正常事务 abort 的回滚操作，直到 undo-list 为空，即找到 undo-list 中最早 start 的事务的 log (感觉这表示这之前的 log 都可以 GC 掉)</li>
+</ol>
+<p><img src="https://image.mwish.me/blog-image/5730DEF8-A0F4-4034-8ADC-FCCD841C7709.png" alt="5730DEF8-A0F4-4034-8ADC-FCCD841C7709"></p>
+<h3 id="Buffer-Pool-amp-GroupCommit-amp-WAL"><a href="#Buffer-Pool-amp-GroupCommit-amp-WAL" class="headerlink" title="Buffer Pool &amp; GroupCommit &amp; WAL"></a>Buffer Pool &amp; GroupCommit &amp; WAL</h3><p>下面是一些优化。写入的时候，可以写到 Buffer Pool 里面，然后把 Page Mark 成 dirty 的，按需求异步去写盘。某种意义上，这降低了写放大，但是也导致 BTree 有些逻辑比较难 tunning.</p>
+<p>同时，wal 也可以 buffering, 但是这里需要注意的是，如果 wal 都做了 buffer, 需要有下面的约束：</p>
+<ol>
+<li>当且仅当 <code>&lt;Ti, Commit&gt;</code> 日志写进持久存储之后，Ti 才可被视作提交</li>
+<li><code>&lt;Ti, Commit&gt;</code> 写进存储的时候，<code>Ti</code> 相关的所有日志必须已经顺序落盘</li>
+<li>Block 在写入的时候，需要保证，这个 Block/Page 有关的日志全部被 flush 了。</li>
+</ol>
+<p>同时，显而易见，Commit 的时候，需要有落盘的开销。对于 SSD，这可能是 ~100us 的级别，对于 HDD，可能是 ~ms 的级别。这个时候，可以靠 Group Commit 来解决这个问题。这可能是增大单次写的 latency ，但是把写入的 IO 数量减少了，并均摊了写入的时间，优化了写入。</p>
+<p>此外，事务可以 Batch 的来处理 insert/delete/update 请求，来作为优化。</p>
+<h3 id="Lock-Release-and-Logical-Undo"><a href="#Lock-Release-and-Logical-Undo" class="headerlink" title="Lock Release and Logical Undo"></a>Lock Release and Logical Undo</h3><p>作为实现来说，对于 inc/dec 类的操作，简单做成: read + set，然后写物理日志是没问题的。但是，如果希望在这里增大并发的话，就会有一些奇怪的问题了。2PL 提到过，这里可能会有 cascading abort 的概念。</p>
+<p>但是实际上，这里也可以用 logicial undo log records 来做一些优化。</p>
+<p><img src="https://image.mwish.me/blog-image/680871EA-B3FF-4A6B-AA3F-27AD38EFE3B9.png" alt="680871EA-B3FF-4A6B-AA3F-27AD38EFE3B9"></p>
+<p>如上图，这里把 inc/dec 做到了 log 里，用逻辑日志来做对应的操作。</p>
+<p>在日志修改索引之前，txn 会创建 <code>&lt;Ti, Oj, operation-begin&gt;</code> 的日志记录。<code>Oj</code> 是对象的标示。</p>
+<p>这里写的时候，实际上也需要写物理日志，标志 prev 和 new value。写完之后，需要写一条逻辑日志，表示更新的操作。</p>
+<p><img src="https://image.mwish.me/blog-image/DDBA46660D2612F7B7B0E79ACA89B8C3.png" alt="DDBA46660D2612F7B7B0E79ACA89B8C3"></p>
+<p>这里，rollback 和 recover 的时候，可以遵照逻辑日志的语义：</p>
+<ol>
+<li>不完整的（没有 operation-end 的逻辑日志）会被物理日志 resolve。<ol>
+<li>没有 operation-end 可能表示对这个 tuple/对象 的锁定还没有释放，默认这种行为是串行的</li>
+</ol>
+</li>
+<li>有 operation-end 的逻辑日志会用逻辑日志的信息回滚，并生成一个 operation-abort 的日志</li>
+<li>跳过这个事务的日志，直到找到对应的 operation-begin</li>
+<li>如果往前扫的途中，找到了一个 operation-abort, 那么他会跳过这个 Ti 对这个 object 所有的操作</li>
+<li>直到结束</li>
+</ol>
+<h2 id="ARIES"><a href="#ARIES" class="headerlink" title="ARIES"></a>ARIES</h2><p>我们之前的描述中，recover 会 scan ckpt 以来所有的日志，然后给 block/page 来 replay 这些 redo 日志，再反向去 undo. 这些流程实际上可能还会把内存中所有 page 变成 dirty 的，同时，也带来了很低的效率。同时，ckpt 的过程相对来说也是低效的。</p>
+<p>ARIES: A Transaction Recovery Method Supporting Fine-Granularity Locking and Partial Rollbacks Using Write-Ahead Logging 提出了 ARIES, 它相对来说提供了很快的 Recover，允许上层使用细粒度的锁等方式。</p>
+<p>下面，假定这里用 Strict 2PL 的模式进行并发控制，并使用 steal + no-force 的方式控制并发。</p>
+<p>下面是一些概念：</p>
+<ol>
+<li>LSN(log sequence number): 每个日志带有的序列号</li>
+</ol>
+<p>然后系统很多地方都会带有这个 LSN:</p>
+<div class="table-container">
+<table>
+<thead>
+<tr>
+<th style="text-align:center">name</th>
+<th>where</th>
+<th>definition</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center">flushedLSN</td>
+<td>Memory</td>
+<td>磁盘上的日志中，最大的 log id (即 flush 过的最大日志的 id)</td>
+</tr>
+<tr>
+<td style="text-align:center">pageLSN</td>
+<td>per page (memory)</td>
+<td>对这个 Page 最近的写入的 log id, 在内存中</td>
+</tr>
+<tr>
+<td style="text-align:center">recLSN</td>
+<td>per page (memory / disk)</td>
+<td>这个 Page 上次 flush 的时候，最大的 log id, 在内存和盘上都有</td>
+</tr>
+<tr>
+<td style="text-align:center">lastLSN</td>
+<td>per transaction</td>
+<td>事务最后写入的 LSN</td>
+</tr>
+<tr>
+<td style="text-align:center">MasterRecord</td>
+<td>disk</td>
+<td>上个 ckpt 的 LSN</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>然后同理，根据之前的 wal 协议，我们要保证：任何时候，任何 <code>pageLSN</code>  小于 <code>flushedLSN</code>。</p>
+<h4 id="Commit"><a href="#Commit" class="headerlink" title="Commit"></a>Commit</h4><ol>
+<li>写 Commit 日志</li>
+<li>等待 Commit 和之前的所有日志被 flush 到盘上，并更新 flushedLSN. 内存中小于 flushedLSN 的记录可以被清除。</li>
+<li>写一条 <code>TXN-END</code> 记录, 不要求立刻 flush</li>
+</ol>
+<h4 id="Abort"><a href="#Abort" class="headerlink" title="Abort"></a>Abort</h4><p>相对于我们之前的物理日志，这里要加上一些额外的字段：</p>
+<ul>
+<li><code>prevLSN</code> 同一个事务的上一条 LSN，这可以把一个事务的日志穿成一个单向链表</li>
+</ul>
+<p>abort 的时候，这里也要写 CLR，相对我们之前记录的 CLR，这里也增加了内容：</p>
+<ul>
+<li><code>undoNext</code> 指针，就是 undo 一条 CLR 只有，根据 <code>prevLSN</code> 的记录，找到的下一条要恢复的 redo 日志</li>
+</ul>
+<p><img src="https://image.mwish.me/blog-image/48E33312-9C7C-489B-986E-DE0726829AEC.png" alt="48E33312-9C7C-489B-986E-DE0726829AEC"></p>
+<p>相对来说，这些记录能在 crash 的时候，提高恢复的速度。</p>
+<p>crash 的时候，这里会：</p>
+<ol>
+<li>写一套 abort 的记录</li>
+<li>写对应的 CLR, 然后沿着版本链 undo</li>
+<li>写 <code>TXN-END</code></li>
+</ol>
+<h3 id="Fuzzy-Checkpoint"><a href="#Fuzzy-Checkpoint" class="headerlink" title="Fuzzy Checkpoint"></a>Fuzzy Checkpoint</h3><p>checkpoint 需要把所有的 dirty page 刷到存储中，这段时间都要 stop-all-txns, 然后要 flush the buffer。fuzzy checkpoint  可以提供一个模糊的 ckpt，这里需要记录事务和 Page 相关的内部状态，所以需要两个 Table:</p>
+<ul>
+<li>Active Transaction Table (ATT)<ul>
+<li>txnId: txn id</li>
+<li>status: 现在事务的状态，分为 <code>Running</code>, <code>Committing</code>, <code>Candidate for undo</code></li>
+<li><code>lastLSN</code>: 事务上一次修改的 <code>LSN</code></li>
+</ul>
+</li>
+<li>Dirty Page Table (DPT)<ul>
+<li>记录了 page 和 <code>recLSN</code></li>
+</ul>
+</li>
+</ul>
+<p>这里相对来说，就不用 flush all, 而是说记录了哪些 Page 是 dirty 的。</p>
+<p><img src="https://image.mwish.me/blog-image/E922642E-C55C-446D-824D-55CE92802225.png" alt="E922642E-C55C-446D-824D-55CE92802225"></p>
+<p>这里 flush 的时候，知道 Page 是 dirty 的。可能需要前面一些的日志，来恢复这些 Txn, 当然这里 att 也能拿到 <code>lastLSN</code>, 来比较快的定位。</p>
+<p>当然，这里也要求，写一条 <code>CHECKPOINT</code> 日志的时候，这中间把这条日志刷下去之前，还需要上锁和短暂的 stop，这里是想保证写入 <code>CHECKPOINT</code> 的时候，之前不会出现别的变更日志，让 <code>ATT</code> 和 <code>DPT</code> 的这里还有一种优化，让这个日志写两条：</p>
+<ol>
+<li><code>CHECKPOINT-BEGIN</code> : 逻辑上的 ckpt 实践</li>
+<li><code>CHECKPOINT-END</code>: 包含 ATT + DPT</li>
+</ol>
+<p>这实际上就是把日志拆成了两条，然后延缓了这个状态。虽然这里也要有小小的 stall。</p>
+<p><img src="https://image.mwish.me/blog-image/0FCE87D0-00D0-4ABE-824D-D917EFCD47B8.png" alt="0FCE87D0-00D0-4ABE-824D-D917EFCD47B8"></p>
+<p>同时，当 <code>checkpoint</code> 写入完成的时候 <code>checkpoint-begin</code> 需要更新到 <code>MasterRecord</code>。这里相当于，<code>checkpoint-begin</code> 到 <code>checkpoint-end</code> 之间的事务，不会纪录到 ATT 中。</p>
+<h4 id="Big-Picture"><a href="#Big-Picture" class="headerlink" title="Big Picture"></a>Big Picture</h4><p>在进入 Recover 之前，让我们对这些结构都有一个全局印象吧：</p>
+<p><img src="https://image.mwish.me/blog-image/BEC1863C-DDBE-4E43-9C58-B8998B652C4D.png" alt="BEC1863C-DDBE-4E43-9C58-B8998B652C4D"></p>
+<h4 id="Recover"><a href="#Recover" class="headerlink" title="Recover"></a>Recover</h4><p>这里 recover 分为三个阶段（还记得之前的 redo/undo 吗）：</p>
+<ol>
+<li>analysis</li>
+<li>redo</li>
+<li>undo</li>
+</ol>
+<p>analysis 阶段中：</p>
+<ol>
+<li>先找到 MasterRecord, 这里对应了一个存储里最新的 <code>BEGIN-CHECKPOINT</code>.</li>
+<li>构建 ATT 和 DPT，这里 <code>CHECKPOINT-END</code> 可以帮助构建 ATT，别的状态刚进来是 UNDO</li>
+<li>ATT 而言，对于剩下的日志：<ol>
+<li>如果来了一个事务，把它状态设置成UNDO</li>
+<li>如果事务提交了，设置成 COMMIT</li>
+<li>如果找到了 <code>TXN-END</code>, 也要从 ATT 中移除。</li>
+</ol>
+</li>
+<li>DPT 而言，对于剩下的写入：<ol>
+<li>如果 Page 不再 DPT 中，把 P 增加到 DPT 中，然后初始化它的 <code>recLSN</code></li>
+</ol>
+</li>
+</ol>
+<p>在 analysis 阶段中，构建了完整的  ATT/DPT.</p>
+<p>在 DPT 中，这里记录了 Page 的 recLSN, 这里找到最小的 recLSN, 然后开始对对应的 Page 来 replay:</p>
+<ol>
+<li>如果 Page 不在 DPT 中，跳过这条日志</li>
+<li>如果 Page 的 LSN 不小于日志 LSN，跳过</li>
+<li>否则，apply log, 并且设置内存中的  <code>pageLSN</code></li>
+<li>redo 完之后，给对应的事务写上 TXN-END 记录，并且从 ATT 中移除</li>
+</ol>
+<p>UNDO 阶段中，这里可以用 lastLSN 来加速查找，并且写入 <code>CLR</code></p>
+<p>ARIES 这边支持的 redo 是 Physiological REDO logging + Logical UNDO，用来提供相关的性能支持。Physiological REDO 可以进行，因为本身通过 Page 来定位，用 LSN 来让操作是幂等的。</p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AD%98%E5%82%A8%E6%A8%A1%E5%9E%8B"><span class="toc-number">1.</span> <span class="toc-text">存储模型</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Recover-and-Atomicity"><span class="toc-number">2.</span> <span class="toc-text">Recover and Atomicity</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#WAL-Protocol"><span class="toc-number">2.1.</span> <span class="toc-text">WAL Protocol</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Checkpoints-ckpt"><span class="toc-number">3.</span> <span class="toc-text">Checkpoints (ckpt)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Recover-Processing"><span class="toc-number">4.</span> <span class="toc-text">Recover Processing</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%AD%A3%E5%B8%B8%E4%BA%8B%E5%8A%A1-abort-%E7%9A%84%E5%9B%9E%E6%BB%9A"><span class="toc-number">4.1.</span> <span class="toc-text">正常事务 abort 的回滚</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#System-Crash-%E5%90%8E%E7%9A%84%E6%81%A2%E5%A4%8D"><span class="toc-number">4.2.</span> <span class="toc-text">System Crash 后的恢复</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Buffer-Pool-amp-GroupCommit-amp-WAL"><span class="toc-number">5.</span> <span class="toc-text">Buffer Pool &amp; GroupCommit &amp; WAL</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Lock-Release-and-Logical-Undo"><span class="toc-number">6.</span> <span class="toc-text">Lock Release and Logical Undo</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#ARIES"><span class="toc-number"></span> <span class="toc-text">ARIES</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Commit"><span class="toc-number">0.1.</span> <span class="toc-text">Commit</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Abort"><span class="toc-number">0.2.</span> <span class="toc-text">Abort</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Fuzzy-Checkpoint"><span class="toc-number">1.</span> <span class="toc-text">Fuzzy Checkpoint</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Big-Picture"><span class="toc-number">1.1.</span> <span class="toc-text">Big Picture</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Recover"><span class="toc-number">1.2.</span> <span class="toc-text">Recover</span></a></li></ol></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2021/08/07/Database-Recover-System/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2021/08/07/Database-Recover-System/&text=Database Recover System"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2021/08/07/Database-Recover-System/&title=Database Recover System"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2021/08/07/Database-Recover-System/&is_video=false&description=Database Recover System"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Database Recover System&body=Check out this article: http://blog.mwish.me/2021/08/07/Database-Recover-System/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2021/08/07/Database-Recover-System/&title=Database Recover System"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2021/08/07/Database-Recover-System/&title=Database Recover System"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2021/08/07/Database-Recover-System/&title=Database Recover System"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2021/08/07/Database-Recover-System/&title=Database Recover System"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2021/08/07/Database-Recover-System/&name=Database Recover System&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2021/08/07/Database-Recover-System/&t=Database Recover System"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

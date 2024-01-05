@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="RISC-V 入门 Part2: ABI &amp;&amp; Calling Convention长度单位：  b byte h halfword w word  i 的尾坠代表 imm, 立即数, 比如 addi, andi jump 基于jalr ，这个 r 是 register。  u类指令格式:  lui: load upper immediate, 用于构造一个 32-bit cons">
+<meta property="og:type" content="article">
+<meta property="og:title" content="RISC-V 入门 Part2: ABI &amp;&amp; Calling Convention">
+<meta property="og:url" content="http://blog.mwish.me/2020/06/07/RISC-V-%E5%85%A5%E9%97%A8-Part2/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="RISC-V 入门 Part2: ABI &amp;&amp; Calling Convention长度单位：  b byte h halfword w word  i 的尾坠代表 imm, 立即数, 比如 addi, andi jump 基于jalr ，这个 r 是 register。  u类指令格式:  lui: load upper immediate, 用于构造一个 32-bit cons">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/DC87168C-5240-43EA-9A36-40D0E23563F3.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/8D576B0E-28AC-450C-9752-9088942AB8C4.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/C5B138C9-1928-4101-A199-E972CF81657F.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/B488D822-AF29-4ACB-82B0-D02416ADCA81.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/QQ20201003-0.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/6F1CCA2D-7402-4958-92E0-14B74AED1E8E.png">
+<meta property="article:published_time" content="2020-06-07T07:03:53.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.564Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/DC87168C-5240-43EA-9A36-40D0E23563F3.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>RISC-V 入门 Part2: ABI &amp;&amp; Calling Convention</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2020/06/17/OS-%E5%92%8C-Virtual-Memory-RISC-V-%E8%A7%86%E8%A7%92/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2020/06/02/LevelDB-memtable/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/06/07/RISC-V-%E5%85%A5%E9%97%A8-Part2/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/06/07/RISC-V-%E5%85%A5%E9%97%A8-Part2/&text=RISC-V 入门 Part2: ABI &amp;&amp; Calling Convention"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/06/07/RISC-V-%E5%85%A5%E9%97%A8-Part2/&title=RISC-V 入门 Part2: ABI &amp;&amp; Calling Convention"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/06/07/RISC-V-%E5%85%A5%E9%97%A8-Part2/&is_video=false&description=RISC-V 入门 Part2: ABI &amp;&amp; Calling Convention"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=RISC-V 入门 Part2: ABI &amp;&amp; Calling Convention&body=Check out this article: http://blog.mwish.me/2020/06/07/RISC-V-%E5%85%A5%E9%97%A8-Part2/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/06/07/RISC-V-%E5%85%A5%E9%97%A8-Part2/&title=RISC-V 入门 Part2: ABI &amp;&amp; Calling Convention"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/06/07/RISC-V-%E5%85%A5%E9%97%A8-Part2/&title=RISC-V 入门 Part2: ABI &amp;&amp; Calling Convention"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/06/07/RISC-V-%E5%85%A5%E9%97%A8-Part2/&title=RISC-V 入门 Part2: ABI &amp;&amp; Calling Convention"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/06/07/RISC-V-%E5%85%A5%E9%97%A8-Part2/&title=RISC-V 入门 Part2: ABI &amp;&amp; Calling Convention"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/06/07/RISC-V-%E5%85%A5%E9%97%A8-Part2/&name=RISC-V 入门 Part2: ABI &amp;&amp; Calling Convention&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/06/07/RISC-V-%E5%85%A5%E9%97%A8-Part2/&t=RISC-V 入门 Part2: ABI &amp;&amp; Calling Convention"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#RISC-V-%E5%85%A5%E9%97%A8-Part2-ABI-amp-amp-Calling-Convention"><span class="toc-number">1.</span> <span class="toc-text">RISC-V 入门 Part2: ABI &amp;&amp; Calling Convention</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#C-to-RISC-V"><span class="toc-number">1.1.</span> <span class="toc-text">C to RISC-V</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Stack-Pointer-amp-Frame-Pointer-amp-Memory"><span class="toc-number">1.2.</span> <span class="toc-text">Stack Pointer &amp; Frame Pointer &amp; Memory</span></a></li></ol></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        RISC-V 入门 Part2: ABI &amp;&amp; Calling Convention
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2020-06-07T07:03:53.000Z" itemprop="datePublished">2020-06-07</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <h1 id="RISC-V-入门-Part2-ABI-amp-amp-Calling-Convention"><a href="#RISC-V-入门-Part2-ABI-amp-amp-Calling-Convention" class="headerlink" title="RISC-V 入门 Part2: ABI &amp;&amp; Calling Convention"></a>RISC-V 入门 Part2: ABI &amp;&amp; Calling Convention</h1><p>长度单位：</p>
+<ul>
+<li><code>b</code> byte</li>
+<li><code>h</code> halfword</li>
+<li><code>w</code> word</li>
+</ul>
+<p><code>i</code> 的尾坠代表 <code>imm</code>, 立即数, 比如 <code>addi</code>, <code>andi</code></p>
+<p><code>jump</code> 基于<code>jalr</code> ，这个 <code>r</code> 是 register。</p>
+<hr>
+<p>u类指令格式:</p>
+<ul>
+<li><code>lui</code>: load upper immediate, 用于构造一个 32-bit constants</li>
+<li><code>auipc</code>: add upper immediate to PC. PC +  偏移量写入 <code>register</code></li>
+</ul>
+<hr>
+<p>我们上一个 Part 介绍了 bne 等 conditional branch，此外还有难理解一些的 unconditional branch. 例如伪指令 <code>j</code>, 它基于 <code>jal</code>, 即 jump and link 实现：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">jal rd offset</span><br><span class="line">jalr rd rs (offset)</span><br></pre></td></tr></table></figure>
+<p>jal 用来实现函数调用的语义：它 PC 跳转 <code>offset</code> （长度为 20bits），或者对应的寄存器，然后把 PC + 4 （RV32I 指令长度是 32bit, 即 4Byte，表示下一条指令）写到 <code>rd</code> 寄存器。</p>
+<p><code>jal</code> 用来实现函数调用和循环中的 unconditional jump.</p>
+<h2 id="C-to-RISC-V"><a href="#C-to-RISC-V" class="headerlink" title="C to RISC-V"></a>C to RISC-V</h2><p><img src="https://image.mwish.me/blog-image/DC87168C-5240-43EA-9A36-40D0E23563F3.png" alt="DC87168C-5240-43EA-9A36-40D0E23563F3"></p>
+<p>上面这张图 cmu 15-445 有更好玩的版本。</p>
+<p><img src="https://image.mwish.me/blog-image/8D576B0E-28AC-450C-9752-9088942AB8C4.png" alt="8D576B0E-28AC-450C-9752-9088942AB8C4"></p>
+<p>这里面写了调用一个函数的6步，即函数调用规范(<strong>Calling convention</strong>) . </p>
+<ul>
+<li>把函数参数放到函数能访问的地方</li>
+<li>把控制权给函数（使用 <code>jal</code> 指令）</li>
+<li>拿到 memory 中的资源 （获取函数需要的局部存储资源，按需保存寄存器）</li>
+<li>运行函数中的指令</li>
+<li>把值写到 memory/register 中 （将返回值存储到调用者能够访问到的位置，恢复寄存器，释放局部存储资源）</li>
+<li>返回 ( <code>ret</code> 指令)</li>
+</ul>
+<p>寄存器有 <em>caller-saved</em> 和 <em>callee-saved</em> 两种：</p>
+<ul>
+<li><em>caller-saved</em>: callee 可以随便搞，从这里读数据，然后操作它们</li>
+<li><em>callee-saved</em>: callee 在返回前应该保存的</li>
+</ul>
+<p>ABI：调用其它函数时，关于汇编、参数、寄存器等的双方约定。（我觉得有几个答案补充的很好）. 实际上 ABI 兼容性是一个和编译器等都有关的话题。ABI 定义了 calling convention，同时 ABI 定义了约束：有些寄存器是不可写的。</p>
+<p>同时，你可以在上面的图里面看到很奇妙的事情，这里没有再使用 <code>x0</code> - <code>x15</code> 这样的记号，而是用了 <code>s0</code> <code>fp</code> 这样相对来说名字好理解一些的。</p>
+<hr>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">int</span> <span class="title">Leaf</span><span class="params">(<span class="type">int</span> g, <span class="type">int</span> h, <span class="type">int</span> i, <span class="type">int</span> j)</span> </span>&#123;</span><br><span class="line">    <span class="type">int</span> f;</span><br><span class="line">    f = (g + h) - (i + j);</span><br><span class="line">    <span class="keyword">return</span> f;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>用 <code>riscv64-unknown-elf-gcc</code> 编译</p>
+<p>可以看到，为了存放旧的值，需要 stack.<code>sp</code> 寄存器和 stack 有关，同时有 push/pop. 鉴于 stack 是自顶向下生长的，push 会减小 <code>sp</code>, pop 会增大 <code>sp</code></p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">✗ riscv64-unknown-elf-gcc -march=rv32imac -mabi=ilp32 -S leaf.c </span><br></pre></td></tr></table></figure>
+<p>编译一下 leaf:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br></pre></td><td class="code"><pre><span class="line">	.file	&quot;leaf.c&quot;</span><br><span class="line">	.option nopic</span><br><span class="line">	.attribute arch, &quot;rv32i2p0_m2p0_a2p0_c2p0&quot;</span><br><span class="line">	.attribute unaligned_access, 0</span><br><span class="line">	.attribute stack_align, 16</span><br><span class="line">	.text</span><br><span class="line">	.align	1</span><br><span class="line">	.globl	Leaf</span><br><span class="line">	.type	Leaf, @function</span><br><span class="line">Leaf:</span><br><span class="line">	addi	sp,sp,-48 # 修改 stack, 降低以 push 值</span><br><span class="line">	sw	s0,44(sp)   # 把 s0 写进 44(sp), s0 这里代表 frame pointer</span><br><span class="line">	addi	s0,sp,48  # s0 = sp + 48, s0 为 frame pointer</span><br><span class="line">	sw	a0,-36(s0)  # 把 a0 - a3 存了。a0-a1 用来存返回值，a0-a7 用来传参</span><br><span class="line">	sw	a1,-40(s0)</span><br><span class="line">	sw	a2,-44(s0)</span><br><span class="line">	sw	a3,-48(s0)</span><br><span class="line"></span><br><span class="line">	lw	a4,-36(s0) # 把原本 a0 a1 加载到 a4 a5</span><br><span class="line">	lw	a5,-40(s0)</span><br><span class="line">	add	a4,a4,a5   # a4 = a4 + a5</span><br><span class="line">	lw	a3,-44(s0) # a3, a5 加载</span><br><span class="line">	lw	a5,-48(s0)</span><br><span class="line">	add	a5,a3,a5	 # a5 = a3 + a5</span><br><span class="line">	sub	a5,a4,a5   # a5 = a4 - a5  这两段完成函数主要的计算</span><br><span class="line">	sw	a5,-20(s0) </span><br><span class="line">	lw	a5,-20(s0)</span><br><span class="line">	mv	a0,a5			 # a0 = a5, a0 是返回值</span><br><span class="line">	lw	s0,44(sp)	 # s0 = sp + 44</span><br><span class="line">	addi	sp,sp,48 # 修改 sp</span><br><span class="line">	jr	ra				 # ra 是 return address, 返回 ra</span><br><span class="line">	.size	Leaf, .-Leaf</span><br><span class="line">	.ident	&quot;GCC: (GNU) 9.2.0&quot;</span><br></pre></td></tr></table></figure>
+<ul>
+<li>改变 <code>s0</code> 这个 frame pointer 和 <code>sp</code> 这个 stack pointer</li>
+<li>把原来的 <code>a0 - a4</code> 放到栈上</li>
+<li>用 <code>a4 a5</code> 来运算</li>
+<li>改回 <code>sp, s0</code></li>
+<li><code>jr</code> 返回</li>
+</ul>
+<p>跳转回来的伪指令如下：</p>
+<p><img src="https://image.mwish.me/blog-image/C5B138C9-1928-4101-A199-E972CF81657F.png" alt="C5B138C9-1928-4101-A199-E972CF81657F"></p>
+<p><img src="https://image.mwish.me/blog-image/B488D822-AF29-4ACB-82B0-D02416ADCA81.png" alt="B488D822-AF29-4ACB-82B0-D02416ADCA81"></p>
+<p>顺便，<code>-O2</code> 编译的时候：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line">	.file	&quot;leaf.c&quot;</span><br><span class="line">	.option nopic</span><br><span class="line">	.attribute arch, &quot;rv32i2p0_m2p0_a2p0_c2p0&quot;</span><br><span class="line">	.attribute unaligned_access, 0</span><br><span class="line">	.attribute stack_align, 16</span><br><span class="line">	.text</span><br><span class="line">	.align	1</span><br><span class="line">	.globl	Leaf</span><br><span class="line">	.type	Leaf, @function</span><br><span class="line">Leaf:</span><br><span class="line">	add	a0,a0,a1</span><br><span class="line">	add	a2,a2,a3</span><br><span class="line">	sub	a0,a0,a2</span><br><span class="line">	ret</span><br><span class="line">	.size	Leaf, .-Leaf</span><br><span class="line">	.ident	&quot;GCC: (GNU) 9.2.0&quot;</span><br></pre></td></tr></table></figure>
+<p>这里 <code>a0, a1, a2, a3</code> 四个是参数。</p>
+<p>下面：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">int</span> <span class="title function_">mult</span><span class="params">(<span class="type">int</span>, <span class="type">int</span>)</span>;</span><br><span class="line"></span><br><span class="line"><span class="type">int</span> <span class="title function_">sumSquare</span><span class="params">(<span class="type">int</span> x, <span class="type">int</span> y)</span> &#123;</span><br><span class="line">    <span class="keyword">return</span> mult(x, x) + y;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>生成汇编：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line">	.file	&quot;ss.c&quot;</span><br><span class="line">	.option nopic</span><br><span class="line">	.attribute arch, &quot;rv32i2p0_m2p0_a2p0_c2p0&quot;</span><br><span class="line">	.attribute unaligned_access, 0</span><br><span class="line">	.attribute stack_align, 16</span><br><span class="line">	.text</span><br><span class="line">	.align	1</span><br><span class="line">	.globl	sumSquare</span><br><span class="line">	.type	sumSquare, @function</span><br><span class="line">sumSquare:</span><br><span class="line">	addi	sp,sp,-16 # reserve space on stack</span><br><span class="line">	sw	ra,12(sp)   # save ret addr</span><br><span class="line">	sw	s0,8(sp)		# 存储原来的 s0</span><br><span class="line">	mv	s0,a1				# s0 存储 y</span><br><span class="line">	mv	a1,a0				# a1 = a0 (= x)</span><br><span class="line">	call	mult</span><br><span class="line">	add	a0,a0,s0</span><br><span class="line">	lw	ra,12(sp)</span><br><span class="line">	lw	s0,8(sp)</span><br><span class="line">	addi	sp,sp,16</span><br><span class="line">	jr	ra</span><br><span class="line">	.size	sumSquare, .-sumSquare</span><br><span class="line">	.ident	&quot;GCC: (GNU) 9.2.0&quot;</span><br></pre></td></tr></table></figure>
+<hr>
+<h2 id="Stack-Pointer-amp-Frame-Pointer-amp-Memory"><a href="#Stack-Pointer-amp-Frame-Pointer-amp-Memory" class="headerlink" title="Stack Pointer &amp; Frame Pointer &amp; Memory"></a>Stack Pointer &amp; Frame Pointer &amp; Memory</h2><p>当然，以上演示的很多都在 stack 上，实际上我们可能需要打理的东西还更多：</p>
+<p><img src="https://image.mwish.me/blog-image/QQ20201003-0.png" alt="QQ20201003-0"></p>
+<p>堆/栈的分配是 ISA 的一部分（指令集同样是 ISA 的一部分）</p>
+<p><img src="https://image.mwish.me/blog-image/6F1CCA2D-7402-4958-92E0-14B74AED1E8E.png" alt="6F1CCA2D-7402-4958-92E0-14B74AED1E8E"></p>
+<p>以上是对 stack 的操作，在 x86 里面我们有原子的 push-pop, 但是这里我们得谨慎的多。</p>
+<p>看前面那个 s0 的例子，用 frame pointer(<code>s0</code>) 而不是 sp 取地址相对值. 同时我们还有 <code>fp</code>, 即 frame pointer, 它中文叫“帧指针”。</p>
+<blockquote>
+<p>The calling convention says it doesn’t matter if you use a frame pointer or not!</p>
+<p>It is just a callee saved register, so if you use it as a frame pointer…  It will be preserved just like any other saved register.</p>
+<p>But if you just use it as <strong>s0</strong>, that makes no difference!</p>
+</blockquote>
+<p>栈帧内返回地址是在local variables前还是在它们后面？ - RednaxelaFX的回答 - 知乎 <a target="_blank" rel="noopener" href="https://www.zhihu.com/question/33920941/answer/57597076">https://www.zhihu.com/question/33920941/answer/57597076</a></p>
+<p>实际上 fp sp 关系类似<code>fp</code> —  <code>sp</code> , 同时 <code>fp</code> 不是必须的，但是对 debug 而言大有裨益。</p>
+<p>接着举例子：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdlib.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">list</span> &#123;</span></span><br><span class="line">    <span class="type">void</span> *car;</span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">list</span> *<span class="title">cdr</span>;</span></span><br><span class="line">&#125; List;</span><br><span class="line"></span><br><span class="line">List *<span class="title function_">map</span><span class="params">(List *src, <span class="type">void</span> *(*f)(<span class="type">void</span> *))</span> &#123;</span><br><span class="line">    List *ret;</span><br><span class="line">    <span class="keyword">if</span> (!src)</span><br><span class="line">        <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">    ret = (List *)<span class="built_in">malloc</span>(<span class="keyword">sizeof</span>(List));</span><br><span class="line">    ret-&gt;car = (*f)(src-&gt;car);</span><br><span class="line">    ret-&gt;car = <span class="built_in">map</span>(src-&gt;cdr, f);</span><br><span class="line">    <span class="keyword">return</span> ret;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>编译一下：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br></pre></td><td class="code"><pre><span class="line">	.file	&quot;rich-list.c&quot;</span><br><span class="line">	.option nopic</span><br><span class="line">	.attribute arch, &quot;rv32i2p0_m2p0_a2p0_c2p0&quot;</span><br><span class="line">	.attribute unaligned_access, 0</span><br><span class="line">	.attribute stack_align, 16</span><br><span class="line">	.text</span><br><span class="line">	.align	1</span><br><span class="line">	.globl	map</span><br><span class="line">	.type	map, @function</span><br><span class="line">map:</span><br><span class="line">	addi	sp,sp,-16</span><br><span class="line">	sw	ra,12(sp)</span><br><span class="line">	sw	s0,8(sp) # 存储 s0-s2</span><br><span class="line">	sw	s1,4(sp) </span><br><span class="line">	sw	s2,0(sp)</span><br><span class="line">	beq	a0,zero,.L3 # is-null, a0 是 src</span><br><span class="line">	mv	s0,a0    # save src</span><br><span class="line">	li	a0,8     # a0 = 8, call malloc with size 8</span><br><span class="line">	mv	s2,a1		 # s2 = a1</span><br><span class="line">	call	malloc</span><br><span class="line">	mv	s1,a0</span><br><span class="line">	lw	a0,0(s0)</span><br><span class="line">	jalr	s2  # jalr 调用函数，a1 是一个 function</span><br><span class="line">	mv	a5,a0</span><br><span class="line">	lw	a0,4(s0)</span><br><span class="line">	sw	a5,0(s1)</span><br><span class="line">	mv	a1,s2</span><br><span class="line">	call	map</span><br><span class="line">	lw	ra,12(sp)</span><br><span class="line">	lw	s0,8(sp)</span><br><span class="line">	sw	a0,0(s1)</span><br><span class="line">	lw	s2,0(sp)</span><br><span class="line">	mv	a0,s1</span><br><span class="line">	lw	s1,4(sp)</span><br><span class="line">	addi	sp,sp,16</span><br><span class="line">	jr	ra</span><br><span class="line">.L3:						# is-null, 直接返回了</span><br><span class="line">	lw	ra,12(sp)</span><br><span class="line">	lw	s0,8(sp)</span><br><span class="line">	li	s1,0      # li rd, imm 读取立即数，这里把 s1, 即返回值，置为0</span><br><span class="line">	lw	s2,0(sp)</span><br><span class="line">	mv	a0,s1     # a0 = 0</span><br><span class="line">	lw	s1,4(sp)</span><br><span class="line">	addi	sp,sp,16</span><br><span class="line">	jr	ra</span><br><span class="line">	.size	map, .-map</span><br><span class="line">	.ident	&quot;GCC: (GNU) 9.2.0&quot;</span><br></pre></td></tr></table></figure>
+<p>这里的 requirements 是：我们会调用 <code>malloc</code>, 并在之后使用 <code>src</code> 和 <code>f</code> 参数</p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#RISC-V-%E5%85%A5%E9%97%A8-Part2-ABI-amp-amp-Calling-Convention"><span class="toc-number">1.</span> <span class="toc-text">RISC-V 入门 Part2: ABI &amp;&amp; Calling Convention</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#C-to-RISC-V"><span class="toc-number">1.1.</span> <span class="toc-text">C to RISC-V</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Stack-Pointer-amp-Frame-Pointer-amp-Memory"><span class="toc-number">1.2.</span> <span class="toc-text">Stack Pointer &amp; Frame Pointer &amp; Memory</span></a></li></ol></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/06/07/RISC-V-%E5%85%A5%E9%97%A8-Part2/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/06/07/RISC-V-%E5%85%A5%E9%97%A8-Part2/&text=RISC-V 入门 Part2: ABI &amp;&amp; Calling Convention"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/06/07/RISC-V-%E5%85%A5%E9%97%A8-Part2/&title=RISC-V 入门 Part2: ABI &amp;&amp; Calling Convention"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/06/07/RISC-V-%E5%85%A5%E9%97%A8-Part2/&is_video=false&description=RISC-V 入门 Part2: ABI &amp;&amp; Calling Convention"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=RISC-V 入门 Part2: ABI &amp;&amp; Calling Convention&body=Check out this article: http://blog.mwish.me/2020/06/07/RISC-V-%E5%85%A5%E9%97%A8-Part2/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/06/07/RISC-V-%E5%85%A5%E9%97%A8-Part2/&title=RISC-V 入门 Part2: ABI &amp;&amp; Calling Convention"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/06/07/RISC-V-%E5%85%A5%E9%97%A8-Part2/&title=RISC-V 入门 Part2: ABI &amp;&amp; Calling Convention"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/06/07/RISC-V-%E5%85%A5%E9%97%A8-Part2/&title=RISC-V 入门 Part2: ABI &amp;&amp; Calling Convention"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/06/07/RISC-V-%E5%85%A5%E9%97%A8-Part2/&title=RISC-V 入门 Part2: ABI &amp;&amp; Calling Convention"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/06/07/RISC-V-%E5%85%A5%E9%97%A8-Part2/&name=RISC-V 入门 Part2: ABI &amp;&amp; Calling Convention&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/06/07/RISC-V-%E5%85%A5%E9%97%A8-Part2/&t=RISC-V 入门 Part2: ABI &amp;&amp; Calling Convention"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

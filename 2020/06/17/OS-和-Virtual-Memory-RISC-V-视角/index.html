@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="这是个 Ring，代表我们用的 OS 软件的层次结构：  在操作系统中，我们可以看到操作系统的任务、职责：  系统开启的第一个应用 控制操作系统的 IO 开启文件系统，网络栈等服务 程序的加载器和运行程序的管理者  OS 工作的核心：  运行进程的 isolation 让系统和外部的 disk 等通信，完成 IO 等  OS 需要硬件支持的部分：  memory translation 每个运行的">
+<meta property="og:type" content="article">
+<meta property="og:title" content="OS 和 Virtual Memory: RISC-V 视角">
+<meta property="og:url" content="http://blog.mwish.me/2020/06/17/OS-%E5%92%8C-Virtual-Memory-RISC-V-%E8%A7%86%E8%A7%92/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="这是个 Ring，代表我们用的 OS 软件的层次结构：  在操作系统中，我们可以看到操作系统的任务、职责：  系统开启的第一个应用 控制操作系统的 IO 开启文件系统，网络栈等服务 程序的加载器和运行程序的管理者  OS 工作的核心：  运行进程的 isolation 让系统和外部的 disk 等通信，完成 IO 等  OS 需要硬件支持的部分：  memory translation 每个运行的">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/A379A81B-5886-404B-9DE7-B290E7A5D1BE.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/1A003613-A174-469A-87CE-3B6746CA8A47.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/交互.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/391D529F-58C6-49C2-9448-EF5A47ACCA76.png">
+<meta property="article:published_time" content="2020-06-17T13:23:20.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.554Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/A379A81B-5886-404B-9DE7-B290E7A5D1BE.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>OS 和 Virtual Memory: RISC-V 视角</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2020/07/13/Inside-C-Object-Model-%E8%AF%BB%E4%B9%A6%E7%AC%94%E8%AE%B0/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2020/06/07/RISC-V-%E5%85%A5%E9%97%A8-Part2/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/06/17/OS-%E5%92%8C-Virtual-Memory-RISC-V-%E8%A7%86%E8%A7%92/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/06/17/OS-%E5%92%8C-Virtual-Memory-RISC-V-%E8%A7%86%E8%A7%92/&text=OS 和 Virtual Memory: RISC-V 视角"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/06/17/OS-%E5%92%8C-Virtual-Memory-RISC-V-%E8%A7%86%E8%A7%92/&title=OS 和 Virtual Memory: RISC-V 视角"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/06/17/OS-%E5%92%8C-Virtual-Memory-RISC-V-%E8%A7%86%E8%A7%92/&is_video=false&description=OS 和 Virtual Memory: RISC-V 视角"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=OS 和 Virtual Memory: RISC-V 视角&body=Check out this article: http://blog.mwish.me/2020/06/17/OS-%E5%92%8C-Virtual-Memory-RISC-V-%E8%A7%86%E8%A7%92/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/06/17/OS-%E5%92%8C-Virtual-Memory-RISC-V-%E8%A7%86%E8%A7%92/&title=OS 和 Virtual Memory: RISC-V 视角"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/06/17/OS-%E5%92%8C-Virtual-Memory-RISC-V-%E8%A7%86%E8%A7%92/&title=OS 和 Virtual Memory: RISC-V 视角"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/06/17/OS-%E5%92%8C-Virtual-Memory-RISC-V-%E8%A7%86%E8%A7%92/&title=OS 和 Virtual Memory: RISC-V 视角"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/06/17/OS-%E5%92%8C-Virtual-Memory-RISC-V-%E8%A7%86%E8%A7%92/&title=OS 和 Virtual Memory: RISC-V 视角"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/06/17/OS-%E5%92%8C-Virtual-Memory-RISC-V-%E8%A7%86%E8%A7%92/&name=OS 和 Virtual Memory: RISC-V 视角&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/06/17/OS-%E5%92%8C-Virtual-Memory-RISC-V-%E8%A7%86%E8%A7%92/&t=OS 和 Virtual Memory: RISC-V 视角"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8A%9F%E8%83%BD%E5%92%8C%E4%BB%A3%E4%BB%B7"><span class="toc-number">1.</span> <span class="toc-text">功能和代价</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Context-Switch"><span class="toc-number">2.</span> <span class="toc-text">Context Switch</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#IO"><span class="toc-number"></span> <span class="toc-text">IO</span></a>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        OS 和 Virtual Memory: RISC-V 视角
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2020-06-17T13:23:20.000Z" itemprop="datePublished">2020-06-17</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>这是个 Ring，代表我们用的 OS 软件的层次结构：</p>
+<p><img src="https://image.mwish.me/blog-image/A379A81B-5886-404B-9DE7-B290E7A5D1BE.png" alt="A379A81B-5886-404B-9DE7-B290E7A5D1BE"></p>
+<p>在操作系统中，我们可以看到操作系统的任务、职责：</p>
+<ul>
+<li>系统开启的第一个应用</li>
+<li>控制操作系统的 IO</li>
+<li>开启文件系统，网络栈等服务</li>
+<li>程序的加载器和运行程序的管理者</li>
+</ul>
+<p>OS 工作的核心：</p>
+<ul>
+<li>运行进程的 isolation</li>
+<li>让系统和外部的 disk 等通信，完成 IO 等</li>
+</ul>
+<p>OS 需要硬件支持的部分：</p>
+<ul>
+<li>memory translation<ul>
+<li>每个运行的进程需要从 virtual 的进程转成物理内存</li>
+<li>program 实际处理的是虚拟内存，需要硬件支持</li>
+</ul>
+</li>
+<li>protection and privilege<ul>
+<li>需要提供 user 和 supervisor 的模式，在 RISC-V 中有 machine 和 supervisor 模式</li>
+</ul>
+</li>
+<li>更低的层次不能修改 memory mapping<ul>
+<li>supervisor 可以</li>
+<li>supervisor 有独立于用户程序的 virtual 到 physical 映射</li>
+</ul>
+</li>
+<li>提供 traps 和 interrupt，在命令层面提供了到 supervisor 的方法</li>
+</ul>
+<p>在 RISC-V 中，硬件可以提供 Control and Status Registers，即 CSR 寄存器，这是一组可以原子读写的寄存器。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">CSRRW rd rs csr</span><br></pre></td></tr></table></figure>
+<p>上述读取 <code>csr</code> 写到 <code>rd</code>, <code>rs</code> 不为0写到 <code>csr</code>。这不是普通的寄存器，用来与硬件沟通</p>
+<p>我们需要 interrupt 和 exceptions，它们的相同点和区别是：</p>
+<ul>
+<li>interrupt 是程序外部对程序的中断</li>
+<li>exception：运行程序内部丢的毛病：需要读 csr, 可能是执行了违法指令，或者读了不合法内存<ul>
+<li><code>ECALL</code> 用来实现 syscall</li>
+<li><code>EBREAK</code> 在现在的优先级引发 exception</li>
+</ul>
+</li>
+</ul>
+<p>trap 有一定的 flow: 由其他进程处理 —&gt; OS 处理</p>
+<p>在 CS61C 的定义中：</p>
+<ul>
+<li>interrupt: 由外部引起，对于程序是异步的</li>
+<li>exception: 由内部引起，同步</li>
+<li>trap: 需要跳到 hardware 处理异常，并跳到 interrupt or trap handler 的代码</li>
+</ul>
+<p>Trap:</p>
+<ul>
+<li>Trap 之前的指令都被执行，之后的指令在 trap 返回之前不能被执行</li>
+<li>很多时候，如果指定了 handler，用户会存储自己的寄存器，stack 等，然后返回。<ul>
+<li>interrupt 处理器不一定要理硬件，其他 trap 可能会有个 trap code</li>
+</ul>
+</li>
+</ul>
+<p>硬件处理 interrupt:</p>
+<ul>
+<li>硬件需要调整，大部分情况会调整到 supervisor</li>
+<li>禁止 interrupt</li>
+<li>把旧的程序的 PC 用 <code>csr</code> 指令写到 <code>sepc</code></li>
+<li>把 trap 的原因写入csr 寄存器 <code>scause</code></li>
+<li>把 PC 设置成 <code>stvec</code> 寄存器<ul>
+<li><code>stvec</code> 设置了 trap handler</li>
+<li>处理 exception</li>
+</ul>
+</li>
+</ul>
+<p>对于软件而言，需要处理的是：</p>
+<ul>
+<li>保存所有寄存器</li>
+<li>读对应的 <code>csr</code> ，发现除了什么问题</li>
+<li>恢复所有寄存器</li>
+<li>返回程序原先的位置</li>
+</ul>
+<p>保存寄存器：</p>
+<ul>
+<li>supervisor 模式下，在 <code>sscratch</code> 存储 trap handler</li>
+<li><code>csrrw x1 x1 sscratch</code> 将 x1 与 sccratch 交换</li>
+<li><code>sepc</code> 这个 CSR 寄存器处写 PC</li>
+<li>最后保存 <code>x1</code>, 恢复 <code>sscratch</code></li>
+</ul>
+<p><img src="https://image.mwish.me/blog-image/1A003613-A174-469A-87CE-3B6746CA8A47.png" alt="1A003613-A174-469A-87CE-3B6746CA8A47"></p>
+<p>所以这里先把所有 x1 相关的参数写到 <code>sscratch</code> 的位置，然后把 <code>sepc</code> 写到 x2，并继续保存它。然后恢复我们之前的，把 x1 （即原来的 <code>sscratch</code> ）写到 <code>sscratch</code> ，把原来的 <code>sscratch</code> 写到 x2。这个时候再把 <code>sscratch</code> 写回。</p>
+<p>以上流程相当于在 <code>sscratch</code> 保存 <code>x1</code> <code>x2</code> … 再保存 <code>sepc</code>。</p>
+<p>然后我们需要再后面决定之后的调用是什么：</p>
+<ul>
+<li>如果是一个 <code>ECALL</code> 指令，就执行具体的 ecall</li>
+<li>如果是不合法指令，直接 kill</li>
+<li>memory 相关的就加载内存</li>
+<li>timer interrupt 就进行 context switch</li>
+</ul>
+<p>处理完之后，我们要恢复所有的寄存器，<code>ecall</code> 需要在 <code>a0</code> 写返回值。然后调用<code>SRET</code> 指令。</p>
+<p><code>sret</code> 指令返回硬件，我们在调用 <code>sret</code> 之前要先处理 <code>ecall</code> 之后做的软件行为：</p>
+<ul>
+<li>恢复所有的寄存器</li>
+<li>恢复 <code>sepc</code>，如果是 <code>ecall</code>, 返回 PC + 4 对应的位置</li>
+<li>恢复所有的其他寄存器，<ul>
+<li>可能需要跳转到 <code>sscratch</code></li>
+<li>如果是 <code>ecall</code>，设置 <code>a0</code> 作为返回值</li>
+</ul>
+</li>
+<li>执行 <code>sret</code></li>
+</ul>
+<p><code>sret</code> 和 <code>ecall</code> 对应，有着下列的硬件行为：</p>
+<ul>
+<li>恢复 interrupt</li>
+<li>从 supervisor 回到 user level</li>
+<li><code>spec</code> 中恢复 <code>pc</code></li>
+<li>继续运行</li>
+</ul>
+<h3 id="功能和代价"><a href="#功能和代价" class="headerlink" title="功能和代价"></a>功能和代价</h3><p>interrupt 的功能：</p>
+<p>在 user mode, 程序不能控制 virtual memory，但是可以改变虚拟内存的内容。</p>
+<p>这份虚拟内存与 <code>satp</code> 这个 csr 寄存器有关，<code>satp</code> 是 page table pointer，表示物理内存上的页表。</p>
+<p>这让调用 trap handler 之外不会 trap 系统调用。</p>
+<p>interrupt 的代价：</p>
+<ul>
+<li>需要 flush pipeline</li>
+<li>需要保存和恢复所有的寄存器</li>
+<li>因为 trap handler 是不相关的代码，所以 cache 可能受影响</li>
+</ul>
+<h3 id="Context-Switch"><a href="#Context-Switch" class="headerlink" title="Context Switch"></a>Context Switch</h3><p>硬件支持了 timer interrupt, 触发的时候，硬件执行 context switch，把寄存器 <code>sscratch</code> 周围存储的寄存器存到现有进程的数据结构中，然后把 <code>satp</code> 和相关拷贝到 memory mapping 相关的数据结构中。然后根据 scheduler 来选择目标进程，恢复目标进程的 <code>satp</code> <code>sepc</code> 等，并调用 <code>sret</code> 返回。</p>
+<h2 id="IO"><a href="#IO" class="headerlink" title="IO"></a>IO</h2><p>CPU 需要与不同的 IO 设备交互。</p>
+<p><img src="https://image.mwish.me/blog-image/交互.png" alt="交互"></p>
+<p>软件希望：输入/输出一堆 bytes，同时希望能够提供一些 memory 相关的接口或者独立的指令。</p>
+<p>对于 memory mapped I/O, 对于一段 address, 我们可以用 lw/sw 等指令处理 IO。</p>
+<p>下面是课件上的一些 memory mapping 的效率，结论是 IO 设备处理数据的速度是远慢于 CPU 的</p>
+<p><img src="https://image.mwish.me/blog-image/391D529F-58C6-49C2-9448-EF5A47ACCA76.png" alt="391D529F-58C6-49C2-9448-EF5A47ACCA76"></p>
+<p>同通用场景下， device registers 有两个寄存器：</p>
+<ul>
+<li>control register: 表示 I/O 是否 ready</li>
+<li>data register: 包含数据</li>
+</ul>
+<p>常用的手段包含 </p>
+<ol>
+<li>polling: PIO 轮询 control register ，看看是否准备好了。这样比较消耗 cpu</li>
+<li>interrupt: 硬件在有数据的时候触发 interrupt，在 IO 频率高的情况下，例如鼠标、键盘、网络等，实际上会触发很多的 IO</li>
+<li>DMA</li>
+</ol>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8A%9F%E8%83%BD%E5%92%8C%E4%BB%A3%E4%BB%B7"><span class="toc-number">1.</span> <span class="toc-text">功能和代价</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Context-Switch"><span class="toc-number">2.</span> <span class="toc-text">Context Switch</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#IO"><span class="toc-number"></span> <span class="toc-text">IO</span></a>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/06/17/OS-%E5%92%8C-Virtual-Memory-RISC-V-%E8%A7%86%E8%A7%92/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/06/17/OS-%E5%92%8C-Virtual-Memory-RISC-V-%E8%A7%86%E8%A7%92/&text=OS 和 Virtual Memory: RISC-V 视角"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/06/17/OS-%E5%92%8C-Virtual-Memory-RISC-V-%E8%A7%86%E8%A7%92/&title=OS 和 Virtual Memory: RISC-V 视角"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/06/17/OS-%E5%92%8C-Virtual-Memory-RISC-V-%E8%A7%86%E8%A7%92/&is_video=false&description=OS 和 Virtual Memory: RISC-V 视角"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=OS 和 Virtual Memory: RISC-V 视角&body=Check out this article: http://blog.mwish.me/2020/06/17/OS-%E5%92%8C-Virtual-Memory-RISC-V-%E8%A7%86%E8%A7%92/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/06/17/OS-%E5%92%8C-Virtual-Memory-RISC-V-%E8%A7%86%E8%A7%92/&title=OS 和 Virtual Memory: RISC-V 视角"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/06/17/OS-%E5%92%8C-Virtual-Memory-RISC-V-%E8%A7%86%E8%A7%92/&title=OS 和 Virtual Memory: RISC-V 视角"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/06/17/OS-%E5%92%8C-Virtual-Memory-RISC-V-%E8%A7%86%E8%A7%92/&title=OS 和 Virtual Memory: RISC-V 视角"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/06/17/OS-%E5%92%8C-Virtual-Memory-RISC-V-%E8%A7%86%E8%A7%92/&title=OS 和 Virtual Memory: RISC-V 视角"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/06/17/OS-%E5%92%8C-Virtual-Memory-RISC-V-%E8%A7%86%E8%A7%92/&name=OS 和 Virtual Memory: RISC-V 视角&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/06/17/OS-%E5%92%8C-Virtual-Memory-RISC-V-%E8%A7%86%E8%A7%92/&t=OS 和 Virtual Memory: RISC-V 视角"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

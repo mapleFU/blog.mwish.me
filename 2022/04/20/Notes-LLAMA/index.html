@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="Bw-Tree, 即 “Buzz Word Tree”，由微软在 2013 年提出，基本是给 SQL Server 做内存引擎的。Bw-Tree 及其底座 LLAMA 的一作 Justin Levandoski 最早在 MS，后来去了 Aurora，现在在 Google BigQuery。 Bw-Tree 主要内容是 SSD 友好的数据结构，它希望对 Bw-Tree 的操作都是 Lock-free">
+<meta property="og:type" content="article">
+<meta property="og:title" content="LLAMA: A Cache&#x2F;Storage Subsystem for Modern Hardware">
+<meta property="og:url" content="http://blog.mwish.me/2022/04/20/Notes-LLAMA/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="Bw-Tree, 即 “Buzz Word Tree”，由微软在 2013 年提出，基本是给 SQL Server 做内存引擎的。Bw-Tree 及其底座 LLAMA 的一作 Justin Levandoski 最早在 MS，后来去了 Aurora，现在在 Google BigQuery。 Bw-Tree 主要内容是 SSD 友好的数据结构，它希望对 Bw-Tree 的操作都是 Lock-free">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/84102576-8957-4691-92DB-772A07FB6F53.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/33FB84CE-4078-45D9-AC16-DCF1BB31A7A6.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/450839E1-75FD-48DC-81E9-BC8E10FE04EE.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/8B64DF88-DD1E-4107-862A-A276B5313E76.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/3E209D4B-B2B4-45F4-A240-C3643AA78B54.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/7F968374-1EDD-41E9-BB82-683D2F88BECC.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/78BF2138-B283-4EF7-BC9A-FF97521E1749.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/updated-btree.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/F06B0563-9E77-407A-85D8-086EF2A10580.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/EF1946C6-A748-4289-98A7-8EF5720F92C7.png">
+<meta property="article:published_time" content="2022-04-20T04:48:35.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.553Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/84102576-8957-4691-92DB-772A07FB6F53.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>LLAMA: A Cache/Storage Subsystem for Modern Hardware</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2022/04/30/ARIES-IM/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2022/04/15/Raft-Basic-Notes/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2022/04/20/Notes-LLAMA/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2022/04/20/Notes-LLAMA/&text=LLAMA: A Cache/Storage Subsystem for Modern Hardware"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2022/04/20/Notes-LLAMA/&title=LLAMA: A Cache/Storage Subsystem for Modern Hardware"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2022/04/20/Notes-LLAMA/&is_video=false&description=LLAMA: A Cache/Storage Subsystem for Modern Hardware"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=LLAMA: A Cache/Storage Subsystem for Modern Hardware&body=Check out this article: http://blog.mwish.me/2022/04/20/Notes-LLAMA/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2022/04/20/Notes-LLAMA/&title=LLAMA: A Cache/Storage Subsystem for Modern Hardware"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2022/04/20/Notes-LLAMA/&title=LLAMA: A Cache/Storage Subsystem for Modern Hardware"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2022/04/20/Notes-LLAMA/&title=LLAMA: A Cache/Storage Subsystem for Modern Hardware"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2022/04/20/Notes-LLAMA/&title=LLAMA: A Cache/Storage Subsystem for Modern Hardware"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2022/04/20/Notes-LLAMA/&name=LLAMA: A Cache/Storage Subsystem for Modern Hardware&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2022/04/20/Notes-LLAMA/&t=LLAMA: A Cache/Storage Subsystem for Modern Hardware"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%9C%80%E6%B1%82"><span class="toc-number">1.</span> <span class="toc-text">需求</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#LLAMA-Interface"><span class="toc-number">2.</span> <span class="toc-text">LLAMA Interface</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Page-Data-Operations"><span class="toc-number">2.1.</span> <span class="toc-text">Page Data Operations</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Page-Management-Operations"><span class="toc-number">2.2.</span> <span class="toc-text">Page Management Operations</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#System-Transaction-Operations"><span class="toc-number">2.3.</span> <span class="toc-text">System Transaction Operations</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Bw-Tree-%E5%A6%82%E4%BD%95%E5%88%A9%E7%94%A8-LLAMA"><span class="toc-number">2.4.</span> <span class="toc-text">Bw-Tree 如何利用 LLAMA</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Cache-Layer"><span class="toc-number">3.</span> <span class="toc-text">Cache Layer</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Flush-%E7%9A%84%E5%8E%9F%E5%AD%90%E6%80%A7"><span class="toc-number">3.1.</span> <span class="toc-text">Flush 的原子性</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Page-%E6%8D%A2%E5%87%BA"><span class="toc-number">3.2.</span> <span class="toc-text">Page 换出</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Storage-Layer"><span class="toc-number">4.</span> <span class="toc-text">Storage Layer</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#LSS-Clean-GC"><span class="toc-number">4.1.</span> <span class="toc-text">LSS Clean (GC)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%80%A7%E8%83%BD"><span class="toc-number">4.2.</span> <span class="toc-text">性能</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#System-Transaction"><span class="toc-number">5.</span> <span class="toc-text">System Transaction</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Recovery"><span class="toc-number">6.</span> <span class="toc-text">Recovery</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#sled"><span class="toc-number">7.</span> <span class="toc-text">sled</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Reference"><span class="toc-number">8.</span> <span class="toc-text">Reference</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BA%8C%E6%89%8B%E6%9D%90%E6%96%99"><span class="toc-number">8.1.</span> <span class="toc-text">二手材料</span></a></li></ol></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        LLAMA: A Cache/Storage Subsystem for Modern Hardware
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2022-04-20T04:48:35.000Z" itemprop="datePublished">2022-04-20</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>Bw-Tree, 即 “Buzz Word Tree”，由微软在 2013 年提出，基本是给 SQL Server 做内存引擎的。Bw-Tree 及其底座 LLAMA 的一作 Justin Levandoski 最早在 MS，后来去了 Aurora，现在在 Google BigQuery。</p>
+<p>Bw-Tree 主要内容是 SSD 友好的数据结构，它希望对 Bw-Tree 的操作都是 Lock-free 的，它的数据基于 Page (Inner node + Leaf node) + Log （Delta node），用 Mapping Table 和 64-bit uuid 来映射到对应的 node （Page 或者 Delta node），它用 Epoch-based Reclaim 来回收空间，回收的时候，Bw-Tree 并没有做到 interval-GC（或者是它论文没说），相对的，在 Consolidation （Log + Page 产生新的 Page）之后，会把旧的 Node 给放到可 GC 的区域中。</p>
+<p>它的分裂合并操作和 Blink-Tree 有一点相似，Split 和 Merge 都分裂成多个阶段，并引入了 Split / Merge 节点。SMO 本身是个多步的操作，当发现系统中有 SMO 的时候，别的操作会先帮助推进 SMO（有点像是在说这个 SMO 是 wait-free 的？）。</p>
+<p>Bw-Tree 论文在国内已经有不少二手文章了，除了 Bw-Tree 文章外，CMU 在 SIGMOD’18 发表了一篇文章，描述了一些 In-memory 的 Bw-Tree 的行为和工程优化，测试(diss)了一下它的性能。笔者认为，B-Tree 族的算法比较复杂，而且和实现高度相关，移步这些专业人士写的二手文章相对来说更靠谱。不过，关于 LLAMA，介绍的二手文章比较少。</p>
+<p><img src="https://image.mwish.me/blog-image/84102576-8957-4691-92DB-772A07FB6F53.png" alt="84102576-8957-4691-92DB-772A07FB6F53"></p>
+<p>LLAMA 提供了一个所谓  Log Structured “Page” Store 的引擎，对上层提供 Page 的接口和 更新/覆盖(替换) Page，但又提供以 Delta Log 和整个 Page 的形式写入具体的存储层的接口。下层类似 LFS。同时，LLAMA 提供 lock-free 的操作族，它的 flush 等操作都可以是异步的。</p>
+<h2 id="需求"><a href="#需求" class="headerlink" title="需求"></a>需求</h2><p>LLAMA 提供了 Cache / Storage 两层的管理，以 Page 和 Page-Delta 的形式提供服务。它不需要理解 Page 的内容。它分为两层：CL 和 SL，即缓存层和存储层。可以简单把 LLAMA 当成一个 BufferPool：</p>
+<ol>
+<li>Storage + Cache</li>
+<li>Mapping Table + Page + Delta</li>
+<li>lock-free</li>
+</ol>
+<p>逻辑上的结构可以见下图（不考虑更新和 Delta Log）：</p>
+<p><img src="https://image.mwish.me/blog-image/33FB84CE-4078-45D9-AC16-DCF1BB31A7A6.png" alt="33FB84CE-4078-45D9-AC16-DCF1BB31A7A6"></p>
+<p>LLAMA 并不会知道 Page 的内容，相关的 WAL/LSN/Checkpoint 需要外部维护，它只提供 Page 的 Allocate/Update/Overwrite/Flush/Remove。虽然表面上存储的是 Page，但是其实类似 LFS，这些数据会以 Log 的形式写到存储系统上，这个和 Delta Log 系统一起，降低了系统的写入开销。LLAMA 还提供了系统事务，用来支持类似 Bw-Tree SMO 等对多个 Page 的原子操作。</p>
+<h2 id="LLAMA-Interface"><a href="#LLAMA-Interface" class="headerlink" title="LLAMA Interface"></a>LLAMA Interface</h2><p>这批论文一张图都没有。</p>
+<h3 id="Page-Data-Operations"><a href="#Page-Data-Operations" class="headerlink" title="Page Data Operations"></a>Page Data Operations</h3><p>LLAMA 提供了 Page Data Operations 操作数据，包括：</p>
+<ol>
+<li><code>Update-D(PID, in-ptr, out-ptr, data)</code>. <code>D</code> 是 delta 的意思，<code>data</code> 通常包含 <code>&lt;lsn, key, data&gt;</code> 这样的逻辑数据。<code>in-ptr</code> <code>out-ptr</code> 其实是塞给 mapping table 或者存储那一套，会把更新后的句柄丢出来</li>
+<li><code>Update-R(PID, in-ptr, out-ptr, data)</code>: <code>R</code> 是 replace 的意思，这里相当于整个页面的状态一把更新</li>
+<li><code>Read(PID, out-ptr)</code>: 返回 <code>out-ptr</code> 指向的内存地址，如果 <code>Page</code> 在盘上，也要把这个捞起来。</li>
+</ol>
+<h3 id="Page-Management-Operations"><a href="#Page-Management-Operations" class="headerlink" title="Page Management Operations"></a>Page Management Operations</h3><p>LLAMA 还提供了一组数据管理接口，支持 flush 等接口：</p>
+<ol>
+<li><code>Flush(PID, in-ptr, out-ptr, annotation)</code>: 把 Page 的状态拷贝到 log structured store(下文称 <strong>LSS</strong> ) 的 IO-Buffer，并且添加一个 <code>Flush</code> 的 Delta 记录，如后文的图。<code>Flush</code> 其实是个 async 接口，并不代表成功写到盘上了。这里还有个要注意的是，这里刷的时候可能大小不固定，然后 annotation 可能是 LSN 这些业务语义，也会带下去。</li>
+<li><code>Mk-Stable(LSS address)</code>:  保证在 <code>LLS address</code> 之前的 IO-Buffer 上的记录都已经写到持久存储上了。</li>
+<li><code>Hi-Stable(out-LSS address)</code>: 返回刷到持久存储的最高位点</li>
+<li><code>Allocate(out-PID)</code> 懂得都懂，申请一个 Page 返回 pid 然后在 mapping table 注册一下. 同时这样的 Page 也要持久化</li>
+<li><code>Free(PID)</code>: 准备会收掉对应的 PageID / Page</li>
+</ol>
+<p>我吐槽下，这论文也没说什么模型，<code>data</code> 是啥，我感觉只能猜测是一些 Delta Log 和什么别的了。LSS 数据估计是一个无线长的数据段或者环状 buffer。至于别的基本上都是 BufferPool 该有的，只是存储变成 Delta 了。</p>
+<h3 id="System-Transaction-Operations"><a href="#System-Transaction-Operations" class="headerlink" title="System Transaction Operations"></a>System Transaction Operations</h3><p>这里会产生系统内部事务，读写会 buffer 在内存中，在 commit 的时候提交。commit 阶段的时候，所有的 Page 会原子性添加到 LSS 的 IO-Buffer 中，然后被刷下去。LLAMA 这里好像并没有描述任何的并发控制和策略，估摸着是上层控制了，BwTree 的事物靠上层的 <strong>Deuteronomy</strong> 来控制。</p>
+<p>这里提供了大概如下的接口：</p>
+<ol>
+<li><code>TBegin(out-TID)</code>: 拿到一个 TID，这需要维护一个 active transaction table (下称 ATT)</li>
+<li><code>Commit(TID)</code>: 从 ATT 中取出来，原子性的写到哪步</li>
+<li><code>TAbort(TID)</code>: 从 ATT 出来 abort</li>
+</ol>
+<p>这里不应该 <code>Update-R</code>，似乎是觉得 Replace 会导致这个内部事务过于复杂，所以没支持。总之会被刷进去。</p>
+<h3 id="Bw-Tree-如何利用-LLAMA"><a href="#Bw-Tree-如何利用-LLAMA" class="headerlink" title="Bw-Tree 如何利用 LLAMA"></a>Bw-Tree 如何利用 LLAMA</h3><p>Bw-Tree 提供 Key-Value 接口，自己维护 LSN，根据事务接口并发控制和管理 Ckpt。通过 <code>Update-D</code>  和 <code>Update-R</code> 来更新/Consolidate。通过 <code>Allocate</code> 和 <code>Free</code> 来申请/收缩。</p>
+<h2 id="Cache-Layer"><a href="#Cache-Layer" class="headerlink" title="Cache Layer"></a>Cache Layer</h2><p>可以视作，Cache Layer 对外提供了 Mapping Table 等抽象，并能够换出对应的内容。如我们在 Bw-Tree 所描述的一样，这里依靠 <code>Write Log</code>-&gt; <code>CAS mapping table</code> 一对操作来进行原子的写入。这里 Mapping 的内容会无论如何存储一个指向 LSS 中位置的指针，来作为 CAS 的主体，用户的指针也会携带一个对应的 LSS。</p>
+<p>这节的内容其实比较 hacking，我估摸着得翻翻实现才能好理解。上面这段话说的比较绕，实际逻辑可以看下面，大概就是无论如何会放一个 <code>LogOffset</code>.</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#[allow(clippy::module_name_repetitions)]</span></span><br><span class="line"><span class="meta">#[derive(Clone, Copy, PartialOrd, Ord, Eq, PartialEq, Hash)]</span></span><br><span class="line"><span class="keyword">pub</span> <span class="keyword">struct</span> <span class="title class_">HeapId</span> &#123;</span><br><span class="line">    <span class="keyword">pub</span> location: <span class="type">u64</span>,</span><br><span class="line">    <span class="keyword">pub</span> original_lsn: Lsn,</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">/// A pointer to a location on disk or an off-log heap item.</span></span><br><span class="line"><span class="comment">/// </span></span><br><span class="line"><span class="comment">/// (log_offxet, heap_id)</span></span><br><span class="line"><span class="meta">#[derive(Debug, Clone, Copy, PartialEq)]</span></span><br><span class="line"><span class="keyword">pub</span> <span class="keyword">enum</span> <span class="title class_">DiskPtr</span> &#123;</span><br><span class="line">    <span class="comment">/// Points to a value stored in the single-file log.</span></span><br><span class="line">    <span class="title function_ invoke__">Inline</span>(LogOffset),</span><br><span class="line">    <span class="comment">/// Points to a value stored off-log in the heap.</span></span><br><span class="line">    <span class="title function_ invoke__">Heap</span>(<span class="type">Option</span>&lt;NonZeroU64&gt;, HeapId),</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>LLAMA 会存储成 Delta / Page, 大概是 <code>PID -&gt; Delta LSS -&gt; Delta LSS -&gt; Page</code>, 需要靠上层 <code>Update-R</code> 之类的来 consolidate.</p>
+<p><img src="https://image.mwish.me/blog-image/450839E1-75FD-48DC-81E9-BC8E10FE04EE.png" alt="450839E1-75FD-48DC-81E9-BC8E10FE04EE"></p>
+<h3 id="Flush-的原子性"><a href="#Flush-的原子性" class="headerlink" title="Flush 的原子性"></a>Flush 的原子性</h3><p>Flush 包括：</p>
+<ol>
+<li>拷贝到 LSS 的内容中</li>
+<li>CAS 发布</li>
+</ol>
+<p>如果同时有更新，可能需要保证正在 copy 的内容不要和 flush 的流混了。这里它的策略如下：</p>
+<ol>
+<li>在 LSS Buffer 给 Allocate 一段 IO Buffer</li>
+<li>创建一个 Flush Delta, 尝试 CAS 这个 LSS</li>
+<li>(2) 成功了，就拷贝到 Buffer 中；否则在 Buffer 写一个 <code>FAILED_FLUSH</code> 记录，防止恢复的时候数据错误</li>
+</ol>
+<h3 id="Page-换出"><a href="#Page-换出" class="headerlink" title="Page 换出"></a>Page 换出</h3><p>这里允许记录或者 Page 换出，为了防止内容空悬，可以用一个 <code>PARTIAL SWAP</code> 记录表示内存中的结构 Swap 出去了：</p>
+<p><img src="https://image.mwish.me/blog-image/8B64DF88-DD1E-4107-862A-A276B5313E76.png" alt="8B64DF88-DD1E-4107-862A-A276B5313E76"></p>
+<p>这里还使用使用 Epoch Base Reclaim 来回收内存，不再赘述。</p>
+<p><img src="https://image.mwish.me/blog-image/3E209D4B-B2B4-45F4-A240-C3643AA78B54.png" alt="3E209D4B-B2B4-45F4-A240-C3643AA78B54"></p>
+<h2 id="Storage-Layer"><a href="#Storage-Layer" class="headerlink" title="Storage Layer"></a>Storage Layer</h2><p>这节说是 Storage Layer，其实就是介绍了它的 Log 写入层和一些 lock-free 的 WAL，和 LFS/MySQL 8.0 WAL 很像。LLAMA 这里没说怎么 GC，不过我感觉因为 Consolidation，早点的记录基本都能被清除掉。</p>
+<p><img src="https://image.mwish.me/blog-image/7F968374-1EDD-41E9-BB82-683D2F88BECC.png" alt="7F968374-1EDD-41E9-BB82-683D2F88BECC"></p>
+<p>比较关键的是 Flushing 部分，它希望 Flushing 是 lock-free 的，每个 Buffer 有一个固定大小。这里有几个控制字段：</p>
+<ol>
+<li>Sealed bit</li>
+<li>Active writers</li>
+<li>Offset</li>
+</ol>
+<p><img src="https://image.mwish.me/blog-image/78BF2138-B283-4EF7-BC9A-FF97521E1749.png" alt="78BF2138-B283-4EF7-BC9A-FF97521E1749"></p>
+<p>那么实现的逻辑如下：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">WriteOnBuf(buf, data):</span><br><span class="line">	<span class="keyword">while</span> <span class="literal">True</span>:</span><br><span class="line">	  (sealed, active_writers, offset) = buf.ctl.load()</span><br><span class="line">    <span class="keyword">if</span> (sealed):</span><br><span class="line">      去写另外的 Buf</span><br><span class="line">    offset += data.size()</span><br><span class="line">    <span class="keyword">if</span> offset 超过限制:</span><br><span class="line">      设置 sealed = <span class="literal">True</span></span><br><span class="line">    设置 writer += <span class="number">1</span></span><br><span class="line">    <span class="keyword">if</span> buf.ctl.cas():</span><br><span class="line">      <span class="keyword">break</span></span><br><span class="line">  拷贝 data 到给定的字段</span><br><span class="line">  cas 减少 writer, 如果 active writer = <span class="number">0</span> 且 Sealed, 推进拷贝到存储空间</span><br></pre></td></tr></table></figure>
+<p>这里其实和 MySQL 那个 Lock-free WAL 协议很像。</p>
+<h3 id="LSS-Clean-GC"><a href="#LSS-Clean-GC" class="headerlink" title="LSS Clean (GC)"></a>LSS Clean (GC)</h3><p>这里内容类似 LFS 或者 WiscKey。LSS 可以视作无限增长的，然后内容写在一个环状缓冲区上。</p>
+<p>InnoDB 会两个 log 文件换着写，我觉得基本也就这个样子。</p>
+<h3 id="性能"><a href="#性能" class="headerlink" title="性能"></a>性能</h3><p>作为一个缝合怪，这里性能描述如下:</p>
+<blockquote>
+<p>First, there is no empty space in pages that are flushed. They are written as packed variable length strings. On average, traditional B-tree pages are only 69% utilized. Second, because we will frequently flush only deltas since the prior flush, much less space will be consumed per page flush. Finally</p>
+</blockquote>
+<p>我觉得没啥意思…</p>
+<h2 id="System-Transaction"><a href="#System-Transaction" class="headerlink" title="System Transaction"></a>System Transaction</h2><p>这里不提供通用的事务，多个 Page 的更新可能会被 Partial 的读到。但是这里靠框架上的更新来处理这一点。</p>
+<p>我上面说的话我自己读了一遍都没太懂，所以我贴个 Cow-Btree:</p>
+<p><img src="https://image.mwish.me/blog-image/updated-btree.png" alt="updated-btree"></p>
+<p>这里不是说 Bw-Tree 是 Cow-Btree, 不过其实差不多，这里 Split/Merge 本身是能够做到原子被看见的：</p>
+<p><img src="https://image.mwish.me/blog-image/F06B0563-9E77-407A-85D8-086EF2A10580.png" alt="F06B0563-9E77-407A-85D8-086EF2A10580"></p>
+<h2 id="Recovery"><a href="#Recovery" class="headerlink" title="Recovery"></a>Recovery</h2><p> 这里 Recover 其实挺类似 WiscKey Recover 的，麻烦在于恢复 Mapping Table。这里会定期写快照，然后 Replay log 来恢复。</p>
+<p><img src="https://image.mwish.me/blog-image/EF1946C6-A748-4289-98A7-8EF5720F92C7.png" alt="EF1946C6-A748-4289-98A7-8EF5720F92C7"></p>
+<h2 id="sled"><a href="#sled" class="headerlink" title="sled"></a>sled</h2><p>sled 是一个 LLAMA 的实现。它上层并没有用 Bw-Tree，用了一个 Epoch GC 的实现。这里有几个关键内容：</p>
+<ol>
+<li><code>IoBuf</code> 和 <code>IoBufs</code> 对应论文里面的无锁 Buffer，由 <code>Log</code> 包装。基本上实现了论文描述的内容。</li>
+<li><code>PageTable</code> 是对应的 Mapping Table 的实现</li>
+<li><code>Node</code> 代表 Page 或者 Delta, 用 link 添加新操作。这里由更新的次数来决定是否 consolidation</li>
+<li><code>transaction.rs</code> 有事务相关的内容。</li>
+<li>GC 使用 crossbeam 的 <code>crossbeam-epoch</code> 实现</li>
+</ol>
+<h2 id="Reference"><a href="#Reference" class="headerlink" title="Reference"></a>Reference</h2><ol>
+<li>[ICDE’13] <a target="_blank" rel="noopener" href="https://15721.courses.cs.cmu.edu/spring2017/papers/08-oltpindexes2/bwtree-icde2013.pdf">The Bw-Tree: A B-tree for New Hardware Platforms</a></li>
+<li>[PVLDB’13] LLAMA: A Cache/Storage Subsystem for Modern Hardware</li>
+<li>[SIGMOD’18] Building a Bw-Tree Takes More Than Just Buzz Words</li>
+<li>[PODS’21] ArkDB: A Key-Value Engine for Scalable Cloud Storage Services</li>
+<li>Sled: <a target="_blank" rel="noopener" href="https://docs.rs/sled/0.34.1/sled/doc/sled_architectural_outlook/index.html#caching">https://docs.rs/sled/0.34.1/sled/doc/sled_architectural_outlook/index.html#caching</a> (已不再维护)</li>
+<li>数据库月报的 Bw-Tree 栏目：<a target="_blank" rel="noopener" href="http://mysql.taobao.org/monthly/2018/11/01/">http://mysql.taobao.org/monthly/2018/11/01/</a></li>
+<li>Indexing on Modern Hardware: Hekaton and Beyond</li>
+<li><a target="_blank" rel="noopener" href="https://github.com/spacejam/sled">https://github.com/spacejam/sled</a></li>
+<li>CMU 15-721</li>
+</ol>
+<h3 id="二手材料"><a href="#二手材料" class="headerlink" title="二手材料"></a>二手材料</h3><ul>
+<li>Bw-Tree技术解读 - 翰明的文章 - 知乎 <a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/29314464">https://zhuanlan.zhihu.com/p/29314464</a></li>
+<li><a target="_blank" rel="noopener" href="https://nan01ab.github.io/2019/09/LLAMA.html">https://nan01ab.github.io/2019/09/LLAMA.html</a></li>
+</ul>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%9C%80%E6%B1%82"><span class="toc-number">1.</span> <span class="toc-text">需求</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#LLAMA-Interface"><span class="toc-number">2.</span> <span class="toc-text">LLAMA Interface</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Page-Data-Operations"><span class="toc-number">2.1.</span> <span class="toc-text">Page Data Operations</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Page-Management-Operations"><span class="toc-number">2.2.</span> <span class="toc-text">Page Management Operations</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#System-Transaction-Operations"><span class="toc-number">2.3.</span> <span class="toc-text">System Transaction Operations</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Bw-Tree-%E5%A6%82%E4%BD%95%E5%88%A9%E7%94%A8-LLAMA"><span class="toc-number">2.4.</span> <span class="toc-text">Bw-Tree 如何利用 LLAMA</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Cache-Layer"><span class="toc-number">3.</span> <span class="toc-text">Cache Layer</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Flush-%E7%9A%84%E5%8E%9F%E5%AD%90%E6%80%A7"><span class="toc-number">3.1.</span> <span class="toc-text">Flush 的原子性</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Page-%E6%8D%A2%E5%87%BA"><span class="toc-number">3.2.</span> <span class="toc-text">Page 换出</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Storage-Layer"><span class="toc-number">4.</span> <span class="toc-text">Storage Layer</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#LSS-Clean-GC"><span class="toc-number">4.1.</span> <span class="toc-text">LSS Clean (GC)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%80%A7%E8%83%BD"><span class="toc-number">4.2.</span> <span class="toc-text">性能</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#System-Transaction"><span class="toc-number">5.</span> <span class="toc-text">System Transaction</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Recovery"><span class="toc-number">6.</span> <span class="toc-text">Recovery</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#sled"><span class="toc-number">7.</span> <span class="toc-text">sled</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Reference"><span class="toc-number">8.</span> <span class="toc-text">Reference</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BA%8C%E6%89%8B%E6%9D%90%E6%96%99"><span class="toc-number">8.1.</span> <span class="toc-text">二手材料</span></a></li></ol></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2022/04/20/Notes-LLAMA/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2022/04/20/Notes-LLAMA/&text=LLAMA: A Cache/Storage Subsystem for Modern Hardware"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2022/04/20/Notes-LLAMA/&title=LLAMA: A Cache/Storage Subsystem for Modern Hardware"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2022/04/20/Notes-LLAMA/&is_video=false&description=LLAMA: A Cache/Storage Subsystem for Modern Hardware"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=LLAMA: A Cache/Storage Subsystem for Modern Hardware&body=Check out this article: http://blog.mwish.me/2022/04/20/Notes-LLAMA/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2022/04/20/Notes-LLAMA/&title=LLAMA: A Cache/Storage Subsystem for Modern Hardware"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2022/04/20/Notes-LLAMA/&title=LLAMA: A Cache/Storage Subsystem for Modern Hardware"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2022/04/20/Notes-LLAMA/&title=LLAMA: A Cache/Storage Subsystem for Modern Hardware"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2022/04/20/Notes-LLAMA/&title=LLAMA: A Cache/Storage Subsystem for Modern Hardware"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2022/04/20/Notes-LLAMA/&name=LLAMA: A Cache/Storage Subsystem for Modern Hardware&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2022/04/20/Notes-LLAMA/&t=LLAMA: A Cache/Storage Subsystem for Modern Hardware"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

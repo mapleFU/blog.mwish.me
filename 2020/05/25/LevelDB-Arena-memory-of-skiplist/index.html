@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="Arena 的英文意思大概是  An arena is an enclosed area that showcases theatre, musical performances or sporting events.  在 LevelDB 中，Arena 是给 SkipList 提供内存来源的，SkipList 会提供 key-value 的数据。同时，SkipList 是 mvcc 的，它在">
+<meta property="og:type" content="article">
+<meta property="og:title" content="LevelDB Arena: memory of skiplist">
+<meta property="og:url" content="http://blog.mwish.me/2020/05/25/LevelDB-Arena-memory-of-skiplist/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="Arena 的英文意思大概是  An arena is an enclosed area that showcases theatre, musical performances or sporting events.  在 LevelDB 中，Arena 是给 SkipList 提供内存来源的，SkipList 会提供 key-value 的数据。同时，SkipList 是 mvcc 的，它在">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2020-05-25T06:59:50.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.559Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>LevelDB Arena: memory of skiplist</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2020/05/29/LevelDB-Log-WAL-of-LSMTree-C0/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2020/05/25/LevelDB-Put-How-it-batch/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/05/25/LevelDB-Arena-memory-of-skiplist/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/05/25/LevelDB-Arena-memory-of-skiplist/&text=LevelDB Arena: memory of skiplist"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/05/25/LevelDB-Arena-memory-of-skiplist/&title=LevelDB Arena: memory of skiplist"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/05/25/LevelDB-Arena-memory-of-skiplist/&is_video=false&description=LevelDB Arena: memory of skiplist"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=LevelDB Arena: memory of skiplist&body=Check out this article: http://blog.mwish.me/2020/05/25/LevelDB-Arena-memory-of-skiplist/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/05/25/LevelDB-Arena-memory-of-skiplist/&title=LevelDB Arena: memory of skiplist"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/05/25/LevelDB-Arena-memory-of-skiplist/&title=LevelDB Arena: memory of skiplist"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/05/25/LevelDB-Arena-memory-of-skiplist/&title=LevelDB Arena: memory of skiplist"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/05/25/LevelDB-Arena-memory-of-skiplist/&title=LevelDB Arena: memory of skiplist"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/05/25/LevelDB-Arena-memory-of-skiplist/&name=LevelDB Arena: memory of skiplist&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/05/25/LevelDB-Arena-memory-of-skiplist/&t=LevelDB Arena: memory of skiplist"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%94%B3%E8%AF%B7%E6%B5%81%E7%A8%8B"><span class="toc-number">1.</span> <span class="toc-text">申请流程</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%80%E4%BA%9B%E9%97%AE%E9%A2%98"><span class="toc-number">2.</span> <span class="toc-text">一些问题</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        LevelDB Arena: memory of skiplist
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2020-05-25T06:59:50.000Z" itemprop="datePublished">2020-05-25</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p><code>Arena</code> 的英文意思大概是</p>
+<blockquote>
+<p>An <strong>arena</strong> is an enclosed area that showcases theatre, musical performances or sporting events.</p>
+</blockquote>
+<p>在 LevelDB 中，<code>Arena</code> 是给 SkipList 提供内存来源的，SkipList 会提供 <code>key-value</code> 的数据。同时，SkipList 是 mvcc 的，它在 Minor Compaction 的时候，才会去掉一些 deleted data, 这意味着 SkipList 在内存中只会 “尝试增加内存”。</p>
+<p>同时，<code>key-value</code> （再加上版本）一般也不会特别大，如果大的话可以参考 WiscKey 的文章，这里转发一篇别人写的博客：</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/30953751">https://zhuanlan.zhihu.com/p/30953751</a></li>
+</ul>
+<p>以上两点需求可以帮助我们了解 <code>Arena</code> 的需求：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">class</span> <span class="title class_">Arena</span> &#123;</span><br><span class="line"> <span class="keyword">public</span>:</span><br><span class="line">  <span class="built_in">Arena</span>();</span><br><span class="line"></span><br><span class="line">  <span class="built_in">Arena</span>(<span class="type">const</span> Arena&amp;) = <span class="keyword">delete</span>;</span><br><span class="line">  Arena&amp; <span class="keyword">operator</span>=(<span class="type">const</span> Arena&amp;) = <span class="keyword">delete</span>;</span><br><span class="line"></span><br><span class="line">  ~<span class="built_in">Arena</span>();</span><br><span class="line"></span><br><span class="line">  <span class="comment">// Return a pointer to a newly allocated memory block of &quot;bytes&quot; bytes.</span></span><br><span class="line">  <span class="function"><span class="type">char</span>* <span class="title">Allocate</span><span class="params">(<span class="type">size_t</span> bytes)</span></span>;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// Allocate memory with the normal alignment guarantees provided by malloc.</span></span><br><span class="line">  <span class="function"><span class="type">char</span>* <span class="title">AllocateAligned</span><span class="params">(<span class="type">size_t</span> bytes)</span></span>;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// Returns an estimate of the total memory usage of data allocated</span></span><br><span class="line">  <span class="comment">// by the arena.</span></span><br><span class="line">  <span class="function"><span class="type">size_t</span> <span class="title">MemoryUsage</span><span class="params">()</span> <span class="type">const</span> </span>&#123;</span><br><span class="line">    <span class="keyword">return</span> memory_usage_.<span class="built_in">load</span>(std::memory_order_relaxed);</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line"> <span class="keyword">private</span>:</span><br><span class="line">  <span class="function"><span class="type">char</span>* <span class="title">AllocateFallback</span><span class="params">(<span class="type">size_t</span> bytes)</span></span>;</span><br><span class="line">  <span class="function"><span class="type">char</span>* <span class="title">AllocateNewBlock</span><span class="params">(<span class="type">size_t</span> block_bytes)</span></span>;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// Allocation state</span></span><br><span class="line">  <span class="type">char</span>* alloc_ptr_;</span><br><span class="line">  <span class="type">size_t</span> alloc_bytes_remaining_;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// Array of new[] allocated memory blocks</span></span><br><span class="line">  std::vector&lt;<span class="type">char</span>*&gt; blocks_;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// Total memory usage of the arena.</span></span><br><span class="line">  <span class="comment">//</span></span><br><span class="line">  <span class="comment">// TODO(costan): This member is accessed via atomics, but the others are</span></span><br><span class="line">  <span class="comment">//               accessed without any locking. Is this OK?</span></span><br><span class="line">  std::atomic&lt;<span class="type">size_t</span>&gt; memory_usage_;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<ul>
+<li>skiplist 可以拿到对应的 arena, arena 负责申请内存</li>
+<li><code>MemoryUsage</code> 返回 <code>Arena</code> 总共申请的内存</li>
+<li><code>Allocate</code> 和 <code>AllocateAlign</code> 给 skiplist 申请内存，也防止内存的碎片化</li>
+</ul>
+<p>有一点问题是，看上去 <code>Arena</code> 使用似乎是单线程的。</p>
+<h2 id="申请流程"><a href="#申请流程" class="headerlink" title="申请流程"></a>申请流程</h2><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">static</span> <span class="type">const</span> <span class="type">int</span> kBlockSize = <span class="number">4096</span>;</span><br><span class="line"></span><br><span class="line">Arena::<span class="built_in">Arena</span>()</span><br><span class="line">    : <span class="built_in">alloc_ptr_</span>(<span class="literal">nullptr</span>), <span class="built_in">alloc_bytes_remaining_</span>(<span class="number">0</span>), <span class="built_in">memory_usage_</span>(<span class="number">0</span>) &#123;&#125;</span><br><span class="line"></span><br><span class="line">Arena::~<span class="built_in">Arena</span>() &#123;</span><br><span class="line">  <span class="keyword">for</span> (<span class="type">size_t</span> i = <span class="number">0</span>; i &lt; blocks_.<span class="built_in">size</span>(); i++) &#123;</span><br><span class="line">    <span class="keyword">delete</span>[] blocks_[i];</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p><code>Arena</code> 在 <code>blocks_</code> 中管理自己的内存，<code>alloc_ptr_</code> 指向现在管理的 <code>block</code>, <code>alloc_bytes_remaining_</code> 管理现有 <code>block</code> 剩余的内存</p>
+<p>下面是 allocate 的流程：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">inline</span> <span class="type">char</span>* <span class="title">Arena::Allocate</span><span class="params">(<span class="type">size_t</span> bytes)</span> </span>&#123;</span><br><span class="line">  <span class="comment">// The semantics of what to return are a bit messy if we allow</span></span><br><span class="line">  <span class="comment">// 0-byte allocations, so we disallow them here (we don&#x27;t need</span></span><br><span class="line">  <span class="comment">// them for our internal use).</span></span><br><span class="line">  <span class="built_in">assert</span>(bytes &gt; <span class="number">0</span>);</span><br><span class="line">  <span class="keyword">if</span> (bytes &lt;= alloc_bytes_remaining_) &#123;</span><br><span class="line">    <span class="type">char</span>* result = alloc_ptr_;</span><br><span class="line">    alloc_ptr_ += bytes;</span><br><span class="line">    alloc_bytes_remaining_ -= bytes;</span><br><span class="line">    <span class="keyword">return</span> result;</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="keyword">return</span> <span class="built_in">AllocateFallback</span>(bytes);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<ul>
+<li>现有的 <code>alloc_bytes_remaining_</code> 有空间，会直接尝试返回</li>
+<li>否则进入 <code>AllocateFallback</code></li>
+</ul>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">char</span>* <span class="title">Arena::AllocateFallback</span><span class="params">(<span class="type">size_t</span> bytes)</span> </span>&#123;</span><br><span class="line">  <span class="keyword">if</span> (bytes &gt; kBlockSize / <span class="number">4</span>) &#123;</span><br><span class="line">    <span class="comment">// Object is more than a quarter of our block size.  Allocate it separately</span></span><br><span class="line">    <span class="comment">// to avoid wasting too much space in leftover bytes.</span></span><br><span class="line">    <span class="type">char</span>* result = <span class="built_in">AllocateNewBlock</span>(bytes);</span><br><span class="line">    <span class="keyword">return</span> result;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// We waste the remaining space in the current block.</span></span><br><span class="line">  alloc_ptr_ = <span class="built_in">AllocateNewBlock</span>(kBlockSize);</span><br><span class="line">  alloc_bytes_remaining_ = kBlockSize;</span><br><span class="line"></span><br><span class="line">  <span class="type">char</span>* result = alloc_ptr_;</span><br><span class="line">  alloc_ptr_ += bytes;</span><br><span class="line">  alloc_bytes_remaining_ -= bytes;</span><br><span class="line">  <span class="keyword">return</span> result;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>在 <code>AllocateFallback</code> 中逻辑是：</p>
+<ul>
+<li>如果申请内存过大（大于 <code>kBlockSize / 4</code>）即直接申请新的块返回</li>
+<li>否则 <code>AllocateNewBlock</code>, 同时把现有的指针指向新的 block</li>
+</ul>
+<p>注意的一点是，内存过大的时候，不会改变 <code>alloc_ptr_</code>，也就是说，插入了新的 <code>block_</code>, 但是不改变现有的 <code>alloc_ptr_</code>。</p>
+<p>对于申请 new block, 代码很简单：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">char</span>* <span class="title">Arena::AllocateNewBlock</span><span class="params">(<span class="type">size_t</span> block_bytes)</span> </span>&#123;</span><br><span class="line">  <span class="type">char</span>* result = <span class="keyword">new</span> <span class="type">char</span>[block_bytes];</span><br><span class="line">  blocks_.<span class="built_in">push_back</span>(result);</span><br><span class="line">  memory_usage_.<span class="built_in">fetch_add</span>(block_bytes + <span class="built_in">sizeof</span>(<span class="type">char</span>*),</span><br><span class="line">                          std::memory_order_relaxed);</span><br><span class="line">  <span class="keyword">return</span> result;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h2 id="一些问题"><a href="#一些问题" class="headerlink" title="一些问题"></a>一些问题</h2><ul>
+<li>对于 <code>Allocate</code>, 假设一开始碎片化的神奇，剩下900余 bytes, 再申请一个 900+ bytes 的内存，是否会造成比较大的内存碎片？</li>
+<li>jemalloc 之类的分配器对于处理小内存应该有比较好的方案，这个时候 <code>Arena</code> 有什么帮助。</li>
+</ul>
+<p>不知道有没有人能推荐便于阅读的 allocator…</p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%94%B3%E8%AF%B7%E6%B5%81%E7%A8%8B"><span class="toc-number">1.</span> <span class="toc-text">申请流程</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%80%E4%BA%9B%E9%97%AE%E9%A2%98"><span class="toc-number">2.</span> <span class="toc-text">一些问题</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/05/25/LevelDB-Arena-memory-of-skiplist/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/05/25/LevelDB-Arena-memory-of-skiplist/&text=LevelDB Arena: memory of skiplist"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/05/25/LevelDB-Arena-memory-of-skiplist/&title=LevelDB Arena: memory of skiplist"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/05/25/LevelDB-Arena-memory-of-skiplist/&is_video=false&description=LevelDB Arena: memory of skiplist"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=LevelDB Arena: memory of skiplist&body=Check out this article: http://blog.mwish.me/2020/05/25/LevelDB-Arena-memory-of-skiplist/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/05/25/LevelDB-Arena-memory-of-skiplist/&title=LevelDB Arena: memory of skiplist"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/05/25/LevelDB-Arena-memory-of-skiplist/&title=LevelDB Arena: memory of skiplist"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/05/25/LevelDB-Arena-memory-of-skiplist/&title=LevelDB Arena: memory of skiplist"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/05/25/LevelDB-Arena-memory-of-skiplist/&title=LevelDB Arena: memory of skiplist"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/05/25/LevelDB-Arena-memory-of-skiplist/&name=LevelDB Arena: memory of skiplist&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/05/25/LevelDB-Arena-memory-of-skiplist/&t=LevelDB Arena: memory of skiplist"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

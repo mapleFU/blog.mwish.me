@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="列式存储自 GFS&#x2F;Hadoop 时代以来，在一个无 Schema 的存储上存储用户想要的数据也成为了用户的重要需求。Stonebraker 批判了这种情况，在 Redbook 4th 上，坚持用户还是需要 Schema 的。事实证明这些 Schema 确实是很好的东西。尽管有类似 Apache Hudi 这样的系统和部分系统用户存储行式的数据。但数据仓库都倾向于将数据存储成列&#x2F;行列混合的格式。">
+<meta property="og:type" content="article">
+<meta property="og:title" content="谈谈格式: 列存">
+<meta property="og:url" content="http://blog.mwish.me/2022/01/15/format-thinking-2/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="列式存储自 GFS&#x2F;Hadoop 时代以来，在一个无 Schema 的存储上存储用户想要的数据也成为了用户的重要需求。Stonebraker 批判了这种情况，在 Redbook 4th 上，坚持用户还是需要 Schema 的。事实证明这些 Schema 确实是很好的东西。尽管有类似 Apache Hudi 这样的系统和部分系统用户存储行式的数据。但数据仓库都倾向于将数据存储成列&#x2F;行列混合的格式。">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/BC69D6D1-43EA-4991-9191-D215CAADD766.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/30D10CA5-E03F-480A-9FE2-E907512FB0DD.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/OrcFileLayout.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/TreeWriters.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/541FB4E7-28A0-4029-B88B-23AC48B38B5D.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/FileLayout.gif">
+<meta property="og:image" content="https://image.mwish.me/blog-image/9F45A74A-9E03-4731-A00F-3758C8C9E81B.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/F541F4F8-D061-4C2B-98BB-9EFC5F07AA0E.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/59A466B0-BFA7-4FF6-8789-D999BE5502FD.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/49439B4B-D687-4F2D-9357-4BDD83C7709C.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/188A1F7D-D245-4EAD-9F37-CFF44FD341CA.png">
+<meta property="article:published_time" content="2022-01-15T06:37:40.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.565Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/BC69D6D1-43EA-4991-9191-D215CAADD766.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>谈谈格式: 列存</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2022/01/28/Transaction-OCC-and-modern-hardware/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2022/01/14/format-thinking/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2022/01/15/format-thinking-2/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2022/01/15/format-thinking-2/&text=谈谈格式: 列存"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2022/01/15/format-thinking-2/&title=谈谈格式: 列存"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2022/01/15/format-thinking-2/&is_video=false&description=谈谈格式: 列存"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=谈谈格式: 列存&body=Check out this article: http://blog.mwish.me/2022/01/15/format-thinking-2/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2022/01/15/format-thinking-2/&title=谈谈格式: 列存"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2022/01/15/format-thinking-2/&title=谈谈格式: 列存"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2022/01/15/format-thinking-2/&title=谈谈格式: 列存"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2022/01/15/format-thinking-2/&title=谈谈格式: 列存"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2022/01/15/format-thinking-2/&name=谈谈格式: 列存&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2022/01/15/format-thinking-2/&t=谈谈格式: 列存"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%88%97%E5%BC%8F%E5%AD%98%E5%82%A8"><span class="toc-number">1.</span> <span class="toc-text">列式存储</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BC%96%E7%A0%81%E7%9A%84%E5%8D%95%E4%BD%8D-clusters-skipping"><span class="toc-number">2.</span> <span class="toc-text">编码的单位&#x2F;clusters&#x2F;skipping</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BC%96%E7%A0%81"><span class="toc-number">3.</span> <span class="toc-text">编码</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#C-Store-%E6%8F%90%E5%88%B0%E7%9A%84%E6%96%B9%E6%B3%95"><span class="toc-number">3.1.</span> <span class="toc-text">C-Store 提到的方法</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#The-Design-and-Implementation-of-Modern-Column-Oriented-Database-Systems"><span class="toc-number">3.2.</span> <span class="toc-text">The Design and Implementation of Modern Column-Oriented Database Systems</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#RLE-Run-Length-Encoding"><span class="toc-number">3.2.1.</span> <span class="toc-text">RLE: Run Length Encoding</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Bit-Vec-Encoding"><span class="toc-number">3.2.2.</span> <span class="toc-text">Bit-Vec Encoding</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Dictionary"><span class="toc-number">3.2.3.</span> <span class="toc-text">Dictionary</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Frame-Of-Reference-FOR"><span class="toc-number">3.2.4.</span> <span class="toc-text">Frame Of Reference (FOR)</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Increment-Encoding"><span class="toc-number">3.2.5.</span> <span class="toc-text">Increment Encoding</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#The-Patching-Technique-Mostly-Encoding"><span class="toc-number">3.2.6.</span> <span class="toc-text">The Patching Technique &#x2F; Mostly Encoding</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%9D%82%E8%B0%88"><span class="toc-number">3.3.</span> <span class="toc-text">杂谈</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#ORC-Parquet"><span class="toc-number">4.</span> <span class="toc-text">ORC&#x2F;Parquet</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9F%BA%E6%9C%AC%E5%8E%9F%E7%90%86"><span class="toc-number">4.1.</span> <span class="toc-text">基本原理</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%8F%98%E9%95%BF%E5%AD%97%E6%AE%B5%E5%92%8C-Null"><span class="toc-number">4.1.1.</span> <span class="toc-text">变长字段和 Null</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Parquet-%E5%92%8C-Dremel"><span class="toc-number">4.2.</span> <span class="toc-text">Parquet 和 Dremel</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#ACID-Indexes"><span class="toc-number">4.3.</span> <span class="toc-text">ACID &#x2F; Indexes</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#DB-%E7%9B%B4%E6%8E%A5%E5%9C%A8%E5%8E%8B%E7%BC%A9%E7%9A%84%E6%95%B0%E6%8D%AE%E4%B8%8A%E8%BF%9B%E8%A1%8C%E8%AE%A1%E7%AE%97"><span class="toc-number">5.</span> <span class="toc-text">DB: 直接在压缩的数据上进行计算</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Apache-Arrow"><span class="toc-number">6.</span> <span class="toc-text">Apache Arrow</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BB%93%E8%AF%AD"><span class="toc-number">7.</span> <span class="toc-text">结语</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        谈谈格式: 列存
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2022-01-15T06:37:40.000Z" itemprop="datePublished">2022-01-15</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <h2 id="列式存储"><a href="#列式存储" class="headerlink" title="列式存储"></a>列式存储</h2><p>自 GFS/Hadoop 时代以来，在一个无 Schema 的存储上存储用户想要的数据也成为了用户的重要需求。Stonebraker 批判了这种情况，在 Redbook 4th 上，坚持用户还是需要 Schema 的。事实证明这些 Schema 确实是很好的东西。尽管有类似 Apache Hudi 这样的系统和部分系统用户存储行式的数据。但数据仓库都倾向于将数据存储成列/行列混合的格式。</p>
+<p>简单来说，这样的存储方式有几种好处：</p>
+<ol>
+<li>对某几列数据的访问，能够有不错的局部性和更低的信息熵</li>
+<li>相同的 type 可以用一些非通用（snappy，zstd 等）方式来压缩、延迟物化。同时能减小占用的空间. 通常占用空间这点是会被忽略的，但是它能起到很多意想不到的收益</li>
+<li>更好的 IPC、对 SIMD 的利用</li>
+</ol>
+<p>对于列的存储来说，我们仍然有很多通用的格式，例如 Parquet、ORC。部分 shared-nothing 的数据仓库自己会实现一些格式，ClickHouse；也有数据仓库用这些开放的 Parquet 格式来提供支持，比如 databend。这些格式有共性、也有不同的地方。</p>
+<p>同时，也需要注意，把一行存成列式不一定代表每列都分开存，可能有一定的折衷方案，比如数个 column 一起存。</p>
+<p>此外，有一些项目也在为列式计算提供帮助。Apache Arrow 是一个处理计算和交换格式的项目，用 SIMD 等形式完成计算。</p>
+<p>我们将简单介绍一些列式存储和压缩的想法，然后介绍一些通用的思路。编码本身是一种 speed 和 compression ratio 的 trade-off，而计算系统可能能利用压缩的优势，来减小它带来的开销，大大提高查询性能。</p>
+<h2 id="编码的单位-clusters-skipping"><a href="#编码的单位-clusters-skipping" class="headerlink" title="编码的单位/clusters/skipping"></a>编码的单位/clusters/skipping</h2><p><img src="https://image.mwish.me/blog-image/BC69D6D1-43EA-4991-9191-D215CAADD766.png" alt="BC69D6D1-43EA-4991-9191-D215CAADD766"></p>
+<p>Zone Maps 提供了一种便于 skipping 的抽象。</p>
+<p>具体可以参考：<a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/354334895">https://zhuanlan.zhihu.com/p/354334895</a></p>
+<h2 id="编码"><a href="#编码" class="headerlink" title="编码"></a>编码</h2><h3 id="C-Store-提到的方法"><a href="#C-Store-提到的方法" class="headerlink" title="C-Store 提到的方法"></a>C-Store 提到的方法</h3><p>C-Store 论文提到过一些编码的形式，这部分标记在论文的 RS 部分：</p>
+<p><strong>Type 1</strong>:有序的且大部分值相同的序列</p>
+<p>这种序列用 <code>(v, f, n)</code> 来表示</p>
+<blockquote>
+<p><em>f</em> is the position in the column where <em>v</em> first appears, and <em>n</em> is the number of times <em>v</em> appears in the column.</p>
+</blockquote>
+<p>为了支持 query, c-store 对这个结构支持了 B树索引，加快了对这个内容的查找。</p>
+<p><strong>Type 2:</strong> 无序且大部分值相同的序列</p>
+<p>这种序列用 <em>(v, b)</em> 来编码，<strong>v</strong> 是可能的值，<strong>b</strong> 是是这个值的数的 bitset:</p>
+<blockquote>
+<p>For example, given a column of integers 0,0,1,1,2,1,0,2,1, we can Type 2-encode this as three pairs: (0, 110000100), (1, 001101001), and (2,000010010).</p>
+</blockquote>
+<p>这里也实现了 <code>&lt;position, value&gt;</code> 的 B+Tree 查找结构。</p>
+<p><strong>Type 3</strong>: 有序且值较少相同的序列</p>
+<p>采用 Delta 的形式进行编码（我感觉这里有点怪，因为 delta 本身应该和压缩没关系，感觉像是用了 delta + varint 啥的…）</p>
+<p><strong>Type 4</strong>: 无序，且值较少相同的序列，相对比较难编码。</p>
+<h3 id="The-Design-and-Implementation-of-Modern-Column-Oriented-Database-Systems"><a href="#The-Design-and-Implementation-of-Modern-Column-Oriented-Database-Systems" class="headerlink" title="The Design and Implementation of Modern Column-Oriented Database Systems"></a>The Design and Implementation of Modern Column-Oriented Database Systems</h3><p>这里提到了几种编码方式</p>
+<h4 id="RLE-Run-Length-Encoding"><a href="#RLE-Run-Length-Encoding" class="headerlink" title="RLE: Run Length Encoding"></a>RLE: Run Length Encoding</h4><p>同上述的 <strong>type 1</strong>。</p>
+<h4 id="Bit-Vec-Encoding"><a href="#Bit-Vec-Encoding" class="headerlink" title="Bit-Vec Encoding"></a>Bit-Vec Encoding</h4><p>同上述的 <strong>type 2</strong></p>
+<p>需要注意的是，bit-vec encoding 还能够进一步压缩，如果 bitmap 很多 0 或者 很多 1，可以用标准的压缩算法压缩；也可以用 RLE 的方式来压缩。Oracle Byte-Aligned Bitmap (Oracle’s BBC) 和 WAH(word-aligned hybrid)提供了一种方案。当然，这种方案只有数据非常稀疏的时候，才值得使用。</p>
+<h4 id="Dictionary"><a href="#Dictionary" class="headerlink" title="Dictionary"></a>Dictionary</h4><p>Dictionary 某种意义上和 Bit-Vec Encoding 很像，我个人理解可以放在不同场景使用。它对某一列的数据构建了一个字典表，然后里面的数据表示在字典的哪一项。当然，如果数据分布很多的话，这个字典会膨胀的非常大。</p>
+<p>一般的情况下，数据可能会以「每个 Block/File/ …」 不同粒度的大小来构建字典。保证字典本身不会膨胀很大。</p>
+<p>对于一些相同模式的字符串，字典编码可以让他们每一项有相同的长度，这也能大大加速查询、降低存储空间。</p>
+<p>此外，考虑到对上层执行的优化，而不仅仅是压缩的话，字典压缩可能要考虑一些奇怪的东西：</p>
+<ol>
+<li>在构建的时候是一次性构建，还是碰到新的值，就给一个新的</li>
+<li>字典的 order 和原本的 order 是否一样呢？比如我们把几个字符串字典压缩了，然后需要排序或者取 top 之类的，可能希望这个序号和原来有一样的顺序（Order-preserving encoding）</li>
+</ol>
+<p>在 Dictionary Encoding 构建的时候，可能要考虑：</p>
+<ol>
+<li>值的 <strong>cardinal number</strong> 有多少种</li>
+<li>包括这些数据，处理的时候，是否能 Fit 在 L1/L2 Cache 中</li>
+<li>是否需要让数据 byte-aligned. 按位对齐的数据通常来说处理会快很多，不过压缩/解压缩 CPU 开销也更大</li>
+</ol>
+<p>在解析的时候，单纯 Dictionary Encoding 也能够很好的解析到单个值上。此外还有一些保序的压缩算法，比如 ALM 或者 ZIL。</p>
+<h4 id="Frame-Of-Reference-FOR"><a href="#Frame-Of-Reference-FOR" class="headerlink" title="Frame Of Reference (FOR)"></a>Frame Of Reference (FOR)</h4><p>当数据有一定局部性的时候，可能可以组织成 frame 的形式，例如：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">1003, 1001, 1007, 1006, 1004</span><br></pre></td></tr></table></figure>
+<p>可以组织成：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">1000, 3, 1, 7, 6, 4</span><br></pre></td></tr></table></figure>
+<p>的形式。这里可以注意，<code>3, 1, 7, 6, 4</code> 是以 Delta 的形式存储的，更多的时候可能会让它们占尽量少的位，例如以 varint 的方式存储。</p>
+<h4 id="Increment-Encoding"><a href="#Increment-Encoding" class="headerlink" title="Increment Encoding"></a>Increment Encoding</h4><p>Increment Encoding 常见于 Key 的压缩编码。对于 key/value 的上层输入，常常会有相同前缀/后缀的 string，可以采用增量编码。LevelDB 使用了前缀压缩 + Restart。</p>
+<p>具体可见 wiki。</p>
+<h4 id="The-Patching-Technique-Mostly-Encoding"><a href="#The-Patching-Technique-Mostly-Encoding" class="headerlink" title="The Patching Technique / Mostly Encoding"></a>The Patching Technique / Mostly Encoding</h4><p>上述有的方法中，不一定适合完整的集合，比方说，只在某一段中，数据是有局部性的。Patching 相当于：</p>
+<ol>
+<li>有一些控制段，表示某几段是以特殊编码方式存储数据的</li>
+<li>在控制段外，不压缩。</li>
+</ol>
+<p>此外，如果有极限的值的话，可以标注出来，做特殊处理：</p>
+<p><img src="https://image.mwish.me/blog-image/30D10CA5-E03F-480A-9FE2-E907512FB0DD.png" alt="30D10CA5-E03F-480A-9FE2-E907512FB0DD"></p>
+<h3 id="杂谈"><a href="#杂谈" class="headerlink" title="杂谈"></a>杂谈</h3><p>对于编码的选择，有一些论文表示了如何自动切换，以达到很好的效果。例如 SIGMOD 2021 的 CodecDB。</p>
+<p>有很多可供参考的代码，比如 ORC/Parquet 的压缩格式，和 Facebook 的时序数据库 Gorilla（提出了时间压缩的 delta-of-delta，double 类型的压缩方式）。</p>
+<p>关于 int 的压缩，可以看：<a target="_blank" rel="noopener" href="https://kkc.github.io/2021/01/30/integer-compression-note/">https://kkc.github.io/2021/01/30/integer-compression-note/</a> 和 <a target="_blank" rel="noopener" href="https://arxiv.org/pdf/1908.10598.pdf">https://arxiv.org/pdf/1908.10598.pdf</a></p>
+<h2 id="ORC-Parquet"><a href="#ORC-Parquet" class="headerlink" title="ORC/Parquet"></a>ORC/Parquet</h2><p>Apache ORC 和 Apache Parquet 可以说是列式存储这些开放格式的事实标准了。它们有很多相同的部分，也有部分区别</p>
+<h3 id="基本原理"><a href="#基本原理" class="headerlink" title="基本原理"></a>基本原理</h3><p>ORC 全称是：Optimized Row Columnar。这个格式本身似乎是为 Hadoop 项目设计的。</p>
+<p><img src="https://image.mwish.me/blog-image/OrcFileLayout.png" alt="OrcFileLayout"></p>
+<p>我们以 ORC v3 为例介绍一下这里的基本原理。忽略 Index Data 部分。多个行会被组织成 RowGroup/Stripe （名词很多，懂意思就行），然后里面切分为 Column。</p>
+<p>ORC 文件解析是从后往前的，在 HDFS 中，文件内容本身是不会直接被修改的，所以一些元信息会被存在文件的尾部。为便于更新，元信息可能用 PB 描述。Postscript 部分包含整个文件的元信息，而 File Footer 部分可能包含各个 Stripe 的信息，便于获致更具体的文件信息。</p>
+<figure class="highlight protobuf"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">message </span><span class="title class_">Footer</span> &#123;</span><br><span class="line"> <span class="comment">// the length of the file header in bytes (always 3)</span></span><br><span class="line"> <span class="keyword">optional</span> <span class="type">uint64</span> headerLength = <span class="number">1</span>;</span><br><span class="line"> <span class="comment">// the length of the file header and body in bytes</span></span><br><span class="line"> <span class="keyword">optional</span> <span class="type">uint64</span> contentLength = <span class="number">2</span>;</span><br><span class="line"> <span class="comment">// the information about the stripes</span></span><br><span class="line"> <span class="keyword">repeated</span> StripeInformation stripes = <span class="number">3</span>;</span><br><span class="line"> <span class="comment">// the schema information</span></span><br><span class="line"> <span class="keyword">repeated</span> Type types = <span class="number">4</span>;</span><br><span class="line"> <span class="comment">// the user metadata that was added</span></span><br><span class="line"> <span class="keyword">repeated</span> UserMetadataItem metadata = <span class="number">5</span>;</span><br><span class="line"> <span class="comment">// the total number of rows in the file</span></span><br><span class="line"> <span class="keyword">optional</span> <span class="type">uint64</span> numberOfRows = <span class="number">6</span>;</span><br><span class="line"> <span class="comment">// the statistics of each column across the file</span></span><br><span class="line"> <span class="keyword">repeated</span> ColumnStatistics statistics = <span class="number">7</span>;</span><br><span class="line"> <span class="comment">// the maximum number of rows in each index entry</span></span><br><span class="line"> <span class="keyword">optional</span> <span class="type">uint32</span> rowIndexStride = <span class="number">8</span>;</span><br><span class="line"> <span class="comment">// Each implementation that writes ORC files should register for a code</span></span><br><span class="line"> <span class="comment">// 0 = ORC Java</span></span><br><span class="line"> <span class="comment">// 1 = ORC C++</span></span><br><span class="line"> <span class="comment">// 2 = Presto</span></span><br><span class="line"> <span class="comment">// 3 = Scritchley Go from https://github.com/scritchley/orc</span></span><br><span class="line"> <span class="comment">// 4 = Trino</span></span><br><span class="line"> <span class="keyword">optional</span> <span class="type">uint32</span> writer = <span class="number">9</span>;</span><br><span class="line"> <span class="comment">// information about the encryption in this file</span></span><br><span class="line"> <span class="keyword">optional</span> Encryption encryption = <span class="number">10</span>;</span><br><span class="line"> <span class="comment">// the number of bytes in the encrypted stripe statistics</span></span><br><span class="line"> <span class="keyword">optional</span> <span class="type">uint64</span> stripeStatisticsLength = <span class="number">11</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>文件的主体部分被分为多个 Stripe，在别的格式中，它可能被称为 RowGroup。它包含：</p>
+<ol>
+<li>数据的索引</li>
+<li>各列的数据</li>
+<li>Stripe 的 Footer</li>
+</ol>
+<p>Stripe 支持下列格式的各种数据：</p>
+<p><img src="https://image.mwish.me/blog-image/TreeWriters.png" alt="TreeWriters"></p>
+<p>在 Stripe 的指示下，可以把 Column 做如下的压缩：</p>
+<ol>
+<li>RLE</li>
+<li>Dictionary</li>
+<li>Delta</li>
+</ol>
+<p>对于 Column，ORCFile 定义 <code>Stream</code> 为一串字节流。这里有如下分类：</p>
+<figure class="highlight protobuf"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">message </span><span class="title class_">Stream</span> &#123;</span><br><span class="line"> <span class="keyword">enum </span><span class="title class_">Kind</span> &#123;</span><br><span class="line">   <span class="comment">// boolean stream of whether the next value is non-null</span></span><br><span class="line">   PRESENT = <span class="number">0</span>;</span><br><span class="line">   <span class="comment">// the primary data stream</span></span><br><span class="line">   DATA = <span class="number">1</span>;</span><br><span class="line">   <span class="comment">// the length of each value for variable length data</span></span><br><span class="line">   LENGTH = <span class="number">2</span>;</span><br><span class="line">   <span class="comment">// the dictionary blob</span></span><br><span class="line">   DICTIONARY_DATA = <span class="number">3</span>;</span><br><span class="line">   <span class="comment">// deprecated prior to Hive 0.11</span></span><br><span class="line">   <span class="comment">// It was used to store the number of instances of each value in the</span></span><br><span class="line">   <span class="comment">// dictionary</span></span><br><span class="line">   DICTIONARY_COUNT = <span class="number">4</span>;</span><br><span class="line">   <span class="comment">// a secondary data stream</span></span><br><span class="line">   SECONDARY = <span class="number">5</span>;</span><br><span class="line">   <span class="comment">// the index for seeking to particular row groups</span></span><br><span class="line">   ROW_INDEX = <span class="number">6</span>;</span><br><span class="line">   <span class="comment">// original bloom filters used before ORC-101</span></span><br><span class="line">   BLOOM_FILTER = <span class="number">7</span>;</span><br><span class="line">   <span class="comment">// bloom filters that consistently use utf8</span></span><br><span class="line">   BLOOM_FILTER_UTF8 = <span class="number">8</span>;</span><br><span class="line"></span><br><span class="line">   <span class="comment">// Virtual stream kinds to allocate space for encrypted index and data.</span></span><br><span class="line">   ENCRYPTED_INDEX = <span class="number">9</span>;</span><br><span class="line">   ENCRYPTED_DATA = <span class="number">10</span>;</span><br><span class="line"></span><br><span class="line">   <span class="comment">// stripe statistics streams</span></span><br><span class="line">   STRIPE_STATISTICS = <span class="number">100</span>;</span><br><span class="line">   <span class="comment">// A virtual stream kind that is used for setting the encryption IV.</span></span><br><span class="line">   FILE_STATISTICS = <span class="number">101</span>;</span><br><span class="line"> &#125;</span><br><span class="line"> <span class="keyword">required</span> Kind kind = <span class="number">1</span>;</span><br><span class="line"> <span class="comment">// the column id</span></span><br><span class="line"> <span class="keyword">optional</span> <span class="type">uint32</span> column = <span class="number">2</span>;</span><br><span class="line"> <span class="comment">// the number of bytes in the file</span></span><br><span class="line"> <span class="keyword">optional</span> <span class="type">uint64</span> length = <span class="number">3</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>在下面的段，描述了它们是怎么被支持的：<a target="_blank" rel="noopener" href="https://orc.apache.org/specification/ORCv2/">https://orc.apache.org/specification/ORCv2/</a> 的 Column Encodings 一节。</p>
+<h4 id="变长字段和-Null"><a href="#变长字段和-Null" class="headerlink" title="变长字段和 Null"></a>变长字段和 Null</h4><p><img src="https://image.mwish.me/blog-image/541FB4E7-28A0-4029-B88B-23AC48B38B5D.png" alt="541FB4E7-28A0-4029-B88B-23AC48B38B5D"></p>
+<p>这里有不同的模式，比方说，direct 存放：</p>
+<ol>
+<li>Null 的集合，以 RLE 的形式存放</li>
+<li>Data，连续的非 Null 内容</li>
+<li>Length 具体的长度</li>
+</ol>
+<p>而 dictionary 则用字典来存储。</p>
+<h3 id="Parquet-和-Dremel"><a href="#Parquet-和-Dremel" class="headerlink" title="Parquet 和 Dremel"></a>Parquet 和 Dremel</h3><p>（需要注意的是，Parquet 这个词很容易读错，可以去搜搜看你读错了吗）</p>
+<p>Parquet 的主要思路来源于 Google 的 Dremel。Google 大量数据用 Protobuf 存储，所以当时搞列存，也要兼容它。推过内部系统的话就知道兼容是一个强需求了。</p>
+<p><img src="https://image.mwish.me/blog-image/FileLayout.gif" alt="FileLayout"></p>
+<p>我们不关注这个格式和 ORC 的细微区别，比如 RowGroup 或者 Stripe 的命名。Dremel 关注一个包含 <code>optional</code>, <code>repeated</code> 且可能嵌套的结构是怎么实现的：</p>
+<p><img src="https://image.mwish.me/blog-image/9F45A74A-9E03-4731-A00F-3758C8C9E81B.png" alt="9F45A74A-9E03-4731-A00F-3758C8C9E81B"></p>
+<p><img src="https://image.mwish.me/blog-image/F541F4F8-D061-4C2B-98BB-9EFC5F07AA0E.png" alt="F541F4F8-D061-4C2B-98BB-9EFC5F07AA0E"></p>
+<p>如 Schema 所示，这里有嵌套的数据结构，还有 repeated 和 optional，这意味着，需要一些额外的标志来解析数据在哪一行。Dremel 引入了 <code>repetition levels</code> 和 <code>Deﬁnition Levels</code> 两个向量，来做一些这样的 Resolve。</p>
+<h3 id="ACID-Indexes"><a href="#ACID-Indexes" class="headerlink" title="ACID / Indexes"></a>ACID / Indexes</h3><p>实际上，ORC 的新版本有对 ACID 的支持，也有 Index 相关的信息，可以存放一些 Bloom Filter 之类的索引。</p>
+<p>对于列式数据来说，实际上可以有一些稀疏索引之类的优化，能给到 field 大概的位置。在 ClickHouse 的 MergeTree 里面，有大概的实现。同时，如果以行的方式，进行增量更新的话，这里写放大会比较大。Kudu、SAP HANA 之类的产品为更新提供了方案。</p>
+<p>也就是说，根据我个人的看法，ACID/Indexes 更像一个上层的需求。ORC 对这些有原生支持，但是你可以手动在 Parquet 里面增加支持，例如 <a target="_blank" rel="noopener" href="https://github.com/datafuselabs/databend#design-overview">databend 架构</a> 维护了 sparse index 和 min max 信息。这些通用的格式在这些方面也有着不错的逻辑。</p>
+<h2 id="DB-直接在压缩的数据上进行计算"><a href="#DB-直接在压缩的数据上进行计算" class="headerlink" title="DB: 直接在压缩的数据上进行计算"></a>DB: 直接在压缩的数据上进行计算</h2><p>SIGMOD 2006 的 <em>Integrating Compression and Execution in Column-Oriented Database Systems</em> 论文，描述了怎么能够在压缩的数据上进行计算。它描述的是一种类似延迟物化的思路，在压缩的数据上进行计算，它对数据进行了下列抽象：</p>
+<p><img src="https://image.mwish.me/blog-image/59A466B0-BFA7-4FF6-8789-D999BE5502FD.png" alt="59A466B0-BFA7-4FF6-8789-D999BE5502FD"></p>
+<p><code>Block</code> 在 RLE 中指的是单个条目和对应内容，在 Bit-Vector/字典 中指的是单个值、非连续的一组信息（比如全0 或者全1）。它提供了一个 <code>DataSource</code> operator，允许把各种条件下推下去。比方说，bit-vector、字典都可以处理一些 Eq 之类的 Expr。</p>
+<p>对于 JOIN 来说，它可以直接在 RLE 上运行。对于 Bit-vector，执行 Nested Loop Join 且里侧为 bit-vector 的时候，可以执行一些优化：</p>
+<p><img src="https://image.mwish.me/blog-image/49439B4B-D687-4F2D-9357-4BDD83C7709C.png" alt="49439B4B-D687-4F2D-9357-4BDD83C7709C"></p>
+<p>它还抽了一下下面的 API：</p>
+<blockquote>
+<p><code>isOneValue()</code> returns whether or not the block contains just one value (and many positions for that value). <code>isValueSorted()</code> returns whether or not the block’s values are sorted (blocks with one value are trivially sorted). <code>isPosContig()</code> returns whether the block contains a consecutive subset of a column (i.e. for a given position range within a column, the block contains all values located in that range).</p>
+</blockquote>
+<p>然后有对应的优化范围：</p>
+<p><img src="https://image.mwish.me/blog-image/188A1F7D-D245-4EAD-9F37-CFF44FD341CA.png" alt="188A1F7D-D245-4EAD-9F37-CFF44FD341CA"></p>
+<p>总之，这里提供了一些 domain-specific 的优化方式。</p>
+<h2 id="Apache-Arrow"><a href="#Apache-Arrow" class="headerlink" title="Apache Arrow"></a>Apache Arrow</h2><p>不同于上述的存储格式，Arrow 更多的是一个交换格式和计算格式。利用 SIMD、Vectorize 等方式，完成跨语言的、高效的内存计算，同时也支持和 Parquet 的转化和 nested structure。</p>
+<p>Apache Arrow 目前是没有延迟物化支持的。</p>
+<h2 id="结语"><a href="#结语" class="headerlink" title="结语"></a>结语</h2><p>不同的格式、不同的数据有不同的特征。这里文章没有涉及一些复杂东西，比如 Streaming Parsing 等需求。笔者描述了列存、行存、RPC 等不同格式的需求和特征，及自己对一些特性的看法。感性的也可以在下方评论交流。鉴于笔者水平不行，行文可能存在诸多纰漏。敬请谅解。</p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%88%97%E5%BC%8F%E5%AD%98%E5%82%A8"><span class="toc-number">1.</span> <span class="toc-text">列式存储</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BC%96%E7%A0%81%E7%9A%84%E5%8D%95%E4%BD%8D-clusters-skipping"><span class="toc-number">2.</span> <span class="toc-text">编码的单位&#x2F;clusters&#x2F;skipping</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BC%96%E7%A0%81"><span class="toc-number">3.</span> <span class="toc-text">编码</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#C-Store-%E6%8F%90%E5%88%B0%E7%9A%84%E6%96%B9%E6%B3%95"><span class="toc-number">3.1.</span> <span class="toc-text">C-Store 提到的方法</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#The-Design-and-Implementation-of-Modern-Column-Oriented-Database-Systems"><span class="toc-number">3.2.</span> <span class="toc-text">The Design and Implementation of Modern Column-Oriented Database Systems</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#RLE-Run-Length-Encoding"><span class="toc-number">3.2.1.</span> <span class="toc-text">RLE: Run Length Encoding</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Bit-Vec-Encoding"><span class="toc-number">3.2.2.</span> <span class="toc-text">Bit-Vec Encoding</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Dictionary"><span class="toc-number">3.2.3.</span> <span class="toc-text">Dictionary</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Frame-Of-Reference-FOR"><span class="toc-number">3.2.4.</span> <span class="toc-text">Frame Of Reference (FOR)</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Increment-Encoding"><span class="toc-number">3.2.5.</span> <span class="toc-text">Increment Encoding</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#The-Patching-Technique-Mostly-Encoding"><span class="toc-number">3.2.6.</span> <span class="toc-text">The Patching Technique &#x2F; Mostly Encoding</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%9D%82%E8%B0%88"><span class="toc-number">3.3.</span> <span class="toc-text">杂谈</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#ORC-Parquet"><span class="toc-number">4.</span> <span class="toc-text">ORC&#x2F;Parquet</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9F%BA%E6%9C%AC%E5%8E%9F%E7%90%86"><span class="toc-number">4.1.</span> <span class="toc-text">基本原理</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%8F%98%E9%95%BF%E5%AD%97%E6%AE%B5%E5%92%8C-Null"><span class="toc-number">4.1.1.</span> <span class="toc-text">变长字段和 Null</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Parquet-%E5%92%8C-Dremel"><span class="toc-number">4.2.</span> <span class="toc-text">Parquet 和 Dremel</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#ACID-Indexes"><span class="toc-number">4.3.</span> <span class="toc-text">ACID &#x2F; Indexes</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#DB-%E7%9B%B4%E6%8E%A5%E5%9C%A8%E5%8E%8B%E7%BC%A9%E7%9A%84%E6%95%B0%E6%8D%AE%E4%B8%8A%E8%BF%9B%E8%A1%8C%E8%AE%A1%E7%AE%97"><span class="toc-number">5.</span> <span class="toc-text">DB: 直接在压缩的数据上进行计算</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Apache-Arrow"><span class="toc-number">6.</span> <span class="toc-text">Apache Arrow</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BB%93%E8%AF%AD"><span class="toc-number">7.</span> <span class="toc-text">结语</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2022/01/15/format-thinking-2/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2022/01/15/format-thinking-2/&text=谈谈格式: 列存"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2022/01/15/format-thinking-2/&title=谈谈格式: 列存"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2022/01/15/format-thinking-2/&is_video=false&description=谈谈格式: 列存"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=谈谈格式: 列存&body=Check out this article: http://blog.mwish.me/2022/01/15/format-thinking-2/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2022/01/15/format-thinking-2/&title=谈谈格式: 列存"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2022/01/15/format-thinking-2/&title=谈谈格式: 列存"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2022/01/15/format-thinking-2/&title=谈谈格式: 列存"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2022/01/15/format-thinking-2/&title=谈谈格式: 列存"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2022/01/15/format-thinking-2/&name=谈谈格式: 列存&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2022/01/15/format-thinking-2/&t=谈谈格式: 列存"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

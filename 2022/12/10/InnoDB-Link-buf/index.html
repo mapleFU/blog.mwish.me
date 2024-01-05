@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="InnoDB 在 MySQL 8.0 之后，提供了 Lock-Free WAL 的机制，顺序申请 LSN，然后把内容拷贝到 Log 应该写入的 Buffer 中，最后写入 Disk，然后通知上层。同时，Page Flush 和这套机制是联动的，FlushList 和这套日志流程需要联动。 为什么需要贴这块呢？相对于一般的 mpmc，mpsc 等队列，WAL 是一个在数据库中很常用，与 concur">
+<meta property="og:type" content="article">
+<meta property="og:title" content="InnoDB Link_buf">
+<meta property="og:url" content="http://blog.mwish.me/2022/12/10/InnoDB-Link-buf/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="InnoDB 在 MySQL 8.0 之后，提供了 Lock-Free WAL 的机制，顺序申请 LSN，然后把内容拷贝到 Log 应该写入的 Buffer 中，最后写入 Disk，然后通知上层。同时，Page Flush 和这套机制是联动的，FlushList 和这套日志流程需要联动。 为什么需要贴这块呢？相对于一般的 mpmc，mpsc 等队列，WAL 是一个在数据库中很常用，与 concur">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/ca7f50ef0815b17696656e1a27259016.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/15a26426373819f5d7028880cf357f51.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/577871cca6c66b0c091720e103568f7b.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/1eae15078668ccd0d3e54e11f1783dfc.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/843bc5776c34866f20b5dc0086474bfc.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/1dc4e6fcece341ee62383b4ab87d95d0.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/b704115a35af372c5c5c57fc1b2fa78e.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/innodb_notify.png">
+<meta property="article:published_time" content="2022-12-10T15:40:00.000Z">
+<meta property="article:modified_time" content="2022-12-10T15:39:46.044Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/ca7f50ef0815b17696656e1a27259016.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>InnoDB Link_buf</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2022/12/24/SQL-Server-Columnar-Stores/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2022/11/24/SOSP-11-Windows-Azure-Storage/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2022/12/10/InnoDB-Link-buf/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2022/12/10/InnoDB-Link-buf/&text=InnoDB Link_buf"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2022/12/10/InnoDB-Link-buf/&title=InnoDB Link_buf"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2022/12/10/InnoDB-Link-buf/&is_video=false&description=InnoDB Link_buf"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=InnoDB Link_buf&body=Check out this article: http://blog.mwish.me/2022/12/10/InnoDB-Link-buf/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2022/12/10/InnoDB-Link-buf/&title=InnoDB Link_buf"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2022/12/10/InnoDB-Link-buf/&title=InnoDB Link_buf"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2022/12/10/InnoDB-Link-buf/&title=InnoDB Link_buf"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2022/12/10/InnoDB-Link-buf/&title=InnoDB Link_buf"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2022/12/10/InnoDB-Link-buf/&name=InnoDB Link_buf&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2022/12/10/InnoDB-Link-buf/&t=InnoDB Link_buf"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BB%A3%E7%A0%81%E5%85%A5%E5%8F%A3"><span class="toc-number">1.</span> <span class="toc-text">代码入口</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#LSN-%E5%88%86%E9%85%8D"><span class="toc-number">1.1.</span> <span class="toc-text">LSN 分配</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%AD%89%E5%BE%85-LSN"><span class="toc-number">1.2.</span> <span class="toc-text">等待 LSN</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Link-buf"><span class="toc-number">1.3.</span> <span class="toc-text">Link_buf</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Copying-Redo-Log"><span class="toc-number">1.4.</span> <span class="toc-text">Copying Redo Log</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Log-Writer-amp-amp-Log-Flusher"><span class="toc-number">1.5.</span> <span class="toc-text">Log Writer &amp;&amp; Log Flusher</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#References"><span class="toc-number">2.</span> <span class="toc-text">References</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        InnoDB Link_buf
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2022-12-10T15:40:00.000Z" itemprop="datePublished">2022-12-10</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>InnoDB 在 MySQL 8.0 之后，提供了 Lock-Free WAL 的机制，顺序申请 LSN，然后把内容拷贝到 Log 应该写入的 Buffer 中，最后写入 Disk，然后通知上层。同时，Page Flush 和这套机制是联动的，FlushList 和这套日志流程需要联动。</p>
+<p>为什么需要贴这块呢？相对于一般的 mpmc，mpsc 等队列，WAL 是一个在数据库中很常用，与 concurrent-queue 有共同点，但是也有不同的内容。因为它涉及内存拷贝和 IO。</p>
+<p>我们先简短介绍一下从别的文章抄来的代码入口，InnoDB 对内容的修改会走 mtr，mtr 会有对 buffer 的锁和 Page Change 的 Logs，Log 在 mtr 执行阶段会 buffer 在 mtr 的内存中，在 commit 阶段会移动到 <code>log_sys_t::buf</code> 中，这里会通过 <code>log_sys_t::buf</code> 来写，日志会被拷贝在 Log Buffer 中，当配置 <code>innodb_flush_log_at_trx_commit=1</code> 的时候，这里会在 txn-commit 的时候持久化日志。</p>
+<p>写入 Log 是在 mtr 提交的时候：</p>
+<ul>
+<li>分配 LSN</li>
+<li>等待内存的 Ring Buffer 匀出足够的空间，然后 Link 到对应的结构中</li>
+<li>拷贝到内存 Buffer 中</li>
+</ul>
+<p>在这之后，Page 的写入就被写入到内存的 Log Buffer 了，随后，脏页需要被加入 flush list，这个时候，为了维护脏页写入的顺序，会有：</p>
+<ul>
+<li><code>redo_log_mark_dirty_pages</code>: 标记页面为 dirty</li>
+<li>Link 到对应的结构中</li>
+<li>由 Recent Closer 线程来处理</li>
+</ul>
+<p>需要说明的是，Flush 和 LSN 强相关，因为 ckpt 依赖 LSN，这个可以说是 Recover 层的原因，InnoDB 的 Page 会有下面两个参数：</p>
+<ul>
+<li><p><code>oldest_modification</code></p>
+</li>
+<li><p><code>newest_modification</code></p>
+</li>
+</ul>
+<p>这两个词含义和字面意思差不多，mtr 修改单颗 index 可能会修改多个 Page（虽然概率上可以当成大部分乐观的场景，它只会修改一个 Page，但是涉及 SMO 或者什么的时候，可能会修改多个 Page），它在 mtr commit 的拷贝 log 阶段需要持有这些页面的锁。这个地方会尽量让 flush list 按照 oldest modification 的时间下刷，在 8.0 之前的版本，甚至是按照这个顺序下刷的：</p>
+<p><img src="https://image.mwish.me/blog-image/ca7f50ef0815b17696656e1a27259016.png" alt="ca7f50ef0815b17696656e1a27259016"></p>
+<p>这个和 checkpoint 的和 Recover 的处理有关，checkpoint 的时候，从某个 Checkpoint LSN 中恢复，可能要考虑 LSN 和恢复之间的关系：</p>
+<p><img src="https://image.mwish.me/blog-image/15a26426373819f5d7028880cf357f51.png" alt="15a26426373819f5d7028880cf357f51"></p>
+<p>否则的话，这个可能恢复的时候，需要一些特殊的处理机制：</p>
+<p><img src="https://image.mwish.me/blog-image/577871cca6c66b0c091720e103568f7b.png" alt="577871cca6c66b0c091720e103568f7b"></p>
+<p>在新的 Design 中，这里大概会维护一些乱序度，然后让对应 Page 在 L 的区间内保证一定的 Order。</p>
+<p>系统中，维护了下面的变量：</p>
+<ul>
+<li>(<code>Link_buf</code>) <code>recent_written</code>: 记录内存拷贝的 write. 护写log buffer的完成状态, <code>recent_written</code>中维护的最大LSN, M表示, 所有小于这个M的LSN都已经将它的redo log写入log buffer. 而这个M也是(如果这下crash, 可能会触发的)崩溃恢复的截止位点, 同时也是下一个写log buffer操作的开始位点.</li>
+<li>(<code>Link_buf</code>) <code>recent_closed</code>: 维护 flush LSN 的递增性质</li>
+<li>额外的后台线程(<code>log_writer</code>/ <code>log_flusher</code>, <code>log_flush_notifier</code>, <code>log_checkpointer</code>, …</li>
+</ul>
+<p>这篇文章不会介绍太多 Buffer Pool 无锁 flushing 的细节，因为写文章的时候我也没完全搞懂。</p>
+<h2 id="代码入口"><a href="#代码入口" class="headerlink" title="代码入口"></a>代码入口</h2><p>具体而言，这块相关的代码在 <code>log0buf.cc</code> 里面，这里面也有不少的描述，然后一些头文件定义在 <code>log0log.h</code> 里面，<code>log_t</code> 类型在 <code>log0types.h</code> 里面. 外界调用在 mtr 的代码中：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/** Write the redo log record, add dirty pages to the flush list and release</span></span><br><span class="line"><span class="comment">the resources. */</span></span><br><span class="line"><span class="type">void</span> <span class="type">mtr_t</span>::Command::<span class="built_in">execute</span>() &#123;</span><br><span class="line">  <span class="built_in">ut_ad</span>(m_impl-&gt;m_log_mode != MTR_LOG_NONE);</span><br><span class="line"></span><br><span class="line">  ulint len;</span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="keyword">ifndef</span> UNIV_HOTBACKUP</span></span><br><span class="line">  len = <span class="built_in">prepare_write</span>();</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span> (len &gt; <span class="number">0</span>) &#123;</span><br><span class="line">    <span class="type">mtr_write_log_t</span> write_log;</span><br><span class="line"></span><br><span class="line">    write_log.m_left_to_write = len;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">auto</span> handle = <span class="built_in">log_buffer_reserve</span>(*log_sys, len);</span><br><span class="line"></span><br><span class="line">    write_log.m_handle = handle;</span><br><span class="line">    write_log.m_lsn = handle.start_lsn;</span><br><span class="line">    write_log.m_rec_group_start_lsn = handle.start_lsn;</span><br><span class="line"></span><br><span class="line">    m_impl-&gt;m_log.for_each_block(write_log);</span><br><span class="line"></span><br><span class="line">    <span class="built_in">ut_ad</span>(write_log.m_left_to_write == <span class="number">0</span>);</span><br><span class="line">    <span class="built_in">ut_ad</span>(write_log.m_lsn == handle.end_lsn);</span><br><span class="line"></span><br><span class="line">    <span class="built_in">log_wait_for_space_in_log_recent_closed</span>(*log_sys, handle.start_lsn);</span><br><span class="line"></span><br><span class="line">    <span class="built_in">DEBUG_SYNC_C</span>(<span class="string">&quot;mtr_redo_before_add_dirty_blocks&quot;</span>);</span><br><span class="line"></span><br><span class="line">    <span class="built_in">add_dirty_blocks_to_flush_list</span>(handle.start_lsn, handle.end_lsn);</span><br><span class="line"></span><br><span class="line">    <span class="built_in">log_buffer_close</span>(*log_sys, handle);</span><br><span class="line"></span><br><span class="line">    m_impl-&gt;m_mtr-&gt;m_commit_lsn = handle.end_lsn;</span><br><span class="line"></span><br><span class="line">  &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">    <span class="built_in">DEBUG_SYNC_C</span>(<span class="string">&quot;mtr_noredo_before_add_dirty_blocks&quot;</span>);</span><br><span class="line"></span><br><span class="line">    <span class="built_in">add_dirty_blocks_to_flush_list</span>(<span class="number">0</span>, <span class="number">0</span>);</span><br><span class="line">  &#125;</span><br><span class="line"><span class="meta">#<span class="keyword">endif</span> <span class="comment">/* !UNIV_HOTBACKUP */</span></span></span><br><span class="line"></span><br><span class="line">  <span class="built_in">release_all</span>();</span><br><span class="line">  <span class="built_in">release_resources</span>();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="LSN-分配"><a href="#LSN-分配" class="headerlink" title="LSN 分配"></a>LSN 分配</h3><p>我们不过度牵涉 mtr 的细节，首先这里需要 reserve 对应的 lsn:</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">@see @ref sect_redo_log_buf_reserve</span><br><span class="line">@param[in,out]	log	redo log</span><br><span class="line">@param[in]	len	number of data bytes to reserve <span class="keyword">for</span> write</span><br><span class="line">@<span class="keyword">return</span> handle that represents the reservation */</span><br><span class="line">Log_handle <span class="built_in">log_buffer_reserve</span>(<span class="type">log_t</span> &amp;log, <span class="type">size_t</span> len);</span><br></pre></td></tr></table></figure>
+<p>这里会利用 <code>fetch_add</code> 来拉大对应的内容，这里有个区别是 sn 和 lsn:</p>
+<ul>
+<li>sn 是逻辑的 bytes</li>
+<li>lsn 是物理上的 bytes bias</li>
+</ul>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">Log_handle <span class="title">log_buffer_reserve</span><span class="params">(<span class="type">log_t</span> &amp;log, <span class="type">size_t</span> len)</span> </span>&#123;</span><br><span class="line">  Log_handle handle;</span><br><span class="line"></span><br><span class="line">  ...</span><br><span class="line"></span><br><span class="line">  <span class="comment">/* Reserve space in sequence of data bytes: */</span></span><br><span class="line">  <span class="type">const</span> <span class="type">sn_t</span> start_sn = log.sn.<span class="built_in">fetch_add</span>(len);</span><br><span class="line"></span><br><span class="line">  <span class="comment">/* Ensure that redo log has been initialized properly. */</span></span><br><span class="line">  <span class="built_in">ut_a</span>(start_sn &gt; <span class="number">0</span>);</span><br><span class="line"></span><br><span class="line">  <span class="comment">/* Headers in redo blocks are not calculated to sn values: */</span></span><br><span class="line">  <span class="type">const</span> <span class="type">sn_t</span> end_sn = start_sn + len;</span><br><span class="line"></span><br><span class="line">  <span class="built_in">LOG_SYNC_POINT</span>(<span class="string">&quot;log_buffer_reserve_before_sn_limit_for_end&quot;</span>);</span><br><span class="line"></span><br><span class="line">  <span class="comment">/* Translate sn to lsn (which includes also headers in redo blocks): */</span></span><br><span class="line">  handle.start_lsn = <span class="built_in">log_translate_sn_to_lsn</span>(start_sn);</span><br><span class="line">  handle.end_lsn = <span class="built_in">log_translate_sn_to_lsn</span>(end_sn);</span><br><span class="line"></span><br><span class="line">  ...</span><br></pre></td></tr></table></figure>
+<p>可以看到，这里用 <code>fetch_add</code> 添加了对应的 sn / lsn，分配了日志对应的 <code>start_lsn</code> 和 <code>end_lsn</code>，然后这部分算是 LSN 分配完成了，不过，在同一个函数中，还有：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">  <span class="keyword">if</span> (<span class="built_in">unlikely</span>(end_sn &gt; log.sn_limit_for_end.<span class="built_in">load</span>())) &#123;</span><br><span class="line">    <span class="built_in">log_wait_for_space_after_reserving</span>(log, handle);</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="built_in">ut_a</span>(<span class="built_in">log_lsn_validate</span>(handle.start_lsn));</span><br><span class="line">  <span class="built_in">ut_a</span>(<span class="built_in">log_lsn_validate</span>(handle.end_lsn));</span><br><span class="line"></span><br><span class="line">  <span class="keyword">return</span> (handle);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这一部分是要等待 Log 分配足够的空间。这个空间大小是怎么会是呢？</p>
+<h3 id="等待-LSN"><a href="#等待-LSN" class="headerlink" title="等待 LSN"></a>等待 LSN</h3><p>(这里可以参考 InnoDB REDO LOG BUFFER管理 - 丁凯的文章 - 知乎 <a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/358690853">https://zhuanlan.zhihu.com/p/358690853</a> 这篇文章，写得比较细)</p>
+<p><code>log.sn_limit_for_end</code> 是个 atomic variable，它的更新受锁保护，但是读的时候可以直接 fastpath 读，来保证读的性能:</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line">    <span class="comment">/** @&#123; */</span></span><br><span class="line"></span><br><span class="line">    <span class="comment">/** Maximum sn up to which there is free space in both the log buffer</span></span><br><span class="line"><span class="comment">    and the log files. This is limitation for the end of any write to the</span></span><br><span class="line"><span class="comment">    log buffer. Threads, which are limited need to wait, and possibly they</span></span><br><span class="line"><span class="comment">    hold latches of dirty pages making a deadlock possible.</span></span><br><span class="line"><span class="comment">    Protected by: writer_mutex (writes). */</span></span><br><span class="line">    <span class="type">atomic_sn_t</span> sn_limit_for_end;</span><br><span class="line"></span><br><span class="line"><span class="comment">/** Maximum sn up to which there is free space in both the log buffer</span></span><br><span class="line"><span class="comment">and the log files for any possible mtr. This is limitation for the</span></span><br><span class="line"><span class="comment">beginning of any write to the log buffer. Threads check this limitation</span></span><br><span class="line"><span class="comment">when they are outside mini transactions and hold no latches. The formula</span></span><br><span class="line"><span class="comment">used to calculate the limitation takes into account maximum size of mtr</span></span><br><span class="line"><span class="comment">and thread concurrency to include proper margins and avoid issue with</span></span><br><span class="line"><span class="comment">race condition (in which all threads check the limitation and then all</span></span><br><span class="line"><span class="comment">proceed with their mini transactions).</span></span><br><span class="line"><span class="comment">Protected by: writer_mutex (writes). */</span></span><br><span class="line"><span class="type">atomic_sn_t</span> sn_limit_for_start;</span><br></pre></td></tr></table></figure>
+<p>这里在 <code>log_wait_for_space_after_reserving</code> 里面，会走：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">log_wait_for_space_after_reserving</span><br><span class="line">- log_wait_for_space_in_log_buf(log, start_sn)</span><br><span class="line">- - log_write_up_to (等待 start_lsn - log.write_lsn &lt;= log.buf_size)</span><br><span class="line">查看 Log 是否比较大, 要分配 Log 的 Buffer, 也可能走 log_write_up_to</span><br><span class="line">- log_wait_for_space_in_log_buf(log, end_sn)</span><br><span class="line">- - log_write_up_to (等待 end_lsn - log.write_lsn &lt;= log.buf_size)</span><br></pre></td></tr></table></figure>
+<p>这个地方，关键的函数是 <code>log_write_up_to</code>, <code>write_lsn</code> 是写入 buffer 的 LSN，这里保证这部分内容能够被写入.</p>
+<p>这里其实有个很 confusing 的地方，就是这个地方保证的是环状 Log 的总空间和 Log Buffer 的空间，出现问题概率非常低。这个和后问 Link_buf 之类的空间不完全一致（严格来说应该比它大很多，</p>
+<h3 id="Link-buf"><a href="#Link-buf" class="headerlink" title="Link_buf"></a>Link_buf</h3><p>我们提前介绍一下 <code>Link_buf</code>, 首先，我们可以看到，上面的拷贝是一个申请 LSN，然后各个 mtr 分小段 copy 的模式，那么，这个地方势必有几个 Log 水位，不考虑 ckpt 那些东西，就看内存的话：</p>
+<ul>
+<li>已经 Flush 的 WAL</li>
+<li>拷贝完了的 WAL</li>
+<li>正在拷贝和分配了没拷贝的 WAL</li>
+</ul>
+<p>这个时候，会有下面的水位图：</p>
+<p><img src="https://image.mwish.me/blog-image/1eae15078668ccd0d3e54e11f1783dfc.png" alt="1eae15078668ccd0d3e54e11f1783dfc"></p>
+<p>Link_buf 用来维护和推进这些水位，它把数据划分为 slot，并且保证数组元素(slot)更新是原子的, 以环形形式复用已经释放的空间，并启用单独的线程负责数组的遍历和空间回收, 线程在遇到空元素(empty slot)时暂停。</p>
+<p>和：</p>
+<p><img src="https://image.mwish.me/blog-image/843bc5776c34866f20b5dc0086474bfc.png" alt="843bc5776c34866f20b5dc0086474bfc"></p>
+<p>这里可以维护 write_lsn 和 ready-for-write 的连续 LSN：</p>
+<p><img src="https://image.mwish.me/blog-image/1dc4e6fcece341ee62383b4ab87d95d0.png" alt="1dc4e6fcece341ee62383b4ab87d95d0"></p>
+<p>这里它维护了几个水位和一些中间的状态。</p>
+<p>关于 <code>Link_buf</code>，这个类型只有三百余行，内容可以参考：<a target="_blank" rel="noopener" href="http://mysql.taobao.org/monthly/2019/05/08/">http://mysql.taobao.org/monthly/2019/05/08/</a> 。需要特别注意的是，<code>Link_buf</code> 很多约束是需要上层来保证的。</p>
+<p><code>Link_buf</code> 会分配一块比较大的内存（见后文）然后用于 Link，我们先看看 API:</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/** Add a directed link between two given positions. It is user&#x27;s</span></span><br><span class="line"><span class="comment">responsibility to ensure that there is space for the link. This is</span></span><br><span class="line"><span class="comment">because it can be useful to ensure much earlier that there is space.</span></span><br><span class="line"><span class="comment"></span></span><br><span class="line"><span class="comment">@param[in]	from	position where the link starts</span></span><br><span class="line"><span class="comment">@param[in]	to	position where the link ends (from -&gt; to) */</span></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">add_link</span><span class="params">(Position from, Position to)</span></span>;</span><br><span class="line"></span><br><span class="line"><span class="comment">/** Advances the tail pointer in the buffer by following connected</span></span><br><span class="line"><span class="comment">path created by links. Starts at current position of the pointer.</span></span><br><span class="line"><span class="comment">Stops when the provided function returns true.</span></span><br><span class="line"><span class="comment"></span></span><br><span class="line"><span class="comment">@param[in]	stop_condition	function used as a stop condition;</span></span><br><span class="line"><span class="comment">                                (lsn_t prev, lsn_t next) -&gt; bool;</span></span><br><span class="line"><span class="comment">                                returns false if we should follow</span></span><br><span class="line"><span class="comment">                                the link prev-&gt;next, true to stop</span></span><br><span class="line"><span class="comment"></span></span><br><span class="line"><span class="comment">@return true if and only if the pointer has been advanced */</span></span><br><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> Stop_condition&gt;</span><br><span class="line"><span class="function"><span class="type">bool</span> <span class="title">advance_tail_until</span><span class="params">(Stop_condition stop_condition)</span></span>;</span><br><span class="line"></span><br><span class="line"><span class="comment">/** Advances the tail pointer in the buffer without additional</span></span><br><span class="line"><span class="comment">condition for stop. Stops at missing outgoing link.</span></span><br><span class="line"><span class="comment"></span></span><br><span class="line"><span class="comment">@see advance_tail_until()</span></span><br><span class="line"><span class="comment"></span></span><br><span class="line"><span class="comment">@return true if and only if the pointer has been advanced */</span></span><br><span class="line"><span class="function"><span class="type">bool</span> <span class="title">advance_tail</span><span class="params">()</span></span>;</span><br><span class="line"></span><br><span class="line"><span class="comment">/** @return capacity of the ring buffer */</span></span><br><span class="line"><span class="function"><span class="type">size_t</span> <span class="title">capacity</span><span class="params">()</span> <span class="type">const</span></span>;</span><br><span class="line"></span><br><span class="line"><span class="comment">/** @return the tail pointer */</span></span><br><span class="line"><span class="function">Position <span class="title">tail</span><span class="params">()</span> <span class="type">const</span></span>;</span><br><span class="line"></span><br><span class="line"><span class="comment">/** Checks if there is space to add link at given position.</span></span><br><span class="line"><span class="comment">User has to use this function before adding the link, and</span></span><br><span class="line"><span class="comment">should wait until the free space exists.</span></span><br><span class="line"><span class="comment"></span></span><br><span class="line"><span class="comment">@param[in]	position	position to check</span></span><br><span class="line"><span class="comment"></span></span><br><span class="line"><span class="comment">@return true if and only if the space is free */</span></span><br><span class="line"><span class="function"><span class="type">bool</span> <span class="title">has_space</span><span class="params">(Position position)</span> <span class="type">const</span></span>;</span><br></pre></td></tr></table></figure>
+<p>我们可以借助官网的图片来理解这些 API:</p>
+<p><img src="https://image.mwish.me/blog-image/b704115a35af372c5c5c57fc1b2fa78e.png" alt="b704115a35af372c5c5c57fc1b2fa78e"></p>
+<ul>
+<li><code>tail</code>: 其实是连续的队列的开头，用来开始跳转，这个是一个 atomic 的 lsn 或者别的位置标记</li>
+<li><code>has_space</code> 判断有没有连续空间，因为 <code>Link_buf</code> 这块的内存可能会少于可分配 LSN 的内存</li>
+<li><code>advance_tail_until</code> 和 <code>advance_tail</code> 都会尝试推进 tail，其实相当于推进空间。这个可能会传一个停止条件进去。</li>
+<li><code>add_link</code>: 添加一个 Link, Link 是什么呢？就是如上文所述的 4-&gt;, 4-&gt; 的标记。</li>
+</ul>
+<p>还有一些内部实现的 API:</p>
+<ul>
+<li><code>next_position</code>: 跳转到下一个地址</li>
+<li><code>clain_position</code>: 把本地址置 0</li>
+</ul>
+<p>这里感觉 lock-free 也不难，因为假设</p>
+<ol>
+<li>并发 <code>add_link</code><ol>
+<li>上层保证了 from - to 的分配是 sn 分配的，同时，用户插入的一定是 <code>has_space</code> 的，之前没有 overflow 的之后必定不可能 overflow，所以操作成功的没有冲突</li>
+</ol>
+</li>
+<li>在 <code>advance_tail</code> 的情况下，已经存在的写是已经 <code>has_space</code> 的，这里只会消除完成的写。极端情况并发 <code>advance_tail</code> 的时候，可能推进不原子，所以只能有一个线程在 <code>advance_tail</code>，观察下列代码可以轻松得出这个结论</li>
+</ol>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> Position&gt;</span><br><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> Stop_condition&gt;</span><br><span class="line"><span class="type">bool</span> Link_buf&lt;Position&gt;::<span class="built_in">advance_tail_until</span>(Stop_condition stop_condition) &#123;</span><br><span class="line">  <span class="keyword">auto</span> position = m_tail.<span class="built_in">load</span>();</span><br><span class="line"></span><br><span class="line">  <span class="keyword">while</span> (<span class="literal">true</span>) &#123;</span><br><span class="line">    Position next;</span><br><span class="line"></span><br><span class="line">    <span class="type">bool</span> stop = <span class="built_in">next_position</span>(position, next);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (stop || <span class="built_in">stop_condition</span>(position, next)) &#123;</span><br><span class="line">      <span class="keyword">break</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/* Reclaim the slot. */</span></span><br><span class="line">    <span class="built_in">claim_position</span>(position);</span><br><span class="line"></span><br><span class="line">    position = next;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span> (position &gt; m_tail.<span class="built_in">load</span>()) &#123;</span><br><span class="line">    m_tail.<span class="built_in">store</span>(position);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> <span class="literal">true</span>;</span><br><span class="line"></span><br><span class="line">  &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">    <span class="keyword">return</span> <span class="literal">false</span>;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="Copying-Redo-Log"><a href="#Copying-Redo-Log" class="headerlink" title="Copying Redo Log"></a>Copying Redo Log</h3><p>这节内容可以参考：<a target="_blank" rel="noopener" href="http://mysql.taobao.org/monthly/2021/09/04/">http://mysql.taobao.org/monthly/2021/09/04/</a></p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">write_log.m_handle = handle;</span><br><span class="line">write_log.m_lsn = handle.start_lsn;</span><br><span class="line">write_log.m_rec_group_start_lsn = handle.start_lsn;</span><br><span class="line"></span><br><span class="line">m_impl-&gt;m_log.for_each_block(write_log);</span><br></pre></td></tr></table></figure>
+<p><code>write_log</code> 是一个函数对象，这里对每个 block 写入这个内容，具体的：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/** Write the block contents to the REDO log */</span></span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">mtr_write_log_t</span> &#123;</span><br><span class="line">  <span class="comment">/** Append a block to the redo log buffer.</span></span><br><span class="line"><span class="comment">  @return whether the appending should continue */</span></span><br><span class="line">  <span class="function"><span class="type">bool</span> <span class="title">operator</span><span class="params">()</span><span class="params">(<span class="type">const</span> <span class="type">mtr_buf_t</span>::<span class="type">block_t</span> *block)</span> </span>&#123;</span><br><span class="line">    <span class="type">lsn_t</span> start_lsn;</span><br><span class="line">    <span class="type">lsn_t</span> end_lsn;</span><br><span class="line"></span><br><span class="line">    <span class="built_in">ut_ad</span>(block != <span class="literal">nullptr</span>);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (block-&gt;<span class="built_in">used</span>() == <span class="number">0</span>) &#123;</span><br><span class="line">      <span class="keyword">return</span> (<span class="literal">true</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    start_lsn = m_lsn;</span><br><span class="line"></span><br><span class="line">    end_lsn = <span class="built_in">log_buffer_write</span>(*log_sys, m_handle, block-&gt;<span class="built_in">begin</span>(),</span><br><span class="line">                               block-&gt;<span class="built_in">used</span>(), start_lsn);</span><br><span class="line"></span><br><span class="line">    m_left_to_write -= block-&gt;<span class="built_in">used</span>();</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (m_left_to_write == <span class="number">0</span></span><br><span class="line">        &amp;&amp; m_rec_group_start_lsn / OS_FILE_LOG_BLOCK_SIZE !=</span><br><span class="line">               end_lsn / OS_FILE_LOG_BLOCK_SIZE) &#123;</span><br><span class="line">      <span class="built_in">log_buffer_set_first_record_group</span>(*log_sys, m_handle, end_lsn);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="built_in">log_buffer_write_completed</span>(*log_sys, m_handle, start_lsn, end_lsn);</span><br><span class="line"></span><br><span class="line">    m_lsn = end_lsn;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> (<span class="literal">true</span>);</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  Log_handle m_handle;</span><br><span class="line">  <span class="type">lsn_t</span> m_lsn;</span><br><span class="line">  <span class="type">lsn_t</span> m_rec_group_start_lsn;</span><br><span class="line">  ulint m_left_to_write;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>首先介绍一下 <code>mtr_buf_t</code>:</p>
+<blockquote>
+<p>mtr_buf_t是由一个双向链表组成的动态buffer，每个元素是512B大小的buffer（512B刚好匹配一个log block大小）。随着mtr_buf_t存储的数据的增加，它会自动生成新的512B的buffer，并加入双向链表中。</p>
+</blockquote>
+<p>这里会走 <code>log_buffer_write</code> ，拷贝内容到 log_buffer 中。</p>
+<p>也就是说，这个内容不是完全「一次性拷贝」的，而是按照 <code>block</code> 粒度拷贝到公共 log buffer，然后调用 complete 的，这里涉及两个函数：</p>
+<ul>
+<li>log_buffer_write</li>
+<li>log_buffer_write_completed</li>
+</ul>
+<p><code>log_buffer_write</code> 会完成拷贝，拷贝有什么难的呢？答案是这里会把 block 转化成 innodb 物理 Redo Log 的格式，还是要一些转化的。这里会拷贝到公共的 log buf 中。</p>
+<p><code>log_buffer_write_completed</code> 相对来说复杂一些，我们首先看一些别的定义：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/** Default value of innodb_log_recent_written_size (in bytes). */</span></span><br><span class="line"><span class="keyword">constexpr</span> ulong INNODB_LOG_RECENT_WRITTEN_SIZE_DEFAULT = <span class="number">1024</span> * <span class="number">1024</span>;</span><br><span class="line"></span><br><span class="line"><span class="comment">/** Minimum allowed value of innodb_log_recent_written_size. */</span></span><br><span class="line"><span class="keyword">constexpr</span> ulong INNODB_LOG_RECENT_WRITTEN_SIZE_MIN = OS_FILE_LOG_BLOCK_SIZE;</span><br><span class="line"></span><br><span class="line"><span class="comment">/** Maximum allowed value of innodb_log_recent_written_size. */</span></span><br><span class="line"><span class="keyword">constexpr</span> ulong INNODB_LOG_RECENT_WRITTEN_SIZE_MAX = <span class="number">1024</span> * <span class="number">1024</span> * <span class="number">1024UL</span>;</span><br></pre></td></tr></table></figure>
+<p>和:</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/** Number of slots in a small buffer, which is used to allow concurrent</span></span><br><span class="line"><span class="comment">writes to log buffer. The slots are addressed by LSN values modulo number</span></span><br><span class="line"><span class="comment">of the slots. */</span></span><br><span class="line">ulong srv_log_recent_written_size = INNODB_LOG_RECENT_WRITTEN_SIZE_DEFAULT;</span><br></pre></td></tr></table></figure>
+<p>这里会等待有足够的空间然后 <code>add_link</code>:</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">log_buffer_write_completed</span><span class="params">(<span class="type">log_t</span> &amp;log, <span class="type">const</span> Log_handle &amp;handle,</span></span></span><br><span class="line"><span class="params"><span class="function">                                <span class="type">lsn_t</span> start_lsn, <span class="type">lsn_t</span> end_lsn)</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">  <span class="comment">/* Let M = log.recent_written_size (number of slots).</span></span><br><span class="line"><span class="comment">  For any integer k, all lsn values equal to: start_lsn + k*M</span></span><br><span class="line"><span class="comment">  correspond to the same slot, and only the smallest of them</span></span><br><span class="line"><span class="comment">  may use the slot. At most one of them can fit the range</span></span><br><span class="line"><span class="comment">  [log.buf_ready_for_write_lsn..log.buf_ready_ready_write_lsn+M).</span></span><br><span class="line"><span class="comment">  Any smaller values have already used the slot. Hence, we just</span></span><br><span class="line"><span class="comment">  need to wait until start_lsn will fit the mentioned range. */</span></span><br><span class="line"></span><br><span class="line">  <span class="type">uint64_t</span> wait_loops = <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">while</span> (!log.recent_written.<span class="built_in">has_space</span>(start_lsn)) &#123;</span><br><span class="line">    ++wait_loops;</span><br><span class="line">    <span class="built_in">os_thread_sleep</span>(<span class="number">20</span>);</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span> (<span class="built_in">unlikely</span>(wait_loops != <span class="number">0</span>)) &#123;</span><br><span class="line">    <span class="built_in">MONITOR_INC_VALUE</span>(MONITOR_LOG_ON_RECENT_WRITTEN_WAIT_LOOPS, wait_loops);</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">/* Disallow reordering of writes to log buffer after this point.</span></span><br><span class="line"><span class="comment">  This is actually redundant, because we use seq_cst inside the</span></span><br><span class="line"><span class="comment">  log.recent_written.add_link(). However, we&#x27;ve decided to leave</span></span><br><span class="line"><span class="comment">  the seperate acq-rel synchronization between user threads and</span></span><br><span class="line"><span class="comment">  log writer. Reasons:</span></span><br><span class="line"><span class="comment">          1. Not to rely on internals of Link_buf::add_link.</span></span><br><span class="line"><span class="comment">          2. Stress that this synchronization is required in</span></span><br><span class="line"><span class="comment">             case someone decided to weaken memory ordering</span></span><br><span class="line"><span class="comment">             inside Link_buf. */</span></span><br><span class="line">  std::<span class="built_in">atomic_thread_fence</span>(std::memory_order_release);</span><br><span class="line"></span><br><span class="line">  <span class="comment">/* Note that end_lsn will not point to just before footer,</span></span><br><span class="line"><span class="comment">  because we have already validated that end_lsn is valid. */</span></span><br><span class="line">  log.recent_written.<span class="built_in">add_link</span>(start_lsn, end_lsn);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="Log-Writer-amp-amp-Log-Flusher"><a href="#Log-Writer-amp-amp-Log-Flusher" class="headerlink" title="Log Writer &amp;&amp; Log Flusher"></a>Log Writer &amp;&amp; Log Flusher</h3><p>这部分代码在 <code>log0write.cc</code>，这里为了冲突，拆分成了多个线程来做 Log 的写入。</p>
+<p><img src="https://image.mwish.me/blog-image/innodb_notify.png" alt="innodb_notify"></p>
+<p>(图片来自 CatKang 的博客)</p>
+<p>首先，我们关注 Log-Writer Thread，他会用 <code>Link_buf</code> 去追那些完成的操作，把它们 Link 起来，具体的条件是：</p>
+<ul>
+<li>遇到的都是连续的（见 <code>Link_buf</code> 的图）</li>
+<li>不大于一定大小（可能 4k）</li>
+</ul>
+<p>收集完之后，它会标记出对应的数据，然后映射到磁盘结构上，标记 Header 之类的内容。这里有个小细节是 <code>incomplete block</code> 在其中的处理，具体可见：InnoDB：redo log（1） - Skywalker的文章 - 知乎 <a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/386710765">https://zhuanlan.zhihu.com/p/386710765</a></p>
+<p>这里 Log Writer 会通过：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">log_advance_ready_for_write_lsn</span><br><span class="line">- advance_tail_until</span><br></pre></td></tr></table></figure>
+<p>等调用来推进。</p>
+<h2 id="References"><a href="#References" class="headerlink" title="References"></a>References</h2><ul>
+<li><a target="_blank" rel="noopener" href="https://mysqlserverteam.com/mysql-8-0-new-lock-free-scalable-wal-design/">https://mysqlserverteam.com/mysql-8-0-new-lock-free-scalable-wal-design/</a></li>
+<li><a target="_blank" rel="noopener" href="http://mysql.taobao.org/monthly/2018/06/01/">http://mysql.taobao.org/monthly/2018/06/01/</a> (上面这篇的翻译)</li>
+<li><a target="_blank" rel="noopener" href="https://catkang.github.io/2020/02/27/mysql-redo.html">https://catkang.github.io/2020/02/27/mysql-redo.html</a> InnoDB Redo Log 的一个 general，包括各层，本文只是其中一个小碎片</li>
+<li>InnoDB Redo Log 调整，允许动态调整 Redo Log：<a target="_blank" rel="noopener" href="http://mysql.taobao.org/monthly/2022/09/03/">http://mysql.taobao.org/monthly/2022/09/03/</a></li>
+<li>Rsygg 神文 InnoDB 确定 checkpoint-lsn 的一处细节：<a target="_blank" rel="noopener" href="https://github.com/rsy56640/triviality/tree/master/content/innodb-ckpt-lsn">https://github.com/rsy56640/triviality/tree/master/content/innodb-ckpt-lsn</a></li>
+<li>InnoDB 5.7 版本的实现，没全部看完，简单过了一遍，拥有一定参考和对比价值：<a target="_blank" rel="noopener" href="http://liuyangming.tech/06-2019/LogBufferAndBufferPool.html">http://liuyangming.tech/06-2019/LogBufferAndBufferPool.html</a></li>
+<li>InnoDB REDO LOG BUFFER管理 - 丁凯的文章 - 知乎 <a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/358690853">https://zhuanlan.zhihu.com/p/358690853</a></li>
+<li><a target="_blank" rel="noopener" href="http://mysql.taobao.org/monthly/2021/09/04/">http://mysql.taobao.org/monthly/2021/09/04/</a></li>
+<li><a target="_blank" rel="noopener" href="http://mysql.taobao.org/monthly/2019/05/08/">http://mysql.taobao.org/monthly/2019/05/08/</a></li>
+<li>InnoDB：redo log（1） - Skywalker的文章 - 知乎 <a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/386710765">https://zhuanlan.zhihu.com/p/386710765</a></li>
+</ul>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BB%A3%E7%A0%81%E5%85%A5%E5%8F%A3"><span class="toc-number">1.</span> <span class="toc-text">代码入口</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#LSN-%E5%88%86%E9%85%8D"><span class="toc-number">1.1.</span> <span class="toc-text">LSN 分配</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%AD%89%E5%BE%85-LSN"><span class="toc-number">1.2.</span> <span class="toc-text">等待 LSN</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Link-buf"><span class="toc-number">1.3.</span> <span class="toc-text">Link_buf</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Copying-Redo-Log"><span class="toc-number">1.4.</span> <span class="toc-text">Copying Redo Log</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Log-Writer-amp-amp-Log-Flusher"><span class="toc-number">1.5.</span> <span class="toc-text">Log Writer &amp;&amp; Log Flusher</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#References"><span class="toc-number">2.</span> <span class="toc-text">References</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2022/12/10/InnoDB-Link-buf/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2022/12/10/InnoDB-Link-buf/&text=InnoDB Link_buf"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2022/12/10/InnoDB-Link-buf/&title=InnoDB Link_buf"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2022/12/10/InnoDB-Link-buf/&is_video=false&description=InnoDB Link_buf"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=InnoDB Link_buf&body=Check out this article: http://blog.mwish.me/2022/12/10/InnoDB-Link-buf/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2022/12/10/InnoDB-Link-buf/&title=InnoDB Link_buf"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2022/12/10/InnoDB-Link-buf/&title=InnoDB Link_buf"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2022/12/10/InnoDB-Link-buf/&title=InnoDB Link_buf"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2022/12/10/InnoDB-Link-buf/&title=InnoDB Link_buf"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2022/12/10/InnoDB-Link-buf/&name=InnoDB Link_buf&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2022/12/10/InnoDB-Link-buf/&t=InnoDB Link_buf"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

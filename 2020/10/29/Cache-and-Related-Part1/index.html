@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="在 Pipeline 执行的时候，我们拆成简单的 4&#x2F;5 stage 的 pipeline 的话，我们会有一些 hazard:  Structural hazard Data hazard Control hazard  structural hazard 都给可以靠 nop 和钱解决. Data hazard 也可以 nop, 但同时，可以 forwarding 的方式，靠额外的控制逻辑，来减小">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Cache and Related Part1">
+<meta property="og:url" content="http://blog.mwish.me/2020/10/29/Cache-and-Related-Part1/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="在 Pipeline 执行的时候，我们拆成简单的 4&#x2F;5 stage 的 pipeline 的话，我们会有一些 hazard:  Structural hazard Data hazard Control hazard  structural hazard 都给可以靠 nop 和钱解决. Data hazard 也可以 nop, 但同时，可以 forwarding 的方式，靠额外的控制逻辑，来减小">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/截屏2020-10-29-下午3.05.03.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/截屏2020-10-29-下午3.08.22.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/截屏2020-10-29-下午5.54.35.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/CF5E4D39-E103-4CBC-ABDA-14FEE162EEB6.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/BE57BF08-4B6D-41B3-AB83-C9809B02D557.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/D41799EC-8745-4B69-BAA7-2B29CF189709.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/截屏2020-10-31-下午2.42.01.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/9FC2703E-B742-4671-B76B-33D8FB1E2ECF.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/7CF53EBF-159A-42A3-ADF4-68522446BC41.png">
+<meta property="article:published_time" content="2020-10-29T05:40:16.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.559Z">
+<meta property="article:author" content="mwish">
+<meta property="article:tag" content="system">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/截屏2020-10-29-下午3.05.03.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>Cache and Related Part1</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2020/10/31/Cache-and-Related-Part2/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2020/10/21/SDS-Intro-RISC-V-Datapath-4-Pipeline/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/10/29/Cache-and-Related-Part1/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/10/29/Cache-and-Related-Part1/&text=Cache and Related Part1"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/10/29/Cache-and-Related-Part1/&title=Cache and Related Part1"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/10/29/Cache-and-Related-Part1/&is_video=false&description=Cache and Related Part1"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Cache and Related Part1&body=Check out this article: http://blog.mwish.me/2020/10/29/Cache-and-Related-Part1/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/10/29/Cache-and-Related-Part1/&title=Cache and Related Part1"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/10/29/Cache-and-Related-Part1/&title=Cache and Related Part1"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/10/29/Cache-and-Related-Part1/&title=Cache and Related Part1"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/10/29/Cache-and-Related-Part1/&title=Cache and Related Part1"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/10/29/Cache-and-Related-Part1/&name=Cache and Related Part1&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/10/29/Cache-and-Related-Part1/&t=Cache and Related Part1"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%BC%93%E5%AD%98%E6%9C%AF%E8%AF%AD"><span class="toc-number">1.</span> <span class="toc-text">缓存术语</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Cache-Miss-%E7%9A%84%E5%BD%A2%E5%BC%8F"><span class="toc-number">2.</span> <span class="toc-text">Cache Miss 的形式</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Cache-%E7%9A%84%E9%80%BB%E8%BE%91%E7%BB%93%E6%9E%84"><span class="toc-number"></span> <span class="toc-text">Cache 的逻辑结构</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Direct-Mapped-Cache"><span class="toc-number">1.</span> <span class="toc-text">Direct-Mapped Cache</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%9C%9F%E5%AE%9E%E6%83%85%E5%86%B5%E4%B8%8E%E5%81%87%E8%AE%BE"><span class="toc-number">2.</span> <span class="toc-text">真实情况与假设</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Write-through-amp-Write-back"><span class="toc-number">3.</span> <span class="toc-text">Write-through &amp; Write-back</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#block-size-%E7%9A%84%E5%A4%A7%E5%B0%8F"><span class="toc-number">4.</span> <span class="toc-text">block size 的大小</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%85%B6%E4%BB%96%E7%B1%BB%E5%9E%8B"><span class="toc-number">5.</span> <span class="toc-text">其他类型</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Cache and Related Part1
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2020-10-29T05:40:16.000Z" itemprop="datePublished">2020-10-29</time>
+        
+      
+    </div>
+
+
+      
+
+      
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/system/" rel="tag">system</a>
+    </div>
+
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>在 Pipeline 执行的时候，我们拆成简单的 4/5 stage 的 pipeline 的话，我们会有一些 hazard:</p>
+<ul>
+<li>Structural hazard</li>
+<li>Data hazard</li>
+<li>Control hazard</li>
+</ul>
+<p>structural hazard 都给可以靠 nop 和钱解决. Data hazard 也可以 nop, 但同时，可以 forwarding 的方式，靠额外的控制逻辑，来减小这类事情的发生。而我们也有 control hazard, 对分支指令带来影响。一方面流水线有分支预测，一方面 gcc 提供了 <code>__likely__</code> 之类的操作，在生成代码的时候静态的做了一些处理。</p>
+<p>在这个阶段的分析中，我们有点对所有指令一视同仁的味道：<code>sw</code> <code>lw</code> 被我们当成伊布/同步的，它们仿佛运转的和运算指令一样快，而且不会带来什么额外开销. 但是实际上我们都知道 load memory 和计算之间是有 gap 的，而且这个 gap 还不太小。</p>
+<p><img src="https://image.mwish.me/blog-image/截屏2020-10-29-下午3.05.03.png" alt="截屏2020-10-29 下午3.05.03"></p>
+<p>然后我们就到了喜闻乐见的存储层次山了：</p>
+<p><img src="https://image.mwish.me/blog-image/截屏2020-10-29-下午3.08.22.png" alt="截屏2020-10-29 下午3.08.22"></p>
+<p>越接近 CPU, 访问越快，但是越小、单位存储量的成本越昂贵。存储层次的思想是：</p>
+<ul>
+<li>上层的数据是下层的一个子集</li>
+<li>下层在逻辑上有所有的数据</li>
+</ul>
+<p>同时，相关的概念有两种 locality:</p>
+<ul>
+<li>Temporal locality: 时间上的局部性<ul>
+<li>如果某个 memory 被访问了，很可能近期有一定机会会再次被访问</li>
+</ul>
+</li>
+<li>Spatial locality<ul>
+<li>如果某个 memory 被访问，那它附近的内存很可能也会被访问</li>
+</ul>
+</li>
+</ul>
+<p><img src="https://image.mwish.me/blog-image/截屏2020-10-29-下午5.54.35.png" alt="截屏2020-10-29 下午5.54.35"></p>
+<p>那么，我们在计算机系统里面有一些隐含的存储层次，这是除开显式的 mmap 或者写盘、共享内存外的形式：</p>
+<ol>
+<li>Register 和 memory 的读/写：由编译器或者汇编编写者生成</li>
+<li>cache 和 main memory: 由 cache controller 管理</li>
+<li>Main memory 和 disk: 由 OS 管理；也有 TLB 这样的缓存存在（总所周知，TLB 虽然叫做 buffer，实际上是个 cache）。</li>
+</ol>
+<p>上面是 locality 相关的访问模式，我们会注意到一些特征。其中需要注意的是，有的访问模式是相对来说：</p>
+<ul>
+<li>链式的结构可能会有 locality 不足的问题，因为实际上它的内存是离散的，</li>
+<li>Go 语言这样的语言提供 map slice 这些相对来说 locality 好一些的结构</li>
+<li>LevelDB 里面会用 Arena 尝试分配在连续的内存上</li>
+</ul>
+<p>Cache 有一点比较重要的就是，<strong>cache 对用户是透明的</strong>，这意味着：</p>
+<ol>
+<li>即使不知道 cache, 程序、指令也能正常的运作</li>
+<li>不考虑效率的情况下，上层的使用者不需要知道 cache 的概念</li>
+</ol>
+<p>考虑 <code>lw t0, 0(t1)</code>, 这个时候 <code>t1</code> 对应的地址上的内存会被加载到缓存里。</p>
+<p>具体而言：<code>t1 contains 0x12F0, Memory[0x12F0] = 99</code></p>
+<ul>
+<li>如果从 cache 中找到了对应的地址，那么直接从 cache 中读</li>
+<li>如果 cache miss 了，那么从内存发送到 cache，再从 cache 发送到用户</li>
+</ul>
+<h3 id="缓存术语"><a href="#缓存术语" class="headerlink" title="缓存术语"></a>缓存术语</h3><p>读缓存的时候，可能会有三种情况</p>
+<ul>
+<li>Cache hit: 缓存命中</li>
+<li>cache miss: 缓存未命中，需要从下层获取</li>
+<li>cache miss, block replacement: cache 未命中 + 需要把原来存在的 cache 給替换掉</li>
+</ul>
+<p>缓存温度</p>
+<ul>
+<li>cold: cache empty, 没有怎么加载</li>
+<li>warming: Cache filling with values you’ll hopefully be accessing again soon</li>
+<li>Warm: Cache is doing its job, fair % of hits</li>
+<li>Hot: Cache is doing very well, high % of hits</li>
+</ul>
+<p>感觉这个温度有两层含义，一个是缓存本身占用高，一个是缓存命中率高。</p>
+<ul>
+<li>hit rate: 命中缓存的比例</li>
+<li>miss rate: 未命中缓存的比例</li>
+<li>miss penalty: 从下一层加载到上一层需要的时间</li>
+<li>hit time: 访问缓存的时间</li>
+</ul>
+<h3 id="Cache-Miss-的形式"><a href="#Cache-Miss-的形式" class="headerlink" title="Cache Miss 的形式"></a>Cache Miss 的形式</h3><p>从上面的 Miss 来看，我们可以得到一些 cache miss 的形式：</p>
+<ol>
+<li>compulsory misses: 程序开始的时候，因为 cold 的原因，导致的 Miss<ol>
+<li>CPU/Cache 怎么解决的我不知道，不过我记得 Memcache 有一定解决方案：<a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/194347153">https://zhuanlan.zhihu.com/p/194347153</a></li>
+</ol>
+</li>
+<li><strong>Conflict Misses</strong>：内存对应 cache 处于相同的位置，需要把目前的下掉，导致的 Miss</li>
+</ol>
+<h2 id="Cache-的逻辑结构"><a href="#Cache-的逻辑结构" class="headerlink" title="Cache 的逻辑结构"></a>Cache 的逻辑结构</h2><p>我们需要考虑下面几个理所当然的问题：</p>
+<ul>
+<li>Cache 的速度远远大于内存，但 Cache 远远小于内存</li>
+</ul>
+<p>因此，下面将由 direct-mapped cache 开始介绍 cache 相关的信息。</p>
+<h3 id="Direct-Mapped-Cache"><a href="#Direct-Mapped-Cache" class="headerlink" title="Direct-Mapped Cache"></a>Direct-Mapped Cache</h3><p>在 direct-mapped cache 里面，每个内存地址会关联到一个 cache 中的 block，只要：</p>
+<ol>
+<li>查找这个 block 有没有成员</li>
+<li>里面成员是不是自己的内存地址</li>
+</ol>
+<p>为了实现上面两个目的，下面这第一章逻辑的图是不够的，因为</p>
+<ol>
+<li>无法确认每个 block 对应的内存是多少</li>
+</ol>
+<p><img src="https://image.mwish.me/blog-image/CF5E4D39-E103-4CBC-ABDA-14FEE162EEB6.png" alt="CF5E4D39-E103-4CBC-ABDA-14FEE162EEB6"></p>
+<p>所以我们的 cache 需要一个 tag:</p>
+<p><img src="https://image.mwish.me/blog-image/BE57BF08-4B6D-41B3-AB83-C9809B02D557.png" alt="BE57BF08-4B6D-41B3-AB83-C9809B02D557"></p>
+<p>这里把一个地址分成了三部分：</p>
+<ol>
+<li><strong>tag</strong> to check if have correct block</li>
+<li><strong>index</strong> to select block </li>
+<li>Byte <strong>offset</strong> in block</li>
+</ol>
+<p><img src="https://image.mwish.me/blog-image/D41799EC-8745-4B69-BAA7-2B29CF189709.png" alt="D41799EC-8745-4B69-BAA7-2B29CF189709"></p>
+<p>RV32 的讨论：</p>
+<ul>
+<li>RV32 地址空间是 32bits</li>
+<li>假设每个 block 是 2-byte，我们有 8Byte 的 cache<ul>
+<li>offset 需要 1bit 来表示</li>
+<li>index 表示对应位置，需要有 <code>(8 / 2)</code> 个状态，即占用 2bit</li>
+<li>剩下的 29bits 作为 tag</li>
+</ul>
+</li>
+</ul>
+<p>同时，实际上我们可能有一个 valid bit, 当程序开始运行的时候，除了 32bits，可能需要一个 valid bit，表示这段缓存中的内存对程序而言是否是 valid 的。</p>
+<h3 id="真实情况与假设"><a href="#真实情况与假设" class="headerlink" title="真实情况与假设"></a>真实情况与假设</h3><p>我们现在假设我们的 cache 有：</p>
+<ol>
+<li>16KB 的 data</li>
+<li>direct-mapped 的模式</li>
+<li>4-word 的 block</li>
+</ol>
+<p>现在我们来对照 slice 看看 direct-mapped 的访问：</p>
+<p><img src="https://image.mwish.me/blog-image/截屏2020-10-31-下午2.42.01.png" alt="截屏2020-10-31 下午2.42.01"></p>
+<p>那么，具体的访问如下图所示：</p>
+<p><img src="https://image.mwish.me/blog-image/9FC2703E-B742-4671-B76B-33D8FB1E2ECF.png" alt="9FC2703E-B742-4671-B76B-33D8FB1E2ECF"></p>
+<p>我们可以看到，在最早我们的讨论中，一个 tag 对应着可能2-byte 的内存，但是现在，我们可能一份 tag 对应 一个 block, 这个 block 可能装有比较多组的内存。实际上，这有益于 locality。</p>
+<h3 id="Write-through-amp-Write-back"><a href="#Write-through-amp-Write-back" class="headerlink" title="Write-through &amp; Write-back"></a>Write-through &amp; Write-back</h3><p>这两种方案相信除了这里，我们介绍很多别的形式的 cache 的时候你也会碰见它们：好吧，过去、现在、还是将来，你都会遇到这两个。</p>
+<ol>
+<li>Write-through：写入的时候需要更新cache 和 memory</li>
+<li>Write-back:<ol>
+<li>写入的时候更新 cache block</li>
+<li>添加一个 dirty flag</li>
+<li>OS 在 IO 之前 flush cache</li>
+</ol>
+</li>
+</ol>
+<h3 id="block-size-的大小"><a href="#block-size-的大小" class="headerlink" title="block size 的大小"></a>block size 的大小</h3><ol>
+<li>Pros:<ol>
+<li>spatial locality: 空间 locality 受益</li>
+<li>对 array 访问有好处</li>
+<li>对于目前 stored-program 的形式有好处</li>
+</ol>
+</li>
+<li>Cons:<ol>
+<li>增加了 Miss penalty</li>
+<li>If block size is too big relative to cache size, then there are too few blocks</li>
+</ol>
+</li>
+</ol>
+<p><img src="https://image.mwish.me/blog-image/7CF53EBF-159A-42A3-ADF4-68522446BC41.png" alt="7CF53EBF-159A-42A3-ADF4-68522446BC41"></p>
+<h3 id="其他类型"><a href="#其他类型" class="headerlink" title="其他类型"></a>其他类型</h3><p>实际上，cache 有几种组织方式：</p>
+<ul>
+<li>fully associative</li>
+<li>Direct mapped</li>
+<li>N-way Set Associate</li>
+</ul>
+<p>我们会在下一个 part 介绍。</p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%BC%93%E5%AD%98%E6%9C%AF%E8%AF%AD"><span class="toc-number">1.</span> <span class="toc-text">缓存术语</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Cache-Miss-%E7%9A%84%E5%BD%A2%E5%BC%8F"><span class="toc-number">2.</span> <span class="toc-text">Cache Miss 的形式</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Cache-%E7%9A%84%E9%80%BB%E8%BE%91%E7%BB%93%E6%9E%84"><span class="toc-number"></span> <span class="toc-text">Cache 的逻辑结构</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Direct-Mapped-Cache"><span class="toc-number">1.</span> <span class="toc-text">Direct-Mapped Cache</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%9C%9F%E5%AE%9E%E6%83%85%E5%86%B5%E4%B8%8E%E5%81%87%E8%AE%BE"><span class="toc-number">2.</span> <span class="toc-text">真实情况与假设</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Write-through-amp-Write-back"><span class="toc-number">3.</span> <span class="toc-text">Write-through &amp; Write-back</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#block-size-%E7%9A%84%E5%A4%A7%E5%B0%8F"><span class="toc-number">4.</span> <span class="toc-text">block size 的大小</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%85%B6%E4%BB%96%E7%B1%BB%E5%9E%8B"><span class="toc-number">5.</span> <span class="toc-text">其他类型</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/10/29/Cache-and-Related-Part1/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/10/29/Cache-and-Related-Part1/&text=Cache and Related Part1"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/10/29/Cache-and-Related-Part1/&title=Cache and Related Part1"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/10/29/Cache-and-Related-Part1/&is_video=false&description=Cache and Related Part1"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Cache and Related Part1&body=Check out this article: http://blog.mwish.me/2020/10/29/Cache-and-Related-Part1/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/10/29/Cache-and-Related-Part1/&title=Cache and Related Part1"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/10/29/Cache-and-Related-Part1/&title=Cache and Related Part1"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/10/29/Cache-and-Related-Part1/&title=Cache and Related Part1"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/10/29/Cache-and-Related-Part1/&title=Cache and Related Part1"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/10/29/Cache-and-Related-Part1/&name=Cache and Related Part1&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/10/29/Cache-and-Related-Part1/&t=Cache and Related Part1"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="本文很短记录一下 BigTable 论文的一些内容。因为论文比较老了，而且感觉更加注重分布式，单机部分其实 SSTable 影响比较大，但是在今年已经遍地 RocksDB 了，看着多少有点老调重弹。 BigTable 提供了高吞吐量的批处理和及时响应的读，它似乎对非批的更新也有一定支持，比如在 Google Percolator 那里看到的。 BigTable 最早论文还是零几年，系统抽象和现在很">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Notes: BigTable">
+<meta property="og:url" content="http://blog.mwish.me/2022/03/21/Notes-BigTable/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="本文很短记录一下 BigTable 论文的一些内容。因为论文比较老了，而且感觉更加注重分布式，单机部分其实 SSTable 影响比较大，但是在今年已经遍地 RocksDB 了，看着多少有点老调重弹。 BigTable 提供了高吞吐量的批处理和及时响应的读，它似乎对非批的更新也有一定支持，比如在 Google Percolator 那里看到的。 BigTable 最早论文还是零几年，系统抽象和现在很">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/4154B725-09D7-4ED7-ACA8-AFCEC0C03C5B.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/4CA43388-1439-4668-BC05-F355BCD57407.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/3FDB7ADA-8801-4D11-B072-7944082FE226.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/A8B964E6-6E0F-4624-832F-E62D49F5AB10.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/36142E10-C8AB-401E-B5E9-BC67A8C5ECD2.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/B7A7AB65-C139-4269-9740-645059300C4F.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/C9D9DD35-CDE3-4A06-A932-BBADEEF336C2.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/82A72356-3129-4F8E-AB38-36B898FF3CB9.png">
+<meta property="article:published_time" content="2022-03-21T03:27:44.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.553Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/4154B725-09D7-4ED7-ACA8-AFCEC0C03C5B.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>Notes: BigTable</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2022/03/30/bthread-%E8%B0%83%E5%BA%A6%E7%9A%84%E6%9C%BA%E5%88%B6/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2022/03/17/InfluxDB-%E7%9B%B8%E5%85%B3%E6%9D%90%E6%96%99/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2022/03/21/Notes-BigTable/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2022/03/21/Notes-BigTable/&text=Notes: BigTable"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2022/03/21/Notes-BigTable/&title=Notes: BigTable"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2022/03/21/Notes-BigTable/&is_video=false&description=Notes: BigTable"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Notes: BigTable&body=Check out this article: http://blog.mwish.me/2022/03/21/Notes-BigTable/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2022/03/21/Notes-BigTable/&title=Notes: BigTable"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2022/03/21/Notes-BigTable/&title=Notes: BigTable"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2022/03/21/Notes-BigTable/&title=Notes: BigTable"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2022/03/21/Notes-BigTable/&title=Notes: BigTable"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2022/03/21/Notes-BigTable/&name=Notes: BigTable&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2022/03/21/Notes-BigTable/&t=Notes: BigTable"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BB%84%E4%BB%B6"><span class="toc-number">1.</span> <span class="toc-text">组件</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Tablet-%E7%9A%84%E5%AE%9A%E4%BD%8D"><span class="toc-number">1.1.</span> <span class="toc-text">Tablet 的定位</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Tablet-%E7%9A%84%E5%88%86%E9%85%8D"><span class="toc-number">1.2.</span> <span class="toc-text">Tablet 的分配</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Master"><span class="toc-number">1.2.1.</span> <span class="toc-text">Master</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Tablet-%E6%9C%8D%E5%8A%A1"><span class="toc-number">1.3.</span> <span class="toc-text">Tablet 服务</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BC%98%E5%8C%96"><span class="toc-number">2.</span> <span class="toc-text">优化</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Log-%E5%92%8C%E6%81%A2%E5%A4%8D%E6%B5%81"><span class="toc-number">2.1.</span> <span class="toc-text">Log 和恢复流</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Tablet-%E5%8A%A0%E9%80%9F%E6%81%A2%E5%A4%8D"><span class="toc-number">2.2.</span> <span class="toc-text">Tablet 加速恢复</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#HBase-%E5%AF%B9-BigTable-%E7%9A%84%E5%AE%9E%E7%8E%B0"><span class="toc-number">3.</span> <span class="toc-text">HBase 对 BigTable 的实现</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%A2%E6%88%B7%E7%AB%AF%E8%A1%8C%E4%B8%BA"><span class="toc-number">3.1.</span> <span class="toc-text">客户端行为</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#RegionServer"><span class="toc-number">3.2.</span> <span class="toc-text">RegionServer</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Region-%E8%BF%81%E7%A7%BB-%E5%88%86%E8%A3%82-%E5%90%88%E5%B9%B6"><span class="toc-number">3.3.</span> <span class="toc-text">Region 迁移&#x2F;分裂&#x2F;合并</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%9F%BA%E7%A1%80-Procedure-V2"><span class="toc-number">3.3.1.</span> <span class="toc-text">基础: Procedure V2</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Region-Split-Merge-%E8%BF%81%E7%A7%BB"><span class="toc-number">3.3.2.</span> <span class="toc-text">Region Split&#x2F;Merge&#x2F;迁移</span></a></li></ol></li></ol></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E6%9C%80%E5%90%8E%E7%9A%84%E8%AF%9D"><span class="toc-number"></span> <span class="toc-text">最后的话</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#References"><span class="toc-number">1.</span> <span class="toc-text">References</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Notes: BigTable
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2022-03-21T03:27:44.000Z" itemprop="datePublished">2022-03-21</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>本文很短记录一下 BigTable 论文的一些内容。因为论文比较老了，而且感觉更加注重分布式，单机部分其实 SSTable 影响比较大，但是在今年已经遍地 RocksDB 了，看着多少有点老调重弹。</p>
+<p>BigTable 提供了高吞吐量的批处理和及时响应的读，它似乎对非批的更新也有一定支持，比如在 Google Percolator 那里看到的。</p>
+<p>BigTable 最早论文还是零几年，系统抽象和现在很多调调其实是反着来的（也可以说现在的调调是反他的）：</p>
+<ol>
+<li>不支持关系模型</li>
+<li>将底层位置、分布、格式之类的暴露给用户</li>
+<li>value 都是 string</li>
+<li>不支持多行事务</li>
+</ol>
+<p>它在 chapter 3 描述了自己的数据模型，是一个一行多列多 ts 的宽表：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">(row: string, column: string, time: i64) -&gt; string</span><br></pre></td></tr></table></figure>
+<p>然后布局数据大概如下：</p>
+<p><img src="https://image.mwish.me/blog-image/4154B725-09D7-4ED7-ACA8-AFCEC0C03C5B.png" alt="4154B725-09D7-4ED7-ACA8-AFCEC0C03C5B"></p>
+<p><code>reverse(www.cnn.com)</code> 有三个 CF，每个 CF 如上所示。关于原子性，内容如下：</p>
+<blockquote>
+<p>对同一个行关键字的读或者写操作都是原子的（不管读或者写这一行里多少个不同列），这个 设计决策能够使用户很容易的理解程序在对同一个行进行并发更新操作时的行为。</p>
+</blockquote>
+<p>BigTable 会按照行来分区，分区单位是 <code>Tablet</code>, 列里定义分为<code>family:qualifier</code>, 如上图，<code>anchor</code> 是列族，<code>anchor:qualifier</code> 才能具体的确定一个列。这里还可以在 CF 上指定一些权限、access 方式，比如只读等。</p>
+<p>BigTable 的定义中还有个 ts。读会优先读取最新的 ts，然后 ts 本身可以用户指定，这里可以设置一些新的 ts GC 策略，比如保留 n 个版本的或者 n 天的 ts，BigTable 会帮助你做 GC。</p>
+<p>回顾一下，这里可以把它的模型当作一个多层的、多行多列的模型。行中的列可以是稀疏的。</p>
+<h2 id="组件"><a href="#组件" class="headerlink" title="组件"></a>组件</h2><p><img src="https://image.mwish.me/blog-image/4CA43388-1439-4668-BC05-F355BCD57407.png" alt="4CA43388-1439-4668-BC05-F355BCD57407"></p>
+<ul>
+<li>BigTable 运行在一个多租户的系统上，可能和 HDFS、MR 等混部（论文没有描写，但是我非常好奇这个是怎么隔离的 orz..）</li>
+<li>BigTable 内部文件是 SSTable 格式的，这个格式我不会细写，看 Google 的 LevelDB 就差不多了</li>
+<li>BigTable 依赖 <strong>Chubby</strong> 做分布式锁服务，这个可以类似 Zookeeper. 它需要 Chubby 来保证至多只有一个 Master、存储 BigTable 的 Metadata；用来给 Tablet Server 探活等</li>
+</ul>
+<p>除了上面这些 Building Block，BigTable 还有下列功能：</p>
+<ol>
+<li>提供给用户的 SDK</li>
+<li>Master Server：给 Tablet Server 分配 Tablets、负责 Tablet Server 的成员变更和负载均衡、对 GFS 来 GC、负责建立表和 CF 的 Schema 操作</li>
+<li>Tablet Server：管理一组 tablets. 存储会下放到共享存储 GFS 中，所以存储不太需要 replica. （不过这里感觉没有考虑那种不太均衡的读负载带来的问题，比方说特别热点的读，写感觉估摸着可以靠创建 Bucket 来解决）。</li>
+</ol>
+<p>实际上，对于 BigTable，它的 TabletServer 可以当成一个「无状态的存储层」，控制信息存储在 Chubby 等地方，数据实际落在一个存储层上。此外，这里的数据还是按照 Key 来进行 Range Partition 的。这里的 Key 可以类似的当作 <code>RowKey:CF</code>，为了保证单行事务，感觉同一个 Row 应该是要在同一个机器上的。</p>
+<h3 id="Tablet-的定位"><a href="#Tablet-的定位" class="headerlink" title="Tablet 的定位"></a>Tablet 的定位</h3><p><img src="https://image.mwish.me/blog-image/3FDB7ADA-8801-4D11-B072-7944082FE226.png" alt="3FDB7ADA-8801-4D11-B072-7944082FE226"></p>
+<p>这里使用一个三层 Btree 的模型来定位到具体 Tablet 的分配，这些数据在 BigTable 本身是会存放在 TabletServer 上的（其实我感觉这些东西本身也可以分开存，比如这些路由信息存放在一些相对稳定不会被乱迁移的机器？）。客户端可以缓存这些路由信息，所以实际上访问这个表流量不太大，大部分都被 client 给缓存下来了。</p>
+<h3 id="Tablet-的分配"><a href="#Tablet-的分配" class="headerlink" title="Tablet 的分配"></a>Tablet 的分配</h3><p>论文没有介绍 TabletServer 的负载是怎么样做负载均衡的，我们也无从得知。</p>
+<p>系统依靠 Chubby 来保证整个系统只有一个 Master 进程。Master 进程要维护 Tablet 在 TabletServer 中的分配，同时要保证这个分配和上面的 Figure 4 的 Tablet 位置信息是一致的。Master 启动的时候，大致流程如下：</p>
+<h4 id="Master"><a href="#Master" class="headerlink" title="Master"></a>Master</h4><p><strong>启动</strong></p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">1. 在 Chubby 抢到 Master 对应的分布式锁, 表示 Master 是独占的。</span><br><span class="line">2. 扫描 Chubby 的 TabletServer, 知道挂了哪些 TabletServer</span><br><span class="line">3. 和 TabletServer 通信, 来指导挂了哪些 Tablets</span><br><span class="line">4. 扫描 METADATA, 来分配未分配的 Tablets. 如果 METADATA 还没有分配, 那就保证它先辈分配.</span><br></pre></td></tr></table></figure>
+<p><strong>运行期间</strong></p>
+<blockquote>
+<p>在任何一个时刻，一个 Tablet 只能分配给一个 Tablet 服务器。Master 服务器记录了当前有哪些活跃的 Tablet 服务器、哪些 Tablet 分配给了哪些 Tablet 服务器、哪些 Tablet 还没有被分配。当一个 Tablet 还没有被分配、 并且刚好有一个 Tablet 服务器有足够的空闲空间装载该 Tablet 时，Master 服务器会给这个 Tablet 服务器发送 一个请求，把 Tablet 分配给这个服务器。</p>
+</blockquote>
+<p><strong>出现变更的时候</strong></p>
+<p>Master 本身会管理 Tablet 在 TabletServer 上的分配情况。同时，也借助 Chubby 维护 TabletServer 是否活跃、Tablet 的具体分配情况。</p>
+<p>TabletServer 本身启动的时候，也会在 Chubby 下面创建一个临时的文件，Master 这样就可以监听 TabletServer 的上线和异常下线。TabletServer 也可以记录</p>
+<p><strong>Split 和 Merge</strong></p>
+<p>某个 Tablet 或者 Region 可能会太大/太小了，需要 Split/Merge 了。这个时候 TabletServer 会和 Master 联动来做 Merge/Split，来完成 Tablet 的重新分配</p>
+<h3 id="Tablet-服务"><a href="#Tablet-服务" class="headerlink" title="Tablet 服务"></a>Tablet 服务</h3><p><img src="https://image.mwish.me/blog-image/A8B964E6-6E0F-4624-832F-E62D49F5AB10.png" alt="A8B964E6-6E0F-4624-832F-E62D49F5AB10"></p>
+<p>需要注意的是，这里存储都并非 LevelDB 的 Disk，而是一个分布式文件系统。这造成各种操作的 GAP 远比简单的 LSM-Tree 大。</p>
+<p>SSTable 这里也要注意粒度问题。</p>
+<h2 id="优化"><a href="#优化" class="headerlink" title="优化"></a>优化</h2><ol>
+<li><p>可以进行一些分割，将一些 CF 存储在同一个 SSTable。来提升局部性。METADATA 的数据以这种方式被优化</p>
+</li>
+<li><p>SSTable 指定一些特定的压缩方式：</p>
+<blockquote>
+<p>很多客户程序使用了“两遍”的、可定制的压缩方式。第一遍采用 Bentley and McIlroy’s 方式[6]，这种方式在一个 很大的扫描窗口里对常见的长字符串进行压缩；第二遍是采用快速压缩算法，即在一个 16KB 的小扫描窗口 中寻找重复数据。两个压缩的算法都很快，在现在的机器上，压缩的速率达到 100-200MB/s，解压的速率达 到 400-1000MB/s。</p>
+</blockquote>
+</li>
+<li><p>使用 BlockCache / BloomFilter</p>
+</li>
+</ol>
+<h3 id="Log-和恢复流"><a href="#Log-和恢复流" class="headerlink" title="Log 和恢复流"></a>Log 和恢复流</h3><p>上面几个都比较好推，下面一个相对来说特殊一些。一台 TabletServer 可能有成百上千的 Tablets，每个 Tablet 会有自己的 Redo log 流和 SSTable。但是都有写入的时候，如果往这么多 Redo Log 流写的话，对下层压力会很大。这里 BigTable 会把日志流聚合，写到 <code>TabletServer</code> 为粒度的日志文件。这让写日志快了很多。</p>
+<p>这给恢复和迁移带来了一些麻烦。因为原本恢复逻辑大概是：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">1. 找到自己 Region 对应的 Redo Log</span><br><span class="line">2. Redo</span><br></pre></td></tr></table></figure>
+<p>现在变成了：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">1. 找到之前的 Log 流</span><br><span class="line">2. 把日志按照 (table，row name，log sequence number) 排序</span><br><span class="line">	2.1. Master 找到日志, 先将日志分割成 64MB 的段，之后在不同的 Tablet 服务器对段进行并行排序</span><br><span class="line">3. 按照之前逻辑恢复</span><br></pre></td></tr></table></figure>
+<h3 id="Tablet-加速恢复"><a href="#Tablet-加速恢复" class="headerlink" title="Tablet 加速恢复"></a>Tablet 加速恢复</h3><p>在调度的时候，Tablet 做 minor compaction，把未 Flush 的 Redo Log 刷到 SST，这个会恢复或者调度期带来一些小小的停写，但是能减少调度/恢复期间的时间。</p>
+<h2 id="HBase-对-BigTable-的实现"><a href="#HBase-对-BigTable-的实现" class="headerlink" title="HBase 对 BigTable 的实现"></a>HBase 对 BigTable 的实现</h2><p>BigTable 论文在 OSDI’06 发布。而 Apache HBase 也在 06 年写下第一行代码。</p>
+<p>HBase 被描述为一个持久的、分布式的、稀疏的、多维的表。按照 Column Family 被存储在不同的地方。它的体系结构类似 BigTable:</p>
+<p><img src="https://image.mwish.me/blog-image/36142E10-C8AB-401E-B5E9-BC67A8C5ECD2.png" alt="36142E10-C8AB-401E-B5E9-BC67A8C5ECD2"></p>
+<p>我们有下面的映射关系：</p>
+<ol>
+<li>分布式文件系统 -&gt; HDFS</li>
+<li>Chubby -&gt; ZooKeeper</li>
+<li>Tablet -&gt; Region</li>
+<li>TabletServer -&gt; RegionServer</li>
+</ol>
+<p>对于元信息，它存储在了特殊的表中: <a target="_blank" rel="noopener" href="https://hbase.apache.org/book.html#arch.catalog">https://hbase.apache.org/book.html#arch.catalog</a> 。这个表也会随着 Region 调度被调度。</p>
+<p>而对于 WAL，HBase 会存放 WAL，行级别的事务只会写一条 WAL，来保证行操作原子性：<a target="_blank" rel="noopener" href="https://hbase.apache.org/book.html#wal">https://hbase.apache.org/book.html#wal</a> 。在上面的论文里，Google BigTable 支持单个 WAL 流，而小米的优化提供了多个 WAL，来打散 HDFS 串行写，优化写。对于读，这里会把 Block 缓存在内存的 BlockCache 中。</p>
+<p>比较细的地方在于 Region 迁移/Merge/Split 相关的，Merge 和 Split 都依赖迁移操作，这里可能会将要操作的多个 Region 移动到同一个 RegionServer 来操作。</p>
+<p>对于 Load Balance，原论文中没有提到，这里提供了一些相对复杂的策略，包括根据负载来迁移：<a target="_blank" rel="noopener" href="https://hbase.apache.org/book.html#regions.arch.assignment">https://hbase.apache.org/book.html#regions.arch.assignment</a></p>
+<p>HBase 的目录在：<a target="_blank" rel="noopener" href="https://github.com/apache/hbase">https://github.com/apache/hbase</a> ，服务器主要路径在 <code>hbase-server</code> 下的 master 和 region-server 的目录分别是</p>
+<p>HBase 宕机恢复和原论文差不多，值得一提的是迁移相关的部分。这里可能受到 Region 调度和分裂的影响，所以做的相对细致很多。我们这里会介绍一下 HBase 管控相关的一些信息</p>
+<p>HBase 的 ZooKeeper 中，会缓存如下的信息，具体我摘录一些调度有关的信息：</p>
+<ul>
+<li><code>meta-region-server</code>: 存储 <code>hbase:meta</code> 这张元数据表的 RegionServer 的访问地址</li>
+<li><code>region-in-transition</code>: 在 Region 的迁移过程中，这里 RegionServer 会在这里变更 Region 的状态，Master 会 watch 对应的节点，触发更新 <code>hbase:meta</code> 表的映射。</li>
+</ul>
+<h3 id="客户端行为"><a href="#客户端行为" class="headerlink" title="客户端行为"></a>客户端行为</h3><p>client 会访问 <code>zk</code> 提供的 <code>hbase:meta</code> 表，这个表大概内容如下：</p>
+<p><img src="https://image.mwish.me/blog-image/B7A7AB65-C139-4269-9740-645059300C4F.png" alt="B7A7AB65-C139-4269-9740-645059300C4F"></p>
+<p>Client 会读取 <code>meta-region-server</code> 这个 ZNode，然后访问 <code>hbase</code> 的元信息，位置信息。访问到之后，具体的路由会被缓存在 client 上。这个内容其实是 <code>&lt;某个对应的 StartKey, EndKey, 分配在什么 RegionServer 的什么 Region&gt;</code>.</p>
+<p>关键是访问失效，RegionServer 能够发现对应 Region 不在自己上面，Client 会清缓存然后重新访问 <code>meta-region-server</code>，然后更新缓存。</p>
+<h3 id="RegionServer"><a href="#RegionServer" class="headerlink" title="RegionServer"></a>RegionServer</h3><p><img src="https://image.mwish.me/blog-image/C9D9DD35-CDE3-4A06-A932-BBADEEF336C2.png" alt="C9D9DD35-CDE3-4A06-A932-BBADEEF336C2"></p>
+<p>HBase 的写入会有一个 <code>sequenceid</code>, 根据 <code>sequenceid</code> 做一些日志推进。HLog 本身是按照时间之类的滚的，然后可能有复制节点在读取这些数据。当保证没有 Flush 的最后一个 MemStore 也大于某个 WAL 的 sequence 之后，这个 WAL 可以被放到别的地方。</p>
+<p>这里的 WAL (HLog) 会写 <code>WAL</code> 文件，<code>WAL</code> 写入之后按照一定条件会切换到写新的文件，当 MemTable Flush 成为 HFile 之后，这里会把 <code>WAL</code> 移动到 <code>oldWALS</code>，等改被这个 <code>WAL</code> 文件没有被 replica 读，并 GC。</p>
+<p>上述描述了 Minor Compaction 的流程。Major Compaction 这里是 Tiered Compaction，因为 HBase 本身适合读多写少的场景. HBase 对 Compaction 提供了专门的线程池做任务隔离（我脑洞一下，感觉 Compaction 任务本身也可以下发到别的机器上）。</p>
+<h3 id="Region-迁移-分裂-合并"><a href="#Region-迁移-分裂-合并" class="headerlink" title="Region 迁移/分裂/合并"></a>Region 迁移/分裂/合并</h3><h4 id="基础-Procedure-V2"><a href="#基础-Procedure-V2" class="headerlink" title="基础: Procedure V2"></a>基础: Procedure V2</h4><p>这个好像是由国人 Committer 张铎老师完成的。这一部分我感觉相当复杂，会涉及 Master、Zk、RegionServer 三方的状态，所以比较复杂. </p>
+<p>在这里，每个 Task 会被分成多个子任务，这里增加了一个 Procedure V2 的模块，然后会把任务写成一个 Task，分成多步来执行。这里可以看：</p>
+<ol>
+<li><a target="_blank" rel="noopener" href="https://www.slidestalk.com/HBaseGroup/HBaseProcedureV236713">https://www.slidestalk.com/HBaseGroup/HBaseProcedureV236713</a></li>
+<li><a target="_blank" rel="noopener" href="http://www.nosqlnotes.com/technotes/hbase/procedure-v2/">http://www.nosqlnotes.com/technotes/hbase/procedure-v2/</a></li>
+</ol>
+<p>对于 Region 状态迁移，这里切分成了下面的状态，以写 <code>MasterRegion</code> 为分布式的 Coordinator，来推定最终的状态。当然实际上这个是很难的，我们可以对比一下 TiKV + PD （即基于 Multi-Raft 的方案）:</p>
+<ol>
+<li>TiKV 分成了多个 Raft Group，每个 Raft Group 是一个自洽的小圈子</li>
+<li>Raft Group 会给 PD 上报心跳，根据心跳来决议最终的状态</li>
+<li>Region 本身，会有一个 Epoch，根据 Epoch 来决定最终的状态。PD 在做分裂的时候会发送一个 Task，然后发送 Region 分裂的任务，这个任务上调度会是幂等的</li>
+</ol>
+<p>那么，TiKV 这个可以参考：<a target="_blank" rel="noopener" href="https://pingcap.com/zh/blog/tikv-source-code-reading-20">https://pingcap.com/zh/blog/tikv-source-code-reading-20</a></p>
+<p>那为什么 Procedure V2 这些这么复杂呢，因为它调度有好几部分：</p>
+<ol>
+<li>Master 的内存</li>
+<li>存储的路由表，即 <code>hbase:meta</code></li>
+<li>RegionServer 的状态</li>
+</ol>
+<p>这个可能 Master Assign 了一个任务，然后 RegionServer 执行了一部分，然后挂到 zk 上，这个时候 Master Crash 了，然后 Master 拉起来之后，可能要根据 Heartbeat 或者什么重建。这个时候，不过不一致，可能会返回 RIT 错误。</p>
+<p>Procedure V2 框架会做什么呢？它会把 <code>MasterRegion</code> 当作 <code>Coordinator</code>, 决定最终的事务状态。然后如果状态不一致，它会尝试推进或者尝试 Abort，做了一个分布式的状态机。（感觉有点像 saga 或者 tcc？其实挺 Hack 的）</p>
+<p><img src="https://image.mwish.me/blog-image/82A72356-3129-4F8E-AB38-36B898FF3CB9.png" alt="82A72356-3129-4F8E-AB38-36B898FF3CB9"></p>
+<p>这个地方可以分成多组状态，然后实现了 <code>rollback</code> 等操作，来推进或者回退。</p>
+<h4 id="Region-Split-Merge-迁移"><a href="#Region-Split-Merge-迁移" class="headerlink" title="Region Split/Merge/迁移"></a>Region Split/Merge/迁移</h4><p>这里可以看看：<a target="_blank" rel="noopener" href="https://blog.cloudera.com/apache-hbase-region-splitting-and-merging/">https://blog.cloudera.com/apache-hbase-region-splitting-and-merging/</a>  和 <a target="_blank" rel="noopener" href="https://popesaga.github.io/2020/11/13/HBase%20%E5%AD%A6%E4%B9%A0%EF%BC%9ARegion%20%E8%BF%81%E7%A7%BB%E3%80%81%E5%90%88%E5%B9%B6%E3%80%81%E5%88%86%E8%A3%82%E5%92%8C%E8%B4%9F%E8%BD%BD%E5%9D%87%E8%A1%A1/#Assignment-Manager-V2">https://popesaga.github.io/2020/11/13/HBase%20%E5%AD%A6%E4%B9%A0%EF%BC%9ARegion%20%E8%BF%81%E7%A7%BB%E3%80%81%E5%90%88%E5%B9%B6%E3%80%81%E5%88%86%E8%A3%82%E5%92%8C%E8%B4%9F%E8%BD%BD%E5%9D%87%E8%A1%A1/#Assignment-Manager-V2</a></p>
+<p>还是挺复杂的，要考虑：</p>
+<ol>
+<li>Procedure V2 的恢复</li>
+<li>分裂、合并的策略，包括触发条件（负载均衡、查找到具体分裂的点），可以参考 <code>StochasticLoadBalancer</code> 策略</li>
+<li>分裂、合并的过程中，会从一台 WAL 涉及到2台 WAL，对应的 HFile 也需要迁移或者 GC。</li>
+</ol>
+<h1 id="最后的话"><a href="#最后的话" class="headerlink" title="最后的话"></a>最后的话</h1><p>这里的 lessons 一节相当有意思，我觉得句句金句。这里说的大致内容还是说，分布式系统的设计要依赖简单的接口，在加入接口之前要想到用户怎么用，然后尽量把依赖和自己都搞简单一些，因为反过来说，很多软件本身很大，但是它的一些边角功能可能相对没那么靠谱；同时，要添加功能的时候，要想到用户可能怎么用，过多的功能和配置会把你的系统搞得很恶心，所以很多时候提供一个简单的 kernel 也挺好的（当然，在现今内卷和细化的环境下，大家也会做各种搅屎棍功能）。</p>
+<p>论文的 lessons 还讲到一些 checksum 之类的问题，我觉得郭宽在知乎的答案其实是相对靠谱的：<a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/338893564">https://zhuanlan.zhihu.com/p/338893564</a> 。</p>
+<p>当初看 BigTable 之前，感觉里面的东西可能比较旧了，而且单行事务的模型可能相对 TiKV 或者 Spanner 那套已经比较 Naive 了，不过 BigTable 仍然很清晰的描述了怎么在共享存储上构建系统。一些比较细节的问题是：Region 成员变更、Region 的 HLog 流、HLog 切分、备份的时候出现新 Region 和旧 Region 不在同一条 HLog 上。这些问题现在做云上一些共享存储的系统还是会碰到的，也是可以参考的。</p>
+<p>像一些新的系统可能会把 Log 接到一些异构的系统，比如 BookKeeper 之类的系统上。不过我感觉很多实现还是跟论文讨论的差不多的。</p>
+<h2 id="References"><a href="#References" class="headerlink" title="References"></a>References</h2><ol>
+<li>OSDI’06 BigTable: <a target="_blank" rel="noopener" href="https://research.google.com/archive/bigtable-osdi06.pdf">https://research.google.com/archive/bigtable-osdi06.pdf</a></li>
+<li>BigTable 的翻译：<a target="_blank" rel="noopener" href="https://arthurchiao.art/blog/google-bigtable-zh/">https://arthurchiao.art/blog/google-bigtable-zh/</a></li>
+<li>HBase Book: <a target="_blank" rel="noopener" href="https://hbase.apache.org/book.html">https://hbase.apache.org/book.html</a></li>
+<li>《HBase原理与实践》 胡争、范欣欣著。</li>
+<li>HBase Compaction: <a target="_blank" rel="noopener" href="http://hbasefly.com/2016/07/13/hbase-compaction-1/">http://hbasefly.com/2016/07/13/hbase-compaction-1/</a></li>
+<li></li>
+</ol>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BB%84%E4%BB%B6"><span class="toc-number">1.</span> <span class="toc-text">组件</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Tablet-%E7%9A%84%E5%AE%9A%E4%BD%8D"><span class="toc-number">1.1.</span> <span class="toc-text">Tablet 的定位</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Tablet-%E7%9A%84%E5%88%86%E9%85%8D"><span class="toc-number">1.2.</span> <span class="toc-text">Tablet 的分配</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Master"><span class="toc-number">1.2.1.</span> <span class="toc-text">Master</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Tablet-%E6%9C%8D%E5%8A%A1"><span class="toc-number">1.3.</span> <span class="toc-text">Tablet 服务</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BC%98%E5%8C%96"><span class="toc-number">2.</span> <span class="toc-text">优化</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Log-%E5%92%8C%E6%81%A2%E5%A4%8D%E6%B5%81"><span class="toc-number">2.1.</span> <span class="toc-text">Log 和恢复流</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Tablet-%E5%8A%A0%E9%80%9F%E6%81%A2%E5%A4%8D"><span class="toc-number">2.2.</span> <span class="toc-text">Tablet 加速恢复</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#HBase-%E5%AF%B9-BigTable-%E7%9A%84%E5%AE%9E%E7%8E%B0"><span class="toc-number">3.</span> <span class="toc-text">HBase 对 BigTable 的实现</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%A2%E6%88%B7%E7%AB%AF%E8%A1%8C%E4%B8%BA"><span class="toc-number">3.1.</span> <span class="toc-text">客户端行为</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#RegionServer"><span class="toc-number">3.2.</span> <span class="toc-text">RegionServer</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Region-%E8%BF%81%E7%A7%BB-%E5%88%86%E8%A3%82-%E5%90%88%E5%B9%B6"><span class="toc-number">3.3.</span> <span class="toc-text">Region 迁移&#x2F;分裂&#x2F;合并</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%9F%BA%E7%A1%80-Procedure-V2"><span class="toc-number">3.3.1.</span> <span class="toc-text">基础: Procedure V2</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Region-Split-Merge-%E8%BF%81%E7%A7%BB"><span class="toc-number">3.3.2.</span> <span class="toc-text">Region Split&#x2F;Merge&#x2F;迁移</span></a></li></ol></li></ol></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E6%9C%80%E5%90%8E%E7%9A%84%E8%AF%9D"><span class="toc-number"></span> <span class="toc-text">最后的话</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#References"><span class="toc-number">1.</span> <span class="toc-text">References</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2022/03/21/Notes-BigTable/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2022/03/21/Notes-BigTable/&text=Notes: BigTable"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2022/03/21/Notes-BigTable/&title=Notes: BigTable"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2022/03/21/Notes-BigTable/&is_video=false&description=Notes: BigTable"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Notes: BigTable&body=Check out this article: http://blog.mwish.me/2022/03/21/Notes-BigTable/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2022/03/21/Notes-BigTable/&title=Notes: BigTable"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2022/03/21/Notes-BigTable/&title=Notes: BigTable"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2022/03/21/Notes-BigTable/&title=Notes: BigTable"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2022/03/21/Notes-BigTable/&title=Notes: BigTable"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2022/03/21/Notes-BigTable/&name=Notes: BigTable&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2022/03/21/Notes-BigTable/&t=Notes: BigTable"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

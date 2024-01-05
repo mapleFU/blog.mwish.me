@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="古早写过一篇：https:&#x2F;&#x2F;zhuanlan.zhihu.com&#x2F;p&#x2F;94406822 Two’s Complement(二进制补码)虽然这是大部分入门计算机的人都学过的——不如说整篇文章都是，但是我们还是走流程复习一遍 如果表示 unsigned 相对来说很简单，那么表示 signed 就不行了。我们可以先验的知道一些结论，例如： https:&#x2F;&#x2F;en.cppreference.com&#x2F;w&#x2F;c">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Integer &amp; Endian">
+<meta property="og:url" content="http://blog.mwish.me/2020/09/19/Integer-Endian/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="古早写过一篇：https:&#x2F;&#x2F;zhuanlan.zhihu.com&#x2F;p&#x2F;94406822 Two’s Complement(二进制补码)虽然这是大部分入门计算机的人都学过的——不如说整篇文章都是，但是我们还是走流程复习一遍 如果表示 unsigned 相对来说很简单，那么表示 signed 就不行了。我们可以先验的知道一些结论，例如： https:&#x2F;&#x2F;en.cppreference.com&#x2F;w&#x2F;c">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/DE4A8B7C-67CC-4304-A0BC-2721362FB6B1.png">
+<meta property="article:published_time" content="2020-09-18T18:52:50.000Z">
+<meta property="article:modified_time" content="2022-07-19T12:23:50.548Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/DE4A8B7C-67CC-4304-A0BC-2721362FB6B1.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>Integer &amp; Endian</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2020/10/04/RISC-V-%E6%8C%87%E4%BB%A4%E6%A0%BC%E5%BC%8F/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2020/09/07/tenet-%E8%A7%82%E5%BD%B1%E7%AC%94%E8%AE%B0/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/09/19/Integer-Endian/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/09/19/Integer-Endian/&text=Integer &amp; Endian"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/09/19/Integer-Endian/&title=Integer &amp; Endian"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/09/19/Integer-Endian/&is_video=false&description=Integer &amp; Endian"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Integer &amp; Endian&body=Check out this article: http://blog.mwish.me/2020/09/19/Integer-Endian/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/09/19/Integer-Endian/&title=Integer &amp; Endian"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/09/19/Integer-Endian/&title=Integer &amp; Endian"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/09/19/Integer-Endian/&title=Integer &amp; Endian"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/09/19/Integer-Endian/&title=Integer &amp; Endian"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/09/19/Integer-Endian/&name=Integer &amp; Endian&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/09/19/Integer-Endian/&t=Integer &amp; Endian"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Two%E2%80%99s-Complement-%E4%BA%8C%E8%BF%9B%E5%88%B6%E8%A1%A5%E7%A0%81"><span class="toc-number">1.</span> <span class="toc-text">Two’s Complement(二进制补码)</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Sign-and-Magnitude-%E6%9C%80%E9%AB%98%E4%BD%8D%E8%A1%A8%E7%A4%BA-signed"><span class="toc-number">1.1.</span> <span class="toc-text">Sign and Magnitude: 最高位表示 signed</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#One%E2%80%99s-Complement"><span class="toc-number">1.2.</span> <span class="toc-text">One’s Complement</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Two%E2%80%99s-complement"><span class="toc-number">1.3.</span> <span class="toc-text">Two’s complement</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Store-data-in-memory"><span class="toc-number">2.</span> <span class="toc-text">Store data in memory</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Optimization"><span class="toc-number">2.1.</span> <span class="toc-text">Optimization</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%BD%AC%E5%8C%96"><span class="toc-number">2.2.</span> <span class="toc-text">转化</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Floating-point-edit"><span class="toc-number">2.3.</span> <span class="toc-text">Floating point[edit]</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%B5%B0%E5%90%91-Reader"><span class="toc-number">2.4.</span> <span class="toc-text">走向 Reader</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%95%B4%E5%9E%8B%E8%BD%AC%E6%8D%A2"><span class="toc-number">3.</span> <span class="toc-text">整型转换</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%95%B4%E5%9E%8B%E8%BD%AC%E6%8D%A2-1"><span class="toc-number">3.0.1.</span> <span class="toc-text">整型转换</span></a></li></ol></li></ol></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Integer &amp; Endian
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2020-09-18T18:52:50.000Z" itemprop="datePublished">2020-09-19</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>古早写过一篇：<a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/94406822">https://zhuanlan.zhihu.com/p/94406822</a></p>
+<h2 id="Two’s-Complement-二进制补码"><a href="#Two’s-Complement-二进制补码" class="headerlink" title="Two’s Complement(二进制补码)"></a>Two’s Complement(二进制补码)</h2><p>虽然这是大部分入门计算机的人都学过的——不如说整篇文章都是，但是我们还是走流程复习一遍</p>
+<p>如果表示 <code>unsigned</code> 相对来说很简单，那么表示 signed 就不行了。我们可以先验的知道一些结论，例如：</p>
+<p><a target="_blank" rel="noopener" href="https://en.cppreference.com/w/cpp/language/types">https://en.cppreference.com/w/cpp/language/types</a></p>
+<ul>
+<li>char 的范围是 <code>-128 to 127</code></li>
+</ul>
+<p>那么，教科书可能会提到的一些朴素的实现：比方说用边缘的某一位表示 signed 或者 unsigned. 因为这样可能会有一个 +0 和一个 -0</p>
+<p>不过我们回忆一下，也有这种模型来的不是，比如 IEEE 浮点数。</p>
+<h3 id="Sign-and-Magnitude-最高位表示-signed"><a href="#Sign-and-Magnitude-最高位表示-signed" class="headerlink" title="Sign and Magnitude: 最高位表示 signed"></a>Sign and Magnitude: 最高位表示 signed</h3><p>会引入 <code>+0</code> <code>-0</code> ，同时，加法/减法需要不同的行为。</p>
+<p><a target="_blank" rel="noopener" href="https://en.wikipedia.org/wiki/Signed_number_representations#Signed_magnitude_representation">https://en.wikipedia.org/wiki/Signed_number_representations#Signed_magnitude_representation</a></p>
+<h3 id="One’s-Complement"><a href="#One’s-Complement" class="headerlink" title="One’s Complement"></a>One’s Complement</h3><blockquote>
+<p>positive numbers have leading 0s, negative numbers have leadings 1s.</p>
+</blockquote>
+<p><a target="_blank" rel="noopener" href="https://en.wikipedia.org/wiki/Ones&#39;_complement">https://en.wikipedia.org/wiki/Ones%27_complement</a></p>
+<p>当然这个也有 <code>+0</code> <code>-0</code> 的问题，One’s Complement 也是最高位表示 signed/unsigned 的</p>
+<p>这个加减法都可以一定程度上统一，但是会带来 negative zero 的问题，而不带来 negative zero 又给计算增加了额外的复杂度。</p>
+<h3 id="Two’s-complement"><a href="#Two’s-complement" class="headerlink" title="Two’s complement"></a>Two’s complement</h3><p><a target="_blank" rel="noopener" href="https://en.wikipedia.org/wiki/Two&#39;s_complement#Arithmetic_operations">https://en.wikipedia.org/wiki/Two%27s_complement#Arithmetic_operations</a></p>
+<p><a target="_blank" rel="noopener" href="https://zh.wikipedia.org/wiki/二補數">https://zh.wikipedia.org/wiki/%E4%BA%8C%E8%A3%9C%E6%95%B8</a></p>
+<p>现在有了 two complement, 这个问题就被很好地解决啦！</p>
+<p>本节，完结！</p>
+<h2 id="Store-data-in-memory"><a href="#Store-data-in-memory" class="headerlink" title="Store data in memory"></a>Store data in memory</h2><p>这一节或许需要回顾：<a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/118749234">https://zhuanlan.zhihu.com/p/118749234</a></p>
+<p>当数据存在内存的时候，我们或许会有字节流：<code>0x28872887</code>，假如这里面全是32位有符号整数，我们怎么解释它们呢？</p>
+<p>在 32位 RISC-V 中，我们是 Little-Endian 的，这意味着我们有如下布局：</p>
+<p><img src="https://image.mwish.me/blog-image/DE4A8B7C-67CC-4304-A0BC-2721362FB6B1.png" alt="DE4A8B7C-67CC-4304-A0BC-2721362FB6B1"></p>
+<p>发现没有，每个 byte 的顺序是不变的，但是一个 16 位整数中， byte 之间的顺序是不一样的，对于 <code>0x28</code> 来说，如果我们是 Little Endian, 那么，我们是 <code>0x28</code>, 而对于 BigEndian 来说，我们是 <code>0x82</code>.</p>
+<p>那么再回到 <code>0x28872887</code>, 假设我们会有一个 <code>int32_t s[4]</code> 变成了以上的 <code>0x28872887</code>，或者有：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">X</span> &#123;</span></span><br><span class="line">  <span class="type">int</span> i1;</span><br><span class="line">  <span class="type">int</span> i2;</span><br><span class="line">  <span class="type">int</span> i3;</span><br><span class="line">  <span class="type">int</span> i4;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>那么，他们会怎么办？假如是大端序？答案是 i1 i2 i3 i4 仍然只代表 <code>0x28</code> <code>0x87</code> <code>0x28</code> <code>0x87</code> 所在的那 16位，这个顺序是不会改变的。</p>
+<h3 id="Optimization"><a href="#Optimization" class="headerlink" title="Optimization"></a>Optimization</h3><p><a target="_blank" rel="noopener" href="https://en.wikipedia.org/wiki/Endianness#Optimization">https://en.wikipedia.org/wiki/Endianness#Optimization</a></p>
+<p>Little-Endian 提供了一个很好的性质，帮助用户完成上述的优化。</p>
+<h3 id="转化"><a href="#转化" class="headerlink" title="转化"></a>转化</h3><p>你接触过 Unix 网络编程的话，可能会对下列的 api 有一定印象：</p>
+<p><a target="_blank" rel="noopener" href="https://linux.die.net/man/3/htons">https://linux.die.net/man/3/htons</a></p>
+<p>网络传输一般采用大端序，也被称之为网络字节序，或<em>网络序</em>。现在假设你做了一个程序，需要从网络读写，可以走上面这一套…</p>
+<p>等等，我们是不是忽略了什么？那浮点数呢？</p>
+<p>我们都知道浮点数有 IEEE 754 标准，那么：</p>
+<blockquote>
+<h3 id="Floating-point-edit"><a href="#Floating-point-edit" class="headerlink" title="Floating point[edit]"></a>Floating point[<a target="_blank" rel="noopener" href="https://en.wikipedia.org/w/index.php?title=Endianness&amp;action=edit&amp;section=8">edit</a>]</h3><p>Although the ubiquitous x86 processors of today use little-endian storage for all types of data (integer, floating point), there are a number of hardware architectures where <a target="_blank" rel="noopener" href="https://en.wikipedia.org/wiki/Floating-point">floating-point</a> numbers are represented in big-endian form while integers are represented in little-endian form.<a target="_blank" rel="noopener" href="https://en.wikipedia.org/wiki/Endianness#cite_note-16">[13]</a> There are <a target="_blank" rel="noopener" href="https://en.wikipedia.org/wiki/ARM_architecture">ARM</a> processors that have half little-endian, half big-endian floating-point representation for double-precision numbers: both 32-bit words are stored in little-endian like integer registers, but the most significant one first. Because there have been many floating-point formats with no “<a target="_blank" rel="noopener" href="https://en.wikipedia.org/wiki/Computer_network">network</a>“ standard representation for them, the <a target="_blank" rel="noopener" href="https://en.wikipedia.org/wiki/External_Data_Representation">XDR</a> standard uses big-endian IEEE 754 as its representation. It may therefore appear strange that the widespread <a target="_blank" rel="noopener" href="https://en.wikipedia.org/wiki/IEEE_754">IEEE 754</a> floating-point standard does not specify endianness.<a target="_blank" rel="noopener" href="https://en.wikipedia.org/wiki/Endianness#cite_note-17">[14]</a> Theoretically, this means that even standard IEEE floating-point data written by one machine might not be readable by another. However, on modern standard computers (i.e., implementing IEEE 754), one may in practice safely assume that the endianness is the same for floating-point numbers as for integers, making the conversion straightforward regardless of data type. (Small <a target="_blank" rel="noopener" href="https://en.wikipedia.org/wiki/Embedded_system">embedded systems</a> using special floating-point formats may be another matter however.)</p>
+</blockquote>
+<p>在 boost.endian中，甚至对 floating point 只有有限的支持：</p>
+<blockquote>
+<p>Is there floating point support?</p>
+<p>An attempt was made to support four-byte <code>float</code>s and eight-byte <code>double</code>s, limited to <a target="_blank" rel="noopener" href="http://en.wikipedia.org/wiki/IEEE_floating_point">IEEE 754</a> (also known as ISO/IEC/IEEE 60559) floating point and further limited to systems where floating point endianness does not differ from integer endianness. Even with those limitations, support for floating point types was not reliable and was removed. For example, simply reversing the endianness of a floating point number can result in a signaling-NAN.</p>
+<p>Support for <code>float</code> and <code>double</code> has since been reinstated for <code>endian_buffer</code>, <code>endian_arithmetic</code> and the conversion functions that reverse endianness in place. The conversion functions that take and return by value still do not support floating point due to the above issues; reversing the bytes of a floating point number does not necessarily produce another valid floating point number.</p>
+</blockquote>
+<h3 id="走向-Reader"><a href="#走向-Reader" class="headerlink" title="走向 Reader"></a>走向 Reader</h3><p>所以，当我们读取的时候，我们可能有大端序的整数读取：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">template</span>&lt;<span class="keyword">typename</span> T&gt;</span></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">Read_</span><span class="params">(<span class="type">const</span> <span class="type">char</span>* buf, T* v)</span> </span>&#123;</span><br><span class="line">  <span class="built_in">static_assert</span>(is_fundamental_v&lt;T&gt;);</span><br><span class="line">  *v = buf[<span class="number">0</span>];</span><br><span class="line">  <span class="keyword">for</span> (<span class="type">size_t</span> i = <span class="number">1</span>; i &lt; <span class="built_in">sizeof</span>(T); ++i) &#123;</span><br><span class="line">    *v &lt;&lt;= <span class="number">8</span>;</span><br><span class="line">    *v |= <span class="built_in">static_cast</span>&lt;<span class="type">uint8_t</span>&gt;(buf[i]);</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+<h2 id="整型转换"><a href="#整型转换" class="headerlink" title="整型转换"></a>整型转换</h2><blockquote>
+<h4 id="整型转换-1"><a href="#整型转换-1" class="headerlink" title="整型转换"></a>整型转换</h4><p>任何整数类型或无作用域枚举类型的<a target="_blank" rel="noopener" href="https://zh.cppreference.com/w/cpp/language/value_category#.E7.BA.AF.E5.8F.B3.E5.80.BC">纯右值</a>都可隐式转换成任何其他整数类型。若其转换列出于整数类型提升之下，则它是提升而非转换。</p>
+<ul>
+<li><p>若目标类型为无符号，则结果值是等于源值<a target="_blank" rel="noopener" href="https://en.wikipedia.org/wiki/Modular_arithmetic">模</a> <em>2n<br>\</em> 的最小无符号值，其中 <em>n</em> 是用于表示目标类型的位数。</p>
+</li>
+<li><p>若目标类型有符号，则当源整数能以目标类型表示时，不更改其值。否则结果是实现定义的 (C++20 前)与源值对 <em>2n<br>\</em> 同余的唯一目标类型值，其中 <em>n</em> 是用于表示目标类型的位数 (C++20 起)（注意这不同于未定义的<a target="_blank" rel="noopener" href="https://zh.cppreference.com/w/cpp/language/operator_arithmetic#.E6.BA.A2.E5.87.BA">有符号整数算术溢出</a>）。</p>
+</li>
+<li>若源类型为 bool，则值 false 转换为目标类型的零，而值 true 转换成目标类型的一（注意若目标类型为 int，则这是整数类型提升，而非整数类型转换）。</li>
+<li>若目标类型为 bool，则这是布尔转换（见下文）。</li>
+</ul>
+</blockquote>
+<p>事实上，TiKV 代码依赖了这点，unsigned/signed 在下层统一用 <code>signed</code> 表示，然后依赖转换的语义。</p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Two%E2%80%99s-Complement-%E4%BA%8C%E8%BF%9B%E5%88%B6%E8%A1%A5%E7%A0%81"><span class="toc-number">1.</span> <span class="toc-text">Two’s Complement(二进制补码)</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Sign-and-Magnitude-%E6%9C%80%E9%AB%98%E4%BD%8D%E8%A1%A8%E7%A4%BA-signed"><span class="toc-number">1.1.</span> <span class="toc-text">Sign and Magnitude: 最高位表示 signed</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#One%E2%80%99s-Complement"><span class="toc-number">1.2.</span> <span class="toc-text">One’s Complement</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Two%E2%80%99s-complement"><span class="toc-number">1.3.</span> <span class="toc-text">Two’s complement</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Store-data-in-memory"><span class="toc-number">2.</span> <span class="toc-text">Store data in memory</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Optimization"><span class="toc-number">2.1.</span> <span class="toc-text">Optimization</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%BD%AC%E5%8C%96"><span class="toc-number">2.2.</span> <span class="toc-text">转化</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Floating-point-edit"><span class="toc-number">2.3.</span> <span class="toc-text">Floating point[edit]</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%B5%B0%E5%90%91-Reader"><span class="toc-number">2.4.</span> <span class="toc-text">走向 Reader</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%95%B4%E5%9E%8B%E8%BD%AC%E6%8D%A2"><span class="toc-number">3.</span> <span class="toc-text">整型转换</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%95%B4%E5%9E%8B%E8%BD%AC%E6%8D%A2-1"><span class="toc-number">3.0.1.</span> <span class="toc-text">整型转换</span></a></li></ol></li></ol></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2020/09/19/Integer-Endian/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2020/09/19/Integer-Endian/&text=Integer &amp; Endian"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2020/09/19/Integer-Endian/&title=Integer &amp; Endian"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2020/09/19/Integer-Endian/&is_video=false&description=Integer &amp; Endian"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Integer &amp; Endian&body=Check out this article: http://blog.mwish.me/2020/09/19/Integer-Endian/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2020/09/19/Integer-Endian/&title=Integer &amp; Endian"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2020/09/19/Integer-Endian/&title=Integer &amp; Endian"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2020/09/19/Integer-Endian/&title=Integer &amp; Endian"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2020/09/19/Integer-Endian/&title=Integer &amp; Endian"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2020/09/19/Integer-Endian/&name=Integer &amp; Endian&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2020/09/19/Integer-Endian/&t=Integer &amp; Endian"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

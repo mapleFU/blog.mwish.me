@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="之前看到培神在群里转华为贡献的 EROFS 可能进安卓主线并作为默认只读文件系统，不仅对这一贡献比较感兴趣，遂把论文拉出来读了一遍。文章作者来自华为和 SJTU iPads，内容还是比较清晰的，描述了它们怎么优化只读文件系统的，它们的贡献大概有：  利用 LZ4 来把输入块压缩成固定大小的块输出 BLOCK 存储在块存储设备上 利用巧妙的技巧，来优化解压缩的开销。作者认为这块的开销有两个方面：文件">
+<meta property="og:type" content="article">
+<meta property="og:title" content="ATC&#39;19: EROFS">
+<meta property="og:url" content="http://blog.mwish.me/2023/10/22/ATC-19-EROFS/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="之前看到培神在群里转华为贡献的 EROFS 可能进安卓主线并作为默认只读文件系统，不仅对这一贡献比较感兴趣，遂把论文拉出来读了一遍。文章作者来自华为和 SJTU iPads，内容还是比较清晰的，描述了它们怎么优化只读文件系统的，它们的贡献大概有：  利用 LZ4 来把输入块压缩成固定大小的块输出 BLOCK 存储在块存储设备上 利用巧妙的技巧，来优化解压缩的开销。作者认为这块的开销有两个方面：文件">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/5632958259247473078.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/1637353494132474512.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/2120385008114742494.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/8349381289810421741.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/8833660903331583403.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/5182527977773199469.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/4188107683917911099.png">
+<meta property="article:published_time" content="2023-10-22T14:49:16.000Z">
+<meta property="article:modified_time" content="2023-10-22T14:50:16.513Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/5632958259247473078.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>ATC&#39;19: EROFS</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2023/10/29/VLDB-11-Efficiently-Compiling-Efficient-Query-Plans-for-Modern-Hardware/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2023/09/08/VLDB-23-Query-Partition-in-Napa/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2023/10/22/ATC-19-EROFS/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2023/10/22/ATC-19-EROFS/&text=ATC&#39;19: EROFS"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2023/10/22/ATC-19-EROFS/&title=ATC&#39;19: EROFS"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2023/10/22/ATC-19-EROFS/&is_video=false&description=ATC&#39;19: EROFS"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=ATC&#39;19: EROFS&body=Check out this article: http://blog.mwish.me/2023/10/22/ATC-19-EROFS/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2023/10/22/ATC-19-EROFS/&title=ATC&#39;19: EROFS"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2023/10/22/ATC-19-EROFS/&title=ATC&#39;19: EROFS"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2023/10/22/ATC-19-EROFS/&title=ATC&#39;19: EROFS"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2023/10/22/ATC-19-EROFS/&title=ATC&#39;19: EROFS"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2023/10/22/ATC-19-EROFS/&name=ATC&#39;19: EROFS&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2023/10/22/ATC-19-EROFS/&t=ATC&#39;19: EROFS"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%83%8C%E6%99%AF%E5%92%8C%E7%9B%B8%E5%85%B3%E7%B3%BB%E7%BB%9F%E4%BB%8B%E7%BB%8D"><span class="toc-number">1.</span> <span class="toc-text">背景和相关系统介绍</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#EROFS"><span class="toc-number">2.</span> <span class="toc-text">EROFS</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Fixed-size-output-compression"><span class="toc-number">2.1.</span> <span class="toc-text">Fixed-size output compression</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Input-Buffer-Handling-Cached-I-O-and-io-place-I-O"><span class="toc-number">2.2.</span> <span class="toc-text">Input Buffer Handling: Cached I&#x2F;O and io-place I&#x2F;O</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Decompression"><span class="toc-number">2.3.</span> <span class="toc-text">Decompression</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Reference"><span class="toc-number">3.</span> <span class="toc-text">Reference</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        ATC&#39;19: EROFS
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2023-10-22T14:49:16.000Z" itemprop="datePublished">2023-10-22</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>之前看到培神在群里转华为贡献的 EROFS 可能进安卓主线并作为默认只读文件系统，不仅对这一贡献比较感兴趣，遂把论文拉出来读了一遍。文章作者来自华为和 SJTU iPads，内容还是比较清晰的，描述了它们怎么优化只读文件系统的，它们的贡献大概有：</p>
+<ol>
+<li>利用 LZ4 来把输入块压缩成<strong>固定大小的块输出</strong> BLOCK 存储在块存储设备上</li>
+<li>利用巧妙的技巧，来优化解压缩的开销。作者认为这块的开销有两个方面：文件大小的放大、解压缩需要的的内存开销（见后文图）<ol>
+<li>文章把 compressed block 分成了两种模式：cached io 和 in-place io。</li>
+<li>用多种方法来优化解压缩，包括直接把用户内存映射到解压缩对应的 Page、跳过不需要解压缩的多余数据</li>
+</ol>
+</li>
+</ol>
+<p>本文只代表 19 ATC 发表的状况，听说 2023 年 Linux 主线代码和这个有点变化，而且作者目前还在维护这套系统。感兴趣的可以翻翻 maillist 来得知最新的情况。</p>
+<h2 id="背景和相关系统介绍"><a href="#背景和相关系统介绍" class="headerlink" title="背景和相关系统介绍"></a>背景和相关系统介绍</h2><p>EROFS 是一个<strong>只读的压缩文件系统</strong>。而安卓本身代码也使用了 Linux Kernel 部分的一些代码[3]. 本身 Linux 上很多地方就是放只读文件的，比如系统的 <code>/system</code> 之类的 read-only space. 那么根据论文的作者所说，实际上安卓的系统文件大小本身是挺大的，在 android 9 上面增长到了 1.9 GB。如下图</p>
+<p>（Sparse Image 和 Raw Image 是镜像的不同格式，见 [4] ）</p>
+<p><img src="https://image.mwish.me/blog-image/5632958259247473078.png" alt="img"></p>
+<ol>
+<li>Btrfs 这种 fs 对压缩并没有那么友好，它会把数据切分成多个 128KB 的 Chunk，然后独立压缩，把这些数据存放在不同的 Extent 中，这些 Extent 的位置会存放在一个 Btree 索引上。需要读取的时候这里需要 decompress 整个 column chunk. 然后去处理. Btrfs 是可以更新的，但是更新和重写整个 chunk 差不多了，还要额外更新一下 index。</li>
+<li>而 SquashFs 是一个已存在的压缩只读文件系统，但是这个系统会带来不少 overhead，有的是设计层面的，有的是实现层面的，见下图：</li>
+</ol>
+<p><img src="https://image.mwish.me/blog-image/1637353494132474512.png" alt="img"></p>
+<p>Squashfs 支持配置<strong>输入 block-size</strong>，然后把这些压缩到输出然后分配到磁盘的 Block 上。也支持配置一些算法。在 Squashfs 上，也需要一些元数据（比如压缩前后的映射）。压缩后的大小存储在 inode 中的列表上。</p>
+<p>从文章的实验角度看，这些设备的压缩率其实是很高的。这导致：</p>
+<ol>
+<li>每次会多读一些磁盘 IO 的数据（这个是设计角度导致的，比如压缩后的块和磁盘 size 不对齐）</li>
+<li>解压缩需要申请 uncompressed 的块大小的临时内存。本来盘大小就小于内存了，你这资源开销更大了…这些内存在现在还没多大内存的机器上操作还会加剧 swapping。</li>
+</ol>
+<p>作者认为，Squashfs 设计有下列核心问题：</p>
+<ol>
+<li>Fixed-sized input compression: 这种方式对小 io 带来了比较大的读放大和内存放大，如果全要读倒还好，但是对于小 io，比方说要读取第一个 block，然后磁盘上可能没对齐的 BLOCK 都给读了，然后又要准备解压缩空间，因为你也不知道这些东西每个用户层面的读要的数据在哪块. 当配置成 4KB 的输入块的时候，上述问题会被改善，但是压缩的 batch-size 又太小了，导致白压缩了。</li>
+<li>数据拷贝的开销。这部分上面的图写的非常清晰，这里读的 buffer-&gt;解压块 -&gt; 用户内存。每部分都引入了一定的开销。这部分我感觉一定程度上也是实现问题了。不知道 block-size 和设计感觉和这个的影响没有那么直接。主要是工程化的时候怎么在内核上支持这些需求。在实现上的时候，squashfs 实现如下<ol>
+<li>拿到 compressed block 的数量</li>
+<li>给每个 compressed block 申请内存。然后 issue io 把它们读起来。这里可能会有个 io page 池，这个池是预先申请的，给 io 对应的需求使用</li>
+<li>拷贝到 temp input buffer，这里需要一个连续的空间，然后解压到 temp output buffer. 作者认为，这里的主要瓶颈还是 memory access 而不是 CPU</li>
+<li>给用户的 page cache 拷贝</li>
+</ol>
+</li>
+</ol>
+<p>作者认为，优化空间在于：</p>
+<ol>
+<li>减少 io</li>
+<li>减少内存申请</li>
+</ol>
+<h2 id="EROFS"><a href="#EROFS" class="headerlink" title="EROFS"></a>EROFS</h2><h3 id="Fixed-size-output-compression"><a href="#Fixed-size-output-compression" class="headerlink" title="Fixed-size output compression"></a>Fixed-size output compression</h3><p>作者认为，一部分问题来源于 Fixed-size input 的不够 flexible，所以他们使用的策略是 fixed-sized output (这块其实我也没有百分百被说服，因为感觉是有 trade-off 的，在同样压缩率的情况下，这里保证了对下层 block 的 io 是对齐的，但是本身 decompress 中的各种放大还是存在的。）</p>
+<p><img src="https://image.mwish.me/blog-image/2120385008114742494.png" alt="img"></p>
+<p>具体方法上，EROFS 采用了 LZ4 的方式，在 <code>&#123;输入大小到达 1MB, 输出大小到达4k&#125;</code> 两个条件任意满足一个就会切下面的 BLOCK。如果是输入大小为1MB可能也会准备一个 4K 的块。这个增加了压缩率的上限（毕竟原来128KB一压）。2(c) 就是压缩的一个图例。作者认为这样有如下有点：</p>
+<ol>
+<li>最大压缩率更好（我认为这个取决于输入吧 orz）</li>
+<li>在解压缩的时候，io 控制的比较好。作者也通过一些 hack 的方式让解压缩尽量解压少的空间<ol>
+<li>作者认为只有对应的压缩数据会被解压，我觉得没差把。我感觉一个隐含条件就是这堆东西压缩率很高，压缩率低的条件下文章提到的很多东西都比较扯。。。这样对于小碎读有一定优化，比如小碎读最多引入两个 Physical Page IO. (<strong>不过看文章领悟了一下，应该这里 fs 层也是 Page-Level IO</strong>，原则上 fs 上层读一个 Page 下头确实最多读两个物理 Page）。</li>
+</ol>
+</li>
+<li>使得后文提到的 in-place compression 成为可能。</li>
+</ol>
+<h3 id="Input-Buffer-Handling-Cached-I-O-and-io-place-I-O"><a href="#Input-Buffer-Handling-Cached-I-O-and-io-place-I-O" class="headerlink" title="Input Buffer Handling: Cached I/O and io-place I/O"></a>Input Buffer Handling: Cached I/O and io-place I/O</h3><p><img src="https://image.mwish.me/blog-image/8349381289810421741.png" alt="img"></p>
+<ol>
+<li>Cached I/O: 如果要 partial read 某个 block<ol>
+<li>使用一块 inode 区域来存储状态，数据被 fetch 到一个额外的 page cache 中。</li>
+<li>作者认为这种小块读可能是连续的，所以可能会 cache 一会儿，后面读到了后面的区段可以避免反复解压（这段有点抽象，可以看后面的 decompression 一节）。</li>
+</ol>
+</li>
+<li>In-place I/O: 比较 hack，包含一些核心优化，给一些需要 decompressed 的 Page 准备的。这里认为大块读不会被反复请求，所以把 page 放到<strong>连续的解压缩 Buffer 的尾部</strong></li>
+</ol>
+<p>（这段有点抽象，可以看后面的 decompression 一节，配合理解）</p>
+<h3 id="Decompression"><a href="#Decompression" class="headerlink" title="Decompression"></a>Decompression</h3><p><img src="https://image.mwish.me/blog-image/8833660903331583403.png" alt="img"></p>
+<p>如上图，假设现在用户需要 D4/D6 ，这里需要看看 Cache-IO 怎么处理</p>
+<p><img src="https://image.mwish.me/blog-image/5182527977773199469.png" alt="img"></p>
+<p>如上 (b)，这里 EROFS 只需要 D3 D4，所以它：</p>
+<ol>
+<li>发起两个 Page 的物理 io</li>
+<li>准备一些 temporary page 给 D0-D2，因为 和 需要 mapping 的 Page 不一样，这些暂时不需要，然后直接解压，然后 D3 D4 解压的用 <code>vmap</code> 映射好丢给用户层</li>
+</ol>
+<p>如果是 in-place I/O，<strong>那么如同 (d)</strong>，这里 C0 会被放到尾部，然后直接解压完。</p>
+<p>这里还有几个工程优化：</p>
+<ol>
+<li>小页面用 Per-CPU buffer decompression。因为很多小页面解压，EROFS 禁止了切换（在第五节介绍的）然后切成 per-cpu 的小页面解压，这里再解压缩页面小于 4个 page 的时候才会使用，例如 3(c). 当然这里也需要拷贝出去了</li>
+<li>Rolling decompression: 为了避免不需要的内存申请太多，这里会每个 CPU 准备 16 个 Physical Pages，然后滚动 decompress</li>
+</ol>
+<p><img src="https://image.mwish.me/blog-image/4188107683917911099.png" alt="img"></p>
+<p>此外，如果当 figure5 这种场景出现的时候，也会使用临时的 Per-cpu页面。</p>
+<h2 id="Reference"><a href="#Reference" class="headerlink" title="Reference"></a>Reference</h2><ol>
+<li><a target="_blank" rel="noopener" href="https://www.usenix.org/system/files/atc19-gao.pdf">https://www.usenix.org/system/files/atc19-gao.pdf</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.usenix.org/conference/atc19/presentation/gao">https://www.usenix.org/conference/atc19/presentation/gao</a> (Presentation)</li>
+<li><a target="_blank" rel="noopener" href="https://www.androidauthority.com/android-linux-784964/">https://www.androidauthority.com/android-linux-784964/</a></li>
+<li><a target="_blank" rel="noopener" href="https://wiki.archlinux.org/title/sparse_file">https://wiki.archlinux.org/title/sparse_file</a></li>
+</ol>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%83%8C%E6%99%AF%E5%92%8C%E7%9B%B8%E5%85%B3%E7%B3%BB%E7%BB%9F%E4%BB%8B%E7%BB%8D"><span class="toc-number">1.</span> <span class="toc-text">背景和相关系统介绍</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#EROFS"><span class="toc-number">2.</span> <span class="toc-text">EROFS</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Fixed-size-output-compression"><span class="toc-number">2.1.</span> <span class="toc-text">Fixed-size output compression</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Input-Buffer-Handling-Cached-I-O-and-io-place-I-O"><span class="toc-number">2.2.</span> <span class="toc-text">Input Buffer Handling: Cached I&#x2F;O and io-place I&#x2F;O</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Decompression"><span class="toc-number">2.3.</span> <span class="toc-text">Decompression</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Reference"><span class="toc-number">3.</span> <span class="toc-text">Reference</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2023/10/22/ATC-19-EROFS/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2023/10/22/ATC-19-EROFS/&text=ATC&#39;19: EROFS"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2023/10/22/ATC-19-EROFS/&title=ATC&#39;19: EROFS"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2023/10/22/ATC-19-EROFS/&is_video=false&description=ATC&#39;19: EROFS"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=ATC&#39;19: EROFS&body=Check out this article: http://blog.mwish.me/2023/10/22/ATC-19-EROFS/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2023/10/22/ATC-19-EROFS/&title=ATC&#39;19: EROFS"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2023/10/22/ATC-19-EROFS/&title=ATC&#39;19: EROFS"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2023/10/22/ATC-19-EROFS/&title=ATC&#39;19: EROFS"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2023/10/22/ATC-19-EROFS/&title=ATC&#39;19: EROFS"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2023/10/22/ATC-19-EROFS/&name=ATC&#39;19: EROFS&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2023/10/22/ATC-19-EROFS/&t=ATC&#39;19: EROFS"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>

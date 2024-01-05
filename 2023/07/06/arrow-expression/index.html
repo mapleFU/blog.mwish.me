@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="Expression，顾名思义，是 arrow 中计算的表达式。这里可以通过 Substrait 来构建 Plan 或者单机的表达式。 Glance在 Arrow 中，Expression 可以分为下面几种可能的形式：  Call Function + Args 的包装，分为 Bounded &#x2F; Unbounded 的类型   Parameter ( A reference to a single">
+<meta property="og:type" content="article">
+<meta property="og:title" content="arrow expression">
+<meta property="og:url" content="http://blog.mwish.me/2023/07/06/arrow-expression/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="Expression，顾名思义，是 arrow 中计算的表达式。这里可以通过 Substrait 来构建 Plan 或者单机的表达式。 Glance在 Arrow 中，Expression 可以分为下面几种可能的形式：  Call Function + Args 的包装，分为 Bounded &#x2F; Unbounded 的类型   Parameter ( A reference to a single">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2023-07-05T17:10:00.000Z">
+<meta property="article:modified_time" content="2023-07-05T17:05:09.851Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>arrow expression</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" aria-label="上一篇" href="/2023/07/15/Distributed-Transaction-in-DynamoDB/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2023/07/01/schedule-Mesos-and-Yarn/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2023/07/06/arrow-expression/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2023/07/06/arrow-expression/&text=arrow expression"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2023/07/06/arrow-expression/&title=arrow expression"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2023/07/06/arrow-expression/&is_video=false&description=arrow expression"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=arrow expression&body=Check out this article: http://blog.mwish.me/2023/07/06/arrow-expression/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2023/07/06/arrow-expression/&title=arrow expression"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2023/07/06/arrow-expression/&title=arrow expression"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2023/07/06/arrow-expression/&title=arrow expression"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2023/07/06/arrow-expression/&title=arrow expression"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2023/07/06/arrow-expression/&name=arrow expression&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2023/07/06/arrow-expression/&t=arrow expression"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Glance"><span class="toc-number">1.</span> <span class="toc-text">Glance</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#FieldRef-and-Parameter"><span class="toc-number">2.</span> <span class="toc-text">FieldRef and Parameter</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Call"><span class="toc-number">3.</span> <span class="toc-text">Call</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Bind"><span class="toc-number">3.1.</span> <span class="toc-text">Bind</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BC%98%E5%8C%96"><span class="toc-number">3.2.</span> <span class="toc-text">优化</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#tools"><span class="toc-number">3.2.1.</span> <span class="toc-text">tools</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Canonicalize"><span class="toc-number">3.2.2.</span> <span class="toc-text">Canonicalize</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Others"><span class="toc-number">3.3.</span> <span class="toc-text">Others</span></a></li></ol></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        arrow expression
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2023-07-05T17:10:00.000Z" itemprop="datePublished">2023-07-06</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>Expression，顾名思义，是 arrow 中计算的表达式。这里可以通过 Substrait 来构建 Plan 或者单机的表达式。</p>
+<h2 id="Glance"><a href="#Glance" class="headerlink" title="Glance"></a>Glance</h2><p>在 Arrow 中，Expression 可以分为下面几种可能的形式：</p>
+<ul>
+<li>Call<ul>
+<li>Function + Args 的包装，分为 Bounded / Unbounded 的类型</li>
+</ul>
+</li>
+<li>Parameter ( <code>A reference to a single (potentially nested) field of the input Datum.</code>)<ul>
+<li>Arrow 或者 Input 中 Field 的包装，分为 Bounded / Unbounded</li>
+<li>可以通过 <code>FieldRef</code> 之类的来构建。用户大部分时候只走 <code>field_ref</code>，但底下实现还是个 <code>Parameter</code></li>
+</ul>
+</li>
+<li>Literal: 正常的 Literal, 包含 Null。实际上由 <code>Datum</code> (我们在介绍 Compute 的时候讲过) 实现</li>
+</ul>
+<p>上面这几套接口在 Expression 中表现为比较有趣的形式：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// An unbound expression which maps a single Datum to another Datum.</span></span><br><span class="line"><span class="comment">/// An expression is one of</span></span><br><span class="line"><span class="comment">/// - A literal Datum.</span></span><br><span class="line"><span class="comment">/// - A reference to a single (potentially nested) field of the input Datum.</span></span><br><span class="line"><span class="comment">/// - A call to a compute function, with arguments specified by other Expressions.</span></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">ARROW_EXPORT</span> Expression &#123;</span><br><span class="line"> <span class="keyword">public</span>:</span><br><span class="line">  <span class="function"><span class="type">bool</span> <span class="title">is_valid</span><span class="params">()</span> <span class="type">const</span> </span>&#123; <span class="keyword">return</span> impl_ != NULLPTR; &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">/// Access a Call or return nullptr if this expression is not a call</span></span><br><span class="line">  <span class="function"><span class="type">const</span> Call* <span class="title">call</span><span class="params">()</span> <span class="type">const</span></span>;</span><br><span class="line">  <span class="comment">/// Access a Datum or return nullptr if this expression is not a literal</span></span><br><span class="line">  <span class="function"><span class="type">const</span> Datum* <span class="title">literal</span><span class="params">()</span> <span class="type">const</span></span>;</span><br><span class="line">  <span class="comment">/// Access a FieldRef or return nullptr if this expression is not a field_ref</span></span><br><span class="line">  <span class="function"><span class="type">const</span> FieldRef* <span class="title">field_ref</span><span class="params">()</span> <span class="type">const</span></span>;</span><br><span class="line">  </span><br><span class="line">  <span class="keyword">struct</span> <span class="title class_">Parameter</span> &#123;</span><br><span class="line">    FieldRef ref;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// post-bind properties</span></span><br><span class="line">    TypeHolder type;</span><br><span class="line">    ::arrow::internal::SmallVector&lt;<span class="type">int</span>, <span class="number">2</span>&gt; indices;</span><br><span class="line">  &#125;;</span><br><span class="line">  <span class="function"><span class="type">const</span> Parameter* <span class="title">parameter</span><span class="params">()</span> <span class="type">const</span></span>;</span><br><span class="line">  </span><br><span class="line"> <span class="keyword">private</span>:</span><br><span class="line">  <span class="keyword">using</span> Impl = std::variant&lt;Datum, Parameter, Call&gt;;</span><br><span class="line">  std::shared_ptr&lt;Impl&gt; impl_;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>这里的使用方式很有意思，类似 enum:</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">auto</span> call = expr-&gt;<span class="built_in">call</span>();</span><br><span class="line"><span class="keyword">if</span> (call == <span class="literal">nullptr</span>) <span class="keyword">return</span>;</span><br></pre></td></tr></table></figure>
+<p><code>Datum</code> 作为 <code>literal</code> 我们之前就已经介绍过了（囧）</p>
+<p>它自己还有整个 Expression 的类型 (<code>Type</code>)，然后此外，整个 <code>Expression</code> 还有对应的 Hash 和 Equal 的方法，用来组一些比较。我们之后会看到这些方法</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">std::string <span class="title">ToString</span><span class="params">()</span> <span class="type">const</span></span>;</span><br><span class="line"><span class="function"><span class="type">bool</span> <span class="title">Equals</span><span class="params">(<span class="type">const</span> Expression&amp; other)</span> <span class="type">const</span></span>;</span><br><span class="line"><span class="function"><span class="type">size_t</span> <span class="title">hash</span><span class="params">()</span> <span class="type">const</span></span>;</span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">Hash</span> &#123;</span><br><span class="line">  <span class="function"><span class="type">size_t</span> <span class="title">operator</span><span class="params">()</span><span class="params">(<span class="type">const</span> Expression&amp; expr)</span> <span class="type">const</span> </span>&#123; <span class="keyword">return</span> expr.<span class="built_in">hash</span>(); &#125;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>此外，这里还有一些特殊的属性，需要额外提供一下：</p>
+<ol>
+<li><code>IsBound</code>:<ol>
+<li><strong>这个后面讲，有点复杂</strong></li>
+</ol>
+</li>
+<li><code>IsScalar</code> （需要注意的是，在这里，complex type 之类的也算是 scalar）<ol>
+<li>对于 <code>Datum</code> 来说，Datum 包含的是否是 Scalar (它还能包含 Array Table RecordBatch ChunkedArray 之类的)</li>
+<li>对于 FieldRef，这里…啥都行！</li>
+<li><code>Call</code>: all argument <code>IsScalar</code>, and function type is <code>SCALAR</code>.</li>
+</ol>
+</li>
+</ol>
+<h2 id="FieldRef-and-Parameter"><a href="#FieldRef-and-Parameter" class="headerlink" title="FieldRef and Parameter"></a>FieldRef and Parameter</h2><p><code>FieldRef</code> 是个很奇怪的东西，表示对某个 Field 的引用，它本身也可以是：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// Unlike FieldPath (which exclusively uses indices of child fields), FieldRef may</span></span><br><span class="line"><span class="comment">/// reference a field by name. It is intended to replace parameters like `int field_index`</span></span><br><span class="line"><span class="comment">/// and `const std::string&amp; field_name`; it can be implicitly constructed from either a</span></span><br><span class="line"><span class="comment">/// field index or a name.</span></span><br><span class="line"><span class="comment">///</span></span><br><span class="line"><span class="comment">/// Nested fields can be referenced as well. Given</span></span><br><span class="line"><span class="comment">///     schema(&#123;field(&quot;a&quot;, struct_(&#123;field(&quot;n&quot;, null())&#125;)), field(&quot;b&quot;, int32())&#125;)</span></span><br><span class="line"><span class="comment">///</span></span><br><span class="line"><span class="comment">/// the following all indicate the nested field named &quot;n&quot;:</span></span><br><span class="line"><span class="comment">///     FieldRef ref1(0, 0);</span></span><br><span class="line"><span class="comment">///     FieldRef ref2(&quot;a&quot;, 0);</span></span><br><span class="line"><span class="comment">///     FieldRef ref3(&quot;a&quot;, &quot;n&quot;);</span></span><br><span class="line"><span class="comment">///     FieldRef ref4(0, &quot;n&quot;);</span></span><br><span class="line"><span class="comment">///     ARROW_ASSIGN_OR_RAISE(FieldRef ref5,</span></span><br><span class="line"><span class="comment">///                           FieldRef::FromDotPath(&quot;.a[0]&quot;));</span></span><br></pre></td></tr></table></figure>
+<p>他可以表示的路径如上所述, 这里可以用名字表示。那么实际上内部用 <code>FieldPath</code> 是最好的，但是这里 xjb 糊了一套，用户 Bind 的时候要传个 Schema 进来，然后用这个 Schema 来 Bind，Bind 完里面还是原来那个 <code>&quot;a.b.c&quot;</code>，只是绑定了一些类型。</p>
+<p>在 Bind 的时候，注意到这些 Post Bind，类型是在 Bind 之后绑定的（还是个 <code>TypeHolder</code> 呢，呵呵）</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">struct</span> <span class="title class_">Parameter</span> &#123;</span><br><span class="line">  FieldRef ref;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// post-bind properties</span></span><br><span class="line">  TypeHolder type;</span><br><span class="line">  ::arrow::internal::SmallVector&lt;<span class="type">int</span>, <span class="number">2</span>&gt; indices;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<h2 id="Call"><a href="#Call" class="headerlink" title="Call"></a>Call</h2><p>Call 表示一个 fn call.</p>
+<p>如果是 <code>Call</code>, 这里会有对应的参数：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">struct</span> <span class="title class_">Call</span> &#123;</span><br><span class="line">  std::string function_name;</span><br><span class="line">  std::vector&lt;Expression&gt; arguments;</span><br><span class="line">  std::shared_ptr&lt;FunctionOptions&gt; options;</span><br><span class="line">  <span class="comment">// Cached hash value</span></span><br><span class="line">  <span class="type">size_t</span> hash;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// post-Bind properties:</span></span><br><span class="line">  std::shared_ptr&lt;Function&gt; function;</span><br><span class="line">  <span class="type">const</span> Kernel* kernel = NULLPTR;</span><br><span class="line">  std::shared_ptr&lt;KernelState&gt; kernel_state;</span><br><span class="line">  TypeHolder type;</span><br><span class="line"></span><br><span class="line">  <span class="function"><span class="type">void</span> <span class="title">ComputeHash</span><span class="params">()</span></span>;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>这里可以通过 <code>function</code> 来判断是否做 binding。这里的含义还是比较清晰的，Expression 的主要内容还是在这个地方应该是最重要的一个类型。<code>+</code> <code>-</code> 之类的，本身有 <code>add</code> 之类的 Function ( 在之前的 compute 模块介绍过 )。而 <code>Expression</code> 层会组织成:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Call(function_name=&quot;Add&quot;, arguments=&#123;field_ref(&quot;a.b&quot;), literal(1000)&#125;)</span><br></pre></td></tr></table></figure>
+<p>这样的形式，在 <code>Bind</code> 以后，这里会绑定到 <code>Function</code> 和对应的 <code>kernel</code> 执行器上。</p>
+<p>这里还提供了 <code>and</code>, <code>or</code> 之类的东西给用户，非常有意思:</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">ARROW_EXPORT Expression <span class="title">project</span><span class="params">(std::vector&lt;Expression&gt; values,</span></span></span><br><span class="line"><span class="params"><span class="function">                                std::vector&lt;std::string&gt; names)</span></span>;</span><br><span class="line"></span><br><span class="line"><span class="function">ARROW_EXPORT Expression <span class="title">equal</span><span class="params">(Expression lhs, Expression rhs)</span></span>;</span><br><span class="line"></span><br><span class="line"><span class="function">ARROW_EXPORT Expression <span class="title">not_equal</span><span class="params">(Expression lhs, Expression rhs)</span></span>;</span><br><span class="line"></span><br><span class="line"><span class="function">ARROW_EXPORT Expression <span class="title">less</span><span class="params">(Expression lhs, Expression rhs)</span></span>;</span><br><span class="line"></span><br><span class="line"><span class="function">ARROW_EXPORT Expression <span class="title">less_equal</span><span class="params">(Expression lhs, Expression rhs)</span></span>;</span><br><span class="line"></span><br><span class="line"><span class="function">ARROW_EXPORT Expression <span class="title">greater</span><span class="params">(Expression lhs, Expression rhs)</span></span>;</span><br><span class="line"></span><br><span class="line"><span class="function">ARROW_EXPORT Expression <span class="title">greater_equal</span><span class="params">(Expression lhs, Expression rhs)</span></span>;</span><br><span class="line"></span><br><span class="line"><span class="function">ARROW_EXPORT Expression <span class="title">is_null</span><span class="params">(Expression lhs, <span class="type">bool</span> nan_is_null = <span class="literal">false</span>)</span></span>;</span><br><span class="line"></span><br><span class="line"><span class="function">ARROW_EXPORT Expression <span class="title">is_valid</span><span class="params">(Expression lhs)</span></span>;</span><br><span class="line"></span><br><span class="line"><span class="function">ARROW_EXPORT Expression <span class="title">and_</span><span class="params">(Expression lhs, Expression rhs)</span></span>;</span><br><span class="line"><span class="function">ARROW_EXPORT Expression <span class="title">and_</span><span class="params">(<span class="type">const</span> std::vector&lt;Expression&gt;&amp;)</span></span>;</span><br><span class="line"><span class="function">ARROW_EXPORT Expression <span class="title">or_</span><span class="params">(Expression lhs, Expression rhs)</span></span>;</span><br><span class="line"><span class="function">ARROW_EXPORT Expression <span class="title">or_</span><span class="params">(<span class="type">const</span> std::vector&lt;Expression&gt;&amp;)</span></span>;</span><br><span class="line"><span class="function">ARROW_EXPORT Expression <span class="title">not_</span><span class="params">(Expression operand)</span></span>;</span><br></pre></td></tr></table></figure>
+<p>比较有意思的是 <code>project</code>，会产生一个新的 <code>struct</code> 类型。</p>
+<h3 id="Bind"><a href="#Bind" class="headerlink" title="Bind"></a>Bind</h3><p>对 Expression 的 Bind 会比较复杂. 这里可能做的事情有：</p>
+<ol>
+<li>Bind 所有的子成员，然后进入 <code>BindNonRecursive</code></li>
+<li>拿到所有 arguments 的类型</li>
+<li>根据 Name 和参数去找到对应的 <code>Function</code> , <code>Kernel</code>，这里先找完全匹配的 （ <code>`DispatchExact</code>）<ol>
+<li>如果找到正好匹配的，就用这个</li>
+<li>如果有 <code>insert_implicit_casts</code>，就会尝试修改类型<ol>
+<li>对于 Literal，找到 Literal 的最小类型（eg: 如果是 <code>Datum(int32(8))</code>, 可以改成 <code>Datum(int8(8))</code></li>
+<li>尝试去 <code>DispatchBest</code>，然后如果有不一样的，<ol>
+<li>如果是 <code>field_ref</code>，直接用目标类型</li>
+<li>如果是 <code>field_ref</code> 或者 <code>call</code>，插入一个 Cast</li>
+</ol>
+</li>
+</ol>
+</li>
+</ol>
+</li>
+<li>初始化 <code>KernelContext</code> 和 <code>KernelState</code></li>
+</ol>
+<h3 id="优化"><a href="#优化" class="headerlink" title="优化"></a>优化</h3><p>表达式的很大一部分逻辑在于对表达式进行处理。下面列举了一组相关的 API。</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// Weak canonicalization which establishes guarantees for subsequent passes. Even</span></span><br><span class="line"><span class="comment">/// equivalent Expressions may result in different canonicalized expressions.</span></span><br><span class="line"><span class="comment">/// TODO this could be a strong canonicalization</span></span><br><span class="line"><span class="function">ARROW_EXPORT</span></span><br><span class="line"><span class="function">Result&lt;Expression&gt; <span class="title">Canonicalize</span><span class="params">(Expression, ExecContext* = NULLPTR)</span></span>;</span><br><span class="line"></span><br><span class="line"><span class="comment">/// Simplify Expressions based on literal arguments (for example, add(null, x) will always</span></span><br><span class="line"><span class="comment">/// be null so replace the call with a null literal). Includes early evaluation of all</span></span><br><span class="line"><span class="comment">/// calls whose arguments are entirely literal.</span></span><br><span class="line"><span class="function">ARROW_EXPORT</span></span><br><span class="line"><span class="function">Result&lt;Expression&gt; <span class="title">FoldConstants</span><span class="params">(Expression)</span></span>;</span><br><span class="line"></span><br><span class="line"><span class="comment">/// Simplify Expressions by replacing with known values of the fields which it references.</span></span><br><span class="line"><span class="function">ARROW_EXPORT</span></span><br><span class="line"><span class="function">Result&lt;Expression&gt; <span class="title">ReplaceFieldsWithKnownValues</span><span class="params">(<span class="type">const</span> KnownFieldValues&amp; known_values,</span></span></span><br><span class="line"><span class="params"><span class="function">                                                Expression)</span></span>;</span><br><span class="line"></span><br><span class="line"><span class="comment">/// Simplify an expression by replacing subexpressions based on a guarantee:</span></span><br><span class="line"><span class="comment">/// a boolean expression which is guaranteed to evaluate to `true`. For example, this is</span></span><br><span class="line"><span class="comment">/// used to remove redundant function calls from a filter expression or to replace a</span></span><br><span class="line"><span class="comment">/// reference to a constant-value field with a literal.</span></span><br><span class="line"><span class="function">ARROW_EXPORT</span></span><br><span class="line"><span class="function">Result&lt;Expression&gt; <span class="title">SimplifyWithGuarantee</span><span class="params">(Expression,</span></span></span><br><span class="line"><span class="params"><span class="function">                                         <span class="type">const</span> Expression&amp; guaranteed_true_predicate)</span></span>;</span><br><span class="line"></span><br><span class="line"><span class="comment">/// Replace all named field refs (e.g. &quot;x&quot; or &quot;x.y&quot;) with field paths (e.g. [0] or [1,3])</span></span><br><span class="line"><span class="comment">///</span></span><br><span class="line"><span class="comment">/// This isn&#x27;t usually needed and does not offer any simplification by itself.  However,</span></span><br><span class="line"><span class="comment">/// it can be useful to normalize an expression to paths to make it simpler to work with.</span></span><br><span class="line"><span class="function">ARROW_EXPORT Result&lt;Expression&gt; <span class="title">RemoveNamedRefs</span><span class="params">(Expression expression)</span></span>;</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+<h4 id="tools"><a href="#tools" class="headerlink" title="tools"></a>tools</h4><p><code>arrow/compute/util.h</code> 等地方提供了一组靠谱的工具，最典型的是一个 tree visitor:</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// Modify an Expression with pre-order and post-order visitation.</span></span><br><span class="line"><span class="comment">/// `pre` will be invoked on each Expression. `pre` will visit Calls before their</span></span><br><span class="line"><span class="comment">/// arguments, `post_call` will visit Calls (and no other Expressions) after their</span></span><br><span class="line"><span class="comment">/// arguments. Visitors should return the Identical expression to indicate no change; this</span></span><br><span class="line"><span class="comment">/// will prevent unnecessary construction in the common case where a modification is not</span></span><br><span class="line"><span class="comment">/// possible/necessary/...</span></span><br><span class="line"><span class="comment">///</span></span><br><span class="line"><span class="comment">/// If an argument was modified, `post_call` visits a reconstructed Call with the modified</span></span><br><span class="line"><span class="comment">/// arguments but also receives a pointer to the unmodified Expression as a second</span></span><br><span class="line"><span class="comment">/// argument. If no arguments were modified the unmodified Expression* will be nullptr.</span></span><br><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> PreVisit, <span class="keyword">typename</span> PostVisitCall&gt;</span><br><span class="line"><span class="function">Result&lt;Expression&gt; <span class="title">ModifyExpression</span><span class="params">(Expression expr, <span class="type">const</span> PreVisit&amp; pre,</span></span></span><br><span class="line"><span class="params"><span class="function">                                    <span class="type">const</span> PostVisitCall&amp; post_call)</span></span>;</span><br></pre></td></tr></table></figure>
+<p>这个能够被用来扫 + 更新整个 tree.</p>
+<h4 id="Canonicalize"><a href="#Canonicalize" class="headerlink" title="Canonicalize"></a>Canonicalize</h4><p>尝试把表达式处理成长得差不多的情况。</p>
+<p>e.g: 对<strong>同样的</strong>可交换操作的处理</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">((a + b) + 2) + 3</span><br></pre></td></tr></table></figure>
+<p>这里发现是同样的操作，就会尝试整理，然后做成便于 constant folding 的形式。这里也会有 <code>field_ref</code>, <code>literal</code> , <code>null literal</code> 位置的关系。</p>
+<p>e.g.: 对比较的处理</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">a &gt; 3</span><br><span class="line">3 &lt; a</span><br></pre></td></tr></table></figure>
+<p>这里会被处理成一样的形式。</p>
+<h3 id="Others"><a href="#Others" class="headerlink" title="Others"></a>Others</h3><p>这里还有 Constant Folding，抽出 Key-Values 等形式。其实这个表达式相对来说还是太 trivial 了，做个入门还行，难一点还是别看这个了。</p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Glance"><span class="toc-number">1.</span> <span class="toc-text">Glance</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#FieldRef-and-Parameter"><span class="toc-number">2.</span> <span class="toc-text">FieldRef and Parameter</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Call"><span class="toc-number">3.</span> <span class="toc-text">Call</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Bind"><span class="toc-number">3.1.</span> <span class="toc-text">Bind</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BC%98%E5%8C%96"><span class="toc-number">3.2.</span> <span class="toc-text">优化</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#tools"><span class="toc-number">3.2.1.</span> <span class="toc-text">tools</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Canonicalize"><span class="toc-number">3.2.2.</span> <span class="toc-text">Canonicalize</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Others"><span class="toc-number">3.3.</span> <span class="toc-text">Others</span></a></li></ol></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2023/07/06/arrow-expression/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2023/07/06/arrow-expression/&text=arrow expression"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2023/07/06/arrow-expression/&title=arrow expression"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2023/07/06/arrow-expression/&is_video=false&description=arrow expression"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=arrow expression&body=Check out this article: http://blog.mwish.me/2023/07/06/arrow-expression/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2023/07/06/arrow-expression/&title=arrow expression"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2023/07/06/arrow-expression/&title=arrow expression"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2023/07/06/arrow-expression/&title=arrow expression"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2023/07/06/arrow-expression/&title=arrow expression"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2023/07/06/arrow-expression/&name=arrow expression&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2023/07/06/arrow-expression/&t=arrow expression"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>
