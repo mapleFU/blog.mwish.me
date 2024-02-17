@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="放假期间沉迷于看厕纸，本来想过一遍一些 Operator，后来计划大失败。所以最后写一篇短的来灌水。 在前几篇文章里面，我们大概知道了 Expr 的结构。Expr 并不是一个很 Pure 的继承树，默认的 Expr作为基类，可以执行 Vector Function，Vector Function 里面包含了 Simple Function 等执行逻辑。在 Expr::eval 中，如果监测到自身是">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Expression Execution in Velox Part 3: SpecialForm">
+<meta property="og:url" content="http://blog.mwish.me/2024/02/17/Expression-Execution-in-Velox-Part-3-SpecialForm/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="放假期间沉迷于看厕纸，本来想过一遍一些 Operator，后来计划大失败。所以最后写一篇短的来灌水。 在前几篇文章里面，我们大概知道了 Expr 的结构。Expr 并不是一个很 Pure 的继承树，默认的 Expr作为基类，可以执行 Vector Function，Vector Function 里面包含了 Simple Function 等执行逻辑。在 Expr::eval 中，如果监测到自身是">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/7954814396343050994.png">
+<meta property="article:published_time" content="2024-02-17T12:40:57.000Z">
+<meta property="article:modified_time" content="2024-02-17T12:40:56.186Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/7954814396343050994.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>Expression Execution in Velox Part 3: SpecialForm</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">
+    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2024/02/09/Expression-Execution-in-Velox-Part-2-Expr-eval/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2024/02/17/Expression-Execution-in-Velox-Part-3-SpecialForm/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2024/02/17/Expression-Execution-in-Velox-Part-3-SpecialForm/&text=Expression Execution in Velox Part 3: SpecialForm"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2024/02/17/Expression-Execution-in-Velox-Part-3-SpecialForm/&title=Expression Execution in Velox Part 3: SpecialForm"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2024/02/17/Expression-Execution-in-Velox-Part-3-SpecialForm/&is_video=false&description=Expression Execution in Velox Part 3: SpecialForm"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Expression Execution in Velox Part 3: SpecialForm&body=Check out this article: http://blog.mwish.me/2024/02/17/Expression-Execution-in-Velox-Part-3-SpecialForm/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2024/02/17/Expression-Execution-in-Velox-Part-3-SpecialForm/&title=Expression Execution in Velox Part 3: SpecialForm"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2024/02/17/Expression-Execution-in-Velox-Part-3-SpecialForm/&title=Expression Execution in Velox Part 3: SpecialForm"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2024/02/17/Expression-Execution-in-Velox-Part-3-SpecialForm/&title=Expression Execution in Velox Part 3: SpecialForm"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2024/02/17/Expression-Execution-in-Velox-Part-3-SpecialForm/&title=Expression Execution in Velox Part 3: SpecialForm"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2024/02/17/Expression-Execution-in-Velox-Part-3-SpecialForm/&name=Expression Execution in Velox Part 3: SpecialForm&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2024/02/17/Expression-Execution-in-Velox-Part-3-SpecialForm/&t=Expression Execution in Velox Part 3: SpecialForm"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#ConjunctExpr"><span class="toc-number">1.</span> <span class="toc-text">ConjunctExpr</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#TryExpr"><span class="toc-number">2.</span> <span class="toc-text">TryExpr</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#SwitchExpr"><span class="toc-number">3.</span> <span class="toc-text">SwitchExpr</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#CoalesceExpr"><span class="toc-number">4.</span> <span class="toc-text">CoalesceExpr</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#CastExpr"><span class="toc-number">5.</span> <span class="toc-text">CastExpr</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Expression Execution in Velox Part 3: SpecialForm
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2024-02-17T12:40:57.000Z" itemprop="datePublished">2024-02-17</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>放假期间沉迷于看厕纸，本来想过一遍一些 Operator，后来计划大失败。所以最后写一篇短的来灌水。</p>
+<p>在前几篇文章里面，我们大概知道了 Expr 的结构。Expr 并不是一个很 Pure 的继承树，默认的 <code>Expr</code>作为基类，可以执行 Vector Function，Vector Function 里面包含了 Simple Function 等执行逻辑。在 <code>Expr::eval</code> 中，如果监测到自身是 SpecialForm，会把逻辑分发给 <code>evalSpecialForm</code>, 具体代码大概如下：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// ...</span></span><br><span class="line">  <span class="keyword">if</span> (<span class="built_in">isSpecialForm</span>()) &#123;</span><br><span class="line">    <span class="comment">// If, And, Or 之类的洞都是 special case.</span></span><br><span class="line">    <span class="built_in">evalSpecialFormWithStats</span>(rows, context, result);</span><br><span class="line">    <span class="keyword">return</span>;</span><br><span class="line">  &#125;</span><br><span class="line"> <span class="comment">/// ...</span></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">Expr::evalSpecialFormWithStats</span><span class="params">(</span></span></span><br><span class="line"><span class="params"><span class="function">    <span class="type">const</span> SelectivityVector&amp; rows,</span></span></span><br><span class="line"><span class="params"><span class="function">    EvalCtx&amp; context,</span></span></span><br><span class="line"><span class="params"><span class="function">    VectorPtr&amp; result)</span> </span>&#123;</span><br><span class="line">  stats_.numProcessedVectors += <span class="number">1</span>;</span><br><span class="line">  stats_.numProcessedRows += rows.<span class="built_in">countSelected</span>();</span><br><span class="line">  <span class="keyword">auto</span> timer = <span class="built_in">cpuWallTimer</span>();</span><br><span class="line"></span><br><span class="line">  <span class="comment">// Q: 为什么 evalSpecialForm 是个特殊函数呢?</span></span><br><span class="line">  <span class="comment">// A: 因为这套东西继承写的一把shit, 拆分出了 eval(base class, non virtual),</span></span><br><span class="line">  <span class="comment">//    和 evalSpecial.</span></span><br><span class="line">  <span class="built_in">evalSpecialForm</span>(rows, context, result);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>我们在之前的章节介绍过两种可以作为表达式输入的 SpecialForm: Constant 和 FieldReference（ <a href="https://blog.mwish.me/2024/02/09/Expression-Execution-in-Velox-Part-2-Expr-eval/#%E8%BE%93%E5%85%A5-Constant-FieldReference">https://blog.mwish.me/2024/02/09/Expression-Execution-in-Velox-Part-2-Expr-eval/#%E8%BE%93%E5%85%A5-Constant-FieldReference</a> ）. 这两个表达式和 SpecialForm 本身的逻辑是很好理解的。今天我们会介绍 Lambda 之外的一些 SpecialForm 表达式，来介绍一下基本这块的执行. 我们这边会介绍的大概有：</p>
+<ol>
+<li><code>ConjunctExpr</code>: 多个表达式的 AND 或者多个表达式的 OR</li>
+<li><code>TryExpr</code>: <code>TRY(...)</code> 会把内部的错误转成 NULL</li>
+<li><code>SwitchExpr</code>: 处理 case-when 和 if-else 这样的分支逻辑</li>
+<li><code>CastExpr</code>: 类型转换，Cast TypeA -&gt; TypeB</li>
+<li><code>CoalesceExpr</code> 返回第一个 NonNull 的表达式或者全是 Null 就返回 NULL</li>
+</ol>
+<p>我们开始吧。</p>
+<h2 id="ConjunctExpr"><a href="#ConjunctExpr" class="headerlink" title="ConjunctExpr"></a>ConjunctExpr</h2><p>ConjunctExpr 执行的内容是 <code>AND(expr1, expr2, expr3 ...)</code> 或者 <code>OR(expr1, expr2, ...)</code> 这样的形式。我们可以拿到一个 invariant: 每个 expr 输入都是一样的，输出则是我们简单概述一下其中的内容：</p>
+<p>不考虑 Reorder Expr:</p>
+<ul>
+<li>从头到尾执行，对于 AND 而言，如果是 False 那么后续就可以熔断；同样对于 OR 而言，是 True 的话后续可以熔断</li>
+<li>那么，从头到尾，维护一个新的 RowSelector，然后，每次执行一个表达式带着 <code>rows</code> 去执行。每次 deselector 去 de-select 熔断了的结果。</li>
+</ul>
+<p>接下来我们考虑一下 NULL。首先参考 SQL 的 NULL 语义：</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://modern-sql.com/concept/three-valued-logic">https://modern-sql.com/concept/three-valued-logic</a></li>
+<li><a target="_blank" rel="noopener" href="https://en.wikipedia.org/wiki/Three-valued_logic#Kleene_and_Priest_logics">https://en.wikipedia.org/wiki/Three-valued_logic#Kleene_and_Priest_logics</a></li>
+</ul>
+<p>然后：</p>
+<p><img src="https://image.mwish.me/blog-image/7954814396343050994.png" alt="img"></p>
+<ol>
+<li>NULL AND FALSE -&gt; FALSE</li>
+<li>NULL AND TRUE -&gt; NULL</li>
+<li>NULL OR TRUE -&gt; TRUT</li>
+<li>NULL AND TRUE -&gt; NULL</li>
+</ol>
+<p>可以简单当成这是个三值逻辑。那么，原先的执行流程没有变，只是多一个 <code>AND: False &gt; NULL &gt; True</code> 这样类似的逻辑。每轮执行的时候，需要拿 values - nulls 来更新 True / False / Null。具体而言，每次先更新优先级最高的，再更新 Nulls。</p>
+<p>然后我们再考虑 Errors 和 reorder 执行，这里首先看官方文档: <a target="_blank" rel="noopener" href="https://facebookincubator.github.io/velox/develop/expression-evaluation.html#error-handling-in-and-or-try">https://facebookincubator.github.io/velox/develop/expression-evaluation.html#error-handling-in-and-or-try</a></p>
+<p>最重要的一句：</p>
+<blockquote>
+<p>The error suppression logic in the AND and OR expressions is designed to deliver consistent results regardless of the order of the conjuncts.</p>
+</blockquote>
+<p>我们考虑一下用户的表达式：<code>a is not NULL and (a 为 Null 可能错的表达式)</code>，这个 reorder 之后可能就飞了。Velox 这里是希望 Errors 能够在一定条件下被抑制。简单来说，这里可以当成一个四值逻辑：</p>
+<ul>
+<li>And: False &gt; Error &gt; Null &gt; True</li>
+</ul>
+<p>对于 Reorder，这里会额外收集每个表达式的 filter ratio (收集输入和输出的时候的 selectivity）和时间。然后执行。</p>
+<p><em>我们重新再整理一遍这个执行流程：</em></p>
+<ol>
+<li>准备 SelectionVector，然后设置出现 error 不 throw</li>
+<li>执行表达式，拿到 errors, nulls 和 values。执行的时候需要计时</li>
+<li>更新 value -&gt; errors -&gt; nulls，然后更新 SelectionVector。回到 (2) 准备执行下一轮</li>
+<li>执行完成，处理异常之类的，根据执行结果，在 rethrow 最终异常什么的。</li>
+</ol>
+<h2 id="TryExpr"><a href="#TryExpr" class="headerlink" title="TryExpr"></a>TryExpr</h2><p>Try 的逻辑相对比较简单，因为下层 error 处理的机制已经比较完备了。直接扯就行</p>
+<ol>
+<li>执行模式上取消 throw on error，然后把原有的 Errors 暂存（比如说 <code>and try(...)</code>，这里原本有一些 Error，执行逻辑不应该影响它们）</li>
+<li>按照 <code>rows</code> 执行表达式</li>
+<li>对错误的表达式清除错误，反选成 NULL</li>
+<li>把原有的 Errors 覆盖回来。</li>
+</ol>
+<h2 id="SwitchExpr"><a href="#SwitchExpr" class="headerlink" title="SwitchExpr"></a>SwitchExpr</h2><p>Switch 主要处理 if/else 和 switch 逻辑，逻辑如下：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// CASE expression:</span></span><br><span class="line"><span class="comment">///</span></span><br><span class="line"><span class="comment">/// case</span></span><br><span class="line"><span class="comment">///  when condition then result</span></span><br><span class="line"><span class="comment">///  [when ...]</span></span><br><span class="line"><span class="comment">///  [else result]</span></span><br><span class="line"><span class="comment">/// end</span></span><br><span class="line"><span class="comment">///</span></span><br><span class="line"><span class="comment">/// Evaluates each boolean condition from left to right until one is true and</span></span><br><span class="line"><span class="comment">/// returns the matching result. If no conditions are true, the result from the</span></span><br><span class="line"><span class="comment">/// ELSE clause is returned if it exists, otherwise null is returned.</span></span><br><span class="line"><span class="comment">///</span></span><br><span class="line"><span class="comment">/// IF expression can be represented as a CASE expression with a single</span></span><br><span class="line"><span class="comment">/// condition.</span></span><br></pre></td></tr></table></figure>
+<p>在 Arrow 之类的系统中，因为不能 Out-of-order write，所以这块可能有一点麻烦。但是 Velox 的任何类型都能支持 Out-of-order write + Selector，这让这块的实现变得很轻松：</p>
+<ol>
+<li>设置 finalSelection 为 false，准备一个 remaingRows 作为 Selector，准备一个 out-of-order 写的 result</li>
+<li>对 <code>remaingRows</code>（除了 Else）执行表达式 case</li>
+<li>拿到本轮的一个需要执行的 Selector （<code>thenRows</code>），在分支结果执行 when 表达式，结果写入 result</li>
+<li>给 remainingRows 去 de-select thenRows，再回到 (2)</li>
+</ol>
+<h2 id="CoalesceExpr"><a href="#CoalesceExpr" class="headerlink" title="CoalesceExpr"></a>CoalesceExpr</h2><p>Coalesce 的逻辑和之前见到的也差不多。这里逻辑和之前都似曾相似：</p>
+<ol>
+<li>设置 finalSelection 为 false，准备 Remaining 的 SelectionVector</li>
+<li>执行表达式，给 Remaining de-select 掉 non-null 的，再次执行，直到执行最后一个表达式</li>
+</ol>
+<h2 id="CastExpr"><a href="#CastExpr" class="headerlink" title="CastExpr"></a>CastExpr</h2><p>类型可以自己定义类型，也可以自己定义类型的 Operator，所以 Cast 会需要绑定：</p>
+<ol>
+<li>Hooks (Spark / Presto 引擎可能 Cast, Truncate 之类的行为不是完全对等的）</li>
+<li>Error Handling: 是否 throw Exception. 这里 SQL 可能会有两种表达式，一种是 tryCast，等价于 <code>try(cast(.. As )</code>，这里设置了对应的逻辑</li>
+<li>自定义类型和自己定义类型的 Operator 的处理。Velox 除了一些基本类型可以自己定义类型和 Operator，以适应不同的计算逻辑。</li>
+</ol>
+<p>这里感觉 Velox 的 Cast 相对 Arrow 的 Cast 写的比较 Hack，大概逻辑如下：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">cast</span><br><span class="line">- trying to Peel</span><br><span class="line">- applyCast</span><br></pre></td></tr></table></figure>
+<p>这里 Cast 中间也会包装一层 Peeling 的逻辑，来避免开销。</p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#ConjunctExpr"><span class="toc-number">1.</span> <span class="toc-text">ConjunctExpr</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#TryExpr"><span class="toc-number">2.</span> <span class="toc-text">TryExpr</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#SwitchExpr"><span class="toc-number">3.</span> <span class="toc-text">SwitchExpr</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#CoalesceExpr"><span class="toc-number">4.</span> <span class="toc-text">CoalesceExpr</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#CastExpr"><span class="toc-number">5.</span> <span class="toc-text">CastExpr</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2024/02/17/Expression-Execution-in-Velox-Part-3-SpecialForm/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2024/02/17/Expression-Execution-in-Velox-Part-3-SpecialForm/&text=Expression Execution in Velox Part 3: SpecialForm"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2024/02/17/Expression-Execution-in-Velox-Part-3-SpecialForm/&title=Expression Execution in Velox Part 3: SpecialForm"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2024/02/17/Expression-Execution-in-Velox-Part-3-SpecialForm/&is_video=false&description=Expression Execution in Velox Part 3: SpecialForm"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Expression Execution in Velox Part 3: SpecialForm&body=Check out this article: http://blog.mwish.me/2024/02/17/Expression-Execution-in-Velox-Part-3-SpecialForm/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2024/02/17/Expression-Execution-in-Velox-Part-3-SpecialForm/&title=Expression Execution in Velox Part 3: SpecialForm"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2024/02/17/Expression-Execution-in-Velox-Part-3-SpecialForm/&title=Expression Execution in Velox Part 3: SpecialForm"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2024/02/17/Expression-Execution-in-Velox-Part-3-SpecialForm/&title=Expression Execution in Velox Part 3: SpecialForm"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2024/02/17/Expression-Execution-in-Velox-Part-3-SpecialForm/&title=Expression Execution in Velox Part 3: SpecialForm"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2024/02/17/Expression-Execution-in-Velox-Part-3-SpecialForm/&name=Expression Execution in Velox Part 3: SpecialForm&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2024/02/17/Expression-Execution-in-Velox-Part-3-SpecialForm/&t=Expression Execution in Velox Part 3: SpecialForm"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+</body>
+</html>
