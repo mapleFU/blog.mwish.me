@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="这一节离前面一节又过了很久，写前一节的时候还没过年，现在都年后了。我们复习一下前面的目录：  https:&#x2F;&#x2F;blog.mwish.me&#x2F;2022&#x2F;11&#x2F;05&#x2F;x86-and-SIMD-programming&#x2F; https:&#x2F;&#x2F;blog.mwish.me&#x2F;2023&#x2F;11&#x2F;15&#x2F;Fast-Scalar-Code-and-Compiler&#x2F; https:&#x2F;&#x2F;blog.mwish.me&#x2F;2023&#x2F;12&#x2F;">
+<meta property="og:type" content="article">
+<meta property="og:title" content="SIMD Extensions and AVX">
+<meta property="og:url" content="http://blog.mwish.me/2024/03/04/SIMD-Extensions-and-AVX/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="这一节离前面一节又过了很久，写前一节的时候还没过年，现在都年后了。我们复习一下前面的目录：  https:&#x2F;&#x2F;blog.mwish.me&#x2F;2022&#x2F;11&#x2F;05&#x2F;x86-and-SIMD-programming&#x2F; https:&#x2F;&#x2F;blog.mwish.me&#x2F;2023&#x2F;11&#x2F;15&#x2F;Fast-Scalar-Code-and-Compiler&#x2F; https:&#x2F;&#x2F;blog.mwish.me&#x2F;2023&#x2F;12&#x2F;">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/5944116006493778418.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/4237392238466393257.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/3891619886556731312.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/4505621814597369732.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/7759616372856089764.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/444211321586127434.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/6074344601769336267.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/8151162079760181905.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/6582981115630589033.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/36922016185874487.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/3927196246452689080.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/1718991737507920215.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/805012586802349935.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/5036575535363700685.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/4946624312463152311.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/9155622688054057680.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/4225578619877617163.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/5084957690458063626.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/6587324812434465191.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/2031504140606795785.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/2970951046836462929.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/3497147159830207096.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/6850816540976780297.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/1441314296950327745.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/4938779423082495043.png">
+<meta property="article:published_time" content="2024-03-04T03:49:29.000Z">
+<meta property="article:modified_time" content="2024-03-23T17:25:18.756Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/5944116006493778418.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>SIMD Extensions and AVX</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2024/02/17/Expression-Execution-in-Velox-Part-3-SpecialForm/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2024/03/04/SIMD-Extensions-and-AVX/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2024/03/04/SIMD-Extensions-and-AVX/&text=SIMD Extensions and AVX"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2024/03/04/SIMD-Extensions-and-AVX/&title=SIMD Extensions and AVX"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2024/03/04/SIMD-Extensions-and-AVX/&is_video=false&description=SIMD Extensions and AVX"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=SIMD Extensions and AVX&body=Check out this article: http://blog.mwish.me/2024/03/04/SIMD-Extensions-and-AVX/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2024/03/04/SIMD-Extensions-and-AVX/&title=SIMD Extensions and AVX"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2024/03/04/SIMD-Extensions-and-AVX/&title=SIMD Extensions and AVX"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2024/03/04/SIMD-Extensions-and-AVX/&title=SIMD Extensions and AVX"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2024/03/04/SIMD-Extensions-and-AVX/&title=SIMD Extensions and AVX"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2024/03/04/SIMD-Extensions-and-AVX/&name=SIMD Extensions and AVX&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2024/03/04/SIMD-Extensions-and-AVX/&t=SIMD Extensions and AVX"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#AVX-%E5%9F%BA%E6%9C%AC%E6%A6%82%E5%BF%B5"><span class="toc-number">1.</span> <span class="toc-text">AVX 基本概念</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#AVX2-amp-Intrinsics"><span class="toc-number">2.</span> <span class="toc-text">AVX2 &amp; Intrinsics</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%88%9D%E5%A7%8B%E5%8C%96%E5%AF%84%E5%AD%98%E5%99%A8-Load-amp-Stores-%E5%92%8C%E5%85%B6%E4%BB%96%E6%93%8D%E4%BD%9C"><span class="toc-number">2.1.</span> <span class="toc-text">初始化寄存器: Load &amp; Stores 和其他操作</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E7%BC%96%E8%AF%91%E5%99%A8%E7%9A%84%E7%9B%B4%E6%8E%A5%E4%BD%BF%E7%94%A8%E5%86%85%E5%AD%98%E5%92%8C%E6%93%8D%E4%BD%9C"><span class="toc-number">2.1.1.</span> <span class="toc-text">编译器的直接使用内存和操作</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Arithmetic"><span class="toc-number">2.2.</span> <span class="toc-text">Arithmetic</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Comparisons-Return-type-m256-with-LSB"><span class="toc-number">2.3.</span> <span class="toc-text">Comparisons (Return type: __m256{} with LSB)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Casting-Converting"><span class="toc-number">2.4.</span> <span class="toc-text">Casting &#x2F; Converting</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Shuffles"><span class="toc-number">2.5.</span> <span class="toc-text">Shuffles</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#References"><span class="toc-number">3.</span> <span class="toc-text">References</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        SIMD Extensions and AVX
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2024-03-04T03:49:29.000Z" itemprop="datePublished">2024-03-04</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>这一节离前面一节又过了很久，写前一节的时候还没过年，现在都年后了。我们复习一下前面的目录：</p>
+<ul>
+<li><a href="https://blog.mwish.me/2022/11/05/x86-and-SIMD-programming/">https://blog.mwish.me/2022/11/05/x86-and-SIMD-programming/</a></li>
+<li><a href="https://blog.mwish.me/2023/11/15/Fast-Scalar-Code-and-Compiler/">https://blog.mwish.me/2023/11/15/Fast-Scalar-Code-and-Compiler/</a></li>
+<li><a href="https://blog.mwish.me/2023/12/10/Compiler-Optimizations-Power-Limits-Auto-vetorize/">https://blog.mwish.me/2023/12/10/Compiler-Optimizations-Power-Limits-Auto-vetorize/</a></li>
+</ul>
+<h2 id="AVX-基本概念"><a href="#AVX-基本概念" class="headerlink" title="AVX 基本概念"></a>AVX 基本概念</h2><p>这节我们正式以 AVX2 为例，来介绍 SIMD。x86 有它的 Core 平台，而 2011 年，AMD 和 Intel 集成了 AVX 到它的平台中，寄存器从 SSE 的 128 位扩展到 256位，简单来说，AVX 新增的内容如下：</p>
+<ol>
+<li>与通用寄存器不同，使用非破坏性语法，如果 src 和 dst 不是同一个寄存器的话，那么不会修改 src 的值</li>
+<li>AVX2 增加了 broadcast, shuffle, perm 指令等</li>
+<li>增加了一种向量索引寻址模式，便于 load/store 非连续的数据</li>
+<li>AVX-512 还增加了8个名为 K0-K7 的掩码寄存器</li>
+</ol>
+<p>此外，还有一些扩展的指令，包括 BMI/FMA/LZCNT 等指令集，严格意义上这些好像也不算 SIMD，算是「<strong>通用寄存器指令集扩展</strong>」，他们作用在通用寄存器而不是 SIMD 的寄存器中。一般在使用相关指令之前，程序需要通过测试 CPUID FMA 功能表示来确定扩展可用性（相关代码：<a target="_blank" rel="noopener" href="https://github.com/apache/arrow/blob/605f8a792c388afb2230b1f19e0f3e4df90d5abe/cpp/cmake_modules/SetupCxxFlags.cmake#L47">https://github.com/apache/arrow/blob/605f8a792c388afb2230b1f19e0f3e4df90d5abe/cpp/cmake_modules/SetupCxxFlags.cmake#L47</a> ）</p>
+<p>x86 支持不同数据类型的计算，包括双精度、单精度浮点数，和各种宽度的整数，还有 char 之类的 1Byte 结构。AVX2 还有半精度浮点数的支持</p>
+<p>AVX/AVX2 本身和浮点数用同一组寄存器，寄存器如下（XMM 是 128位的 SSE 寄存器组，YMM 是 AVX 寄存器组）：</p>
+<p><img src="https://image.mwish.me/blog-image/5944116006493778418.png" alt="img"></p>
+<p>（AVX512 扩展到了 512 bits，并且增加了 16个寄存器，即 ZMM16-ZMM31）</p>
+<p>这组寄存器也能够表示单精度、双精度的浮点数：</p>
+<p><img src="https://image.mwish.me/blog-image/4237392238466393257.png" alt="img"></p>
+<p>此外，这里还涉及一个表示 <SIMD/浮点数> 状态的 MXCSR 寄存器：</p>
+<p><img src="https://image.mwish.me/blog-image/3891619886556731312.png" alt="img"></p>
+<p>AVX2 和 x86 一样，也有数据类型的概念，可见：</p>
+<p><img src="https://image.mwish.me/blog-image/4505621814597369732.png" alt="img"></p>
+<p>Avx 支持一种<strong>整数的</strong> “saturated arithmetic”, 即对 overflow/underflow 做特殊判断，这个结果看下图很好理解，<em>我们在之后会了解到如何设置本模式</em>。</p>
+<p><img src="https://image.mwish.me/blog-image/7759616372856089764.png" alt="img"></p>
+<p>浮点数编程的概念：</p>
+<p>TBD</p>
+<p>混用 SSE 和 AVX 是有风险的，AVX 下用 SSE 会清除对应的高位。这也可能带来对齐之类导致的性能开销，见：</p>
+<ul>
+<li>为什么AVX反而比SSE慢？ - 知乎 <a target="_blank" rel="noopener" href="https://www.zhihu.com/question/37230675">https://www.zhihu.com/question/37230675</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.intel.com/content/dam/develop/external/us/en/documents/11mc12-avoiding-2bavx-sse-2btransition-2bpenalties-2brh-2bfinal-809104.pdf">https://www.intel.com/content/dam/develop/external/us/en/documents/11mc12-avoiding-2bavx-sse-2btransition-2bpenalties-2brh-2bfinal-809104.pdf</a></li>
+</ul>
+<p>根据手册:</p>
+<blockquote>
+<p>It is often possible to remove AVX-SSE transitions by converting legacy Intel® SSE instructions to their equivalent VEX encoded instructions. When it is not possible to remove the transitions, it is often possible to avoid the penalty by explicitly zeroing the upper 128-bits of the YMM registers, in which case the hardware does not save these values.</p>
+</blockquote>
+<p>这里提到了两种做法：</p>
+<ol>
+<li>使用 VEX 指令，例如 <code>movaps</code> -&gt; <code>vmovaps</code>，转化成对等的 vex 指令。这个操作如果写了 intrinsics 并且编译的时候带上了对应的参数</li>
+<li>使用 <code>_mm256_zeroupper();</code> 之类的指令来清除上面的指令。不是所有的 SSE 都有对应的 AVX2 指令，因为跨 lane 的操作是比较昂贵的。</li>
+</ol>
+<p><img src="https://image.mwish.me/blog-image/444211321586127434.png" alt="img"></p>
+<p>混用 AVX2 和 AVX512：原则上没问题，不过小心降频。AVX512 会提供一组更多的寄存器：</p>
+<p>TBD</p>
+<h2 id="AVX2-amp-Intrinsics"><a href="#AVX2-amp-Intrinsics" class="headerlink" title="AVX2 &amp; Intrinsics"></a>AVX2 &amp; Intrinsics</h2><p>Intrinsic 还是比较重要的概念，当然你或许多少见到过。你可以在 Intel 页面上 （ <a target="_blank" rel="noopener" href="https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html">https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html</a> ）看到过。这里相当于 C++/C 代码开洞，给参数这些对应的类型，然后写 C/C++ 代码来调 SIMD 代码，我们后面代码基本以 intrinsics 形式来写。</p>
+<p>这一块在处理的时候是没有 overhead 的，此外这里 intrinsics 还会处理一些奇怪的工作，比如靠 intrinsics 写 SSE 指令，在 SSE 和AVX intrinsic 都会被编译器生成 VEX-encoding 代码。</p>
+<p>在我们关注 avx2 的时候，我们可以先看看 intrinsics 对应的类型（你会发现啥后缀没有的好像就是 float）：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">__m256 f; <span class="comment">// = &#123;float f0, f1, f2, f3, f4, f5, f6, f7&#125;</span></span><br><span class="line">__m256d d; <span class="comment">// = &#123;double d0, d1, d3, d4&#125;</span></span><br><span class="line">__m256i i; <span class="comment">// 32 8-bit, 16 16-bit, 8 32-bit, or 4 64-bit</span></span><br></pre></td></tr></table></figure>
+<p>我们可以看到 instrinsics 中的数据类型有关的命名：</p>
+<ul>
+<li>ps: 由float类型数据组成的向量</li>
+<li>pd:由double类型数据组成的向量</li>
+<li>epi8/epi16/epi32/epi64: 由8位/16位/32位/64位的有符号整数组成的向量</li>
+<li>epu8/epu16/epu32/epu64: 包含8位/16位/32位/64位的无符号整数组成的向量</li>
+</ul>
+<p>这里可以见：<a target="_blank" rel="noopener" href="https://stackoverflow.com/questions/70911872/what-are-the-names-and-meanings-of-the-intrinsic-vector-element-types-like-epi6">https://stackoverflow.com/questions/70911872/what-are-the-names-and-meanings-of-the-intrinsic-vector-element-types-like-epi6</a></p>
+<p>在 intrinsics 中，代码和指令可能是一对一的( Native Intrinsics )，也可能是一对多 (Multi Intrinsics ) 的关系，我们列举如下：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">_mm256_load_pd() &lt;-&gt; vmovapd</span><br><span class="line">_mm256_add_pd() &lt;-&gt; vaddpd</span><br><span class="line">_mm256_mul_pd() &lt;-&gt; vmulpd</span><br><span class="line"></span><br><span class="line"><span class="comment">// 下面可能映射到多个</span></span><br><span class="line">_mm256_set_pd()</span><br><span class="line">_mm256_set1_pd()</span><br></pre></td></tr></table></figure>
+<p>下面的类似解释如下：</p>
+<blockquote>
+<p>_mm256_set1_pd()这个intrinsic function，在新的avx系列的指令中是由VMOVDDUP和VINSERTF128这两条汇编指令组成的。实际上_mm256_set1_pd()可以看成是一条宏汇编指令，只不过这是通过intrinsic function来实现的。很多时候汇编器为了方便，会提供一些宏汇编指令，这些宏汇编指令会由一般是两条指令组成，有时候会是一条汇编指令组成，甚至有时没有对应的汇编指令。但avx中大部分的intrinsic function都是对应一条汇编指令的。</p>
+</blockquote>
+<p>关于 cast，还有一些甚至类似 reinterpret_cast，实际上什么都不会做的。</p>
+<p>此外，这里还提供了一些宏，比如 <code>_MM_SHUFFLE()</code>: <a target="_blank" rel="noopener" href="https://community.intel.com/t5/Intel-C-Compiler/mm-shuffle/m-p/947890">https://community.intel.com/t5/Intel-C-Compiler/mm-shuffle/m-p/947890</a></p>
+<h3 id="初始化寄存器-Load-amp-Stores-和其他操作"><a href="#初始化寄存器-Load-amp-Stores-和其他操作" class="headerlink" title="初始化寄存器: Load &amp; Stores 和其他操作"></a>初始化寄存器: Load &amp; Stores 和其他操作</h3><p>Aligned/Unaligned Load from array。所有的类型都支持 aligned / unaligned 的 Load / Store。</p>
+<p><img src="https://image.mwish.me/blog-image/6074344601769336267.png" alt="img"></p>
+<p>Pd: packed double precision.</p>
+<p>这里需要注意的是，SSE 有一些特殊的指令支持 single-lane load，比如 <code>_mm_load_ss</code>  <code>_mm_load_sd</code></p>
+<p>Broadcast ( with a <code>__m256i</code> mask)</p>
+<p><img src="https://image.mwish.me/blog-image/8151162079760181905.png" alt="img"></p>
+<p><img src="https://image.mwish.me/blog-image/6582981115630589033.png" alt="img"></p>
+<p>maskload</p>
+<p><img src="https://image.mwish.me/blog-image/36922016185874487.png" alt="img"></p>
+<p>Gather ( From offsets )</p>
+<p><img src="https://image.mwish.me/blog-image/3927196246452689080.png" alt="img"></p>
+<p>（scale 是用来处理 offset 的，这条指令可能会受到访存之类的限制，不会很快）</p>
+<p>Load from Constants</p>
+<p><img src="https://image.mwish.me/blog-image/1718991737507920215.png" alt="img"></p>
+<p>这里还有一些编译器对应的行为，哈哈…</p>
+<blockquote>
+<p>Finally, in many cases you don’t need to do anything special to load values. If your source data is aligned, you can just write code like <code>__m128i value = *pointer</code>; and it’ll compile into an equivalent of regular load.</p>
+</blockquote>
+<p>哈哈…</p>
+<h4 id="编译器的直接使用内存和操作"><a href="#编译器的直接使用内存和操作" class="headerlink" title="编译器的直接使用内存和操作"></a>编译器的直接使用内存和操作</h4><p>理论上，一些 avx 指令的操作数可以是内存，比如:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">_mm_add_ps( v, _mm_loadu_ps( ptr ) )</span><br><span class="line">_mm_add_ps( v, _mm_load_ps( ptr ) )</span><br></pre></td></tr></table></figure>
+<p>下面可以是直接转化成一条指令。</p>
+<p>还有一些特殊的指令，比如 <code>_mm[256]_stream_something</code> ，可以 bypass cache，这种在视频处理之类的地方很管用</p>
+<h3 id="Arithmetic"><a href="#Arithmetic" class="headerlink" title="Arithmetic"></a>Arithmetic</h3><p>Add / Sub / Mul / Divide</p>
+<p>这些都实现了：</p>
+<p><img src="https://image.mwish.me/blog-image/805012586802349935.png" alt="img"></p>
+<p>Unorthodox</p>
+<p>关于 min-max 操作的支持，比如 <code>_mm256_max_pd</code>, <code>_mm256_min_pd</code></p>
+<p><img src="https://image.mwish.me/blog-image/5036575535363700685.png" alt="img"></p>
+<p>addsub</p>
+<p>SSE3 和 AVX 中有，交错去 add / sub: <code>_mm256_addsub_pd</code>:</p>
+<p><img src="https://image.mwish.me/blog-image/4946624312463152311.png" alt="img"></p>
+<p>hadd/hsub ( Does not cross between 128-bit lanes )</p>
+<p>相当于两个一组的去处理</p>
+<p><img src="https://image.mwish.me/blog-image/9155622688054057680.png" alt="img"></p>
+<p>(<em>The performance is not great, though</em>.) 这块是用来执行这种任务的：<a target="_blank" rel="noopener" href="https://mathworld.wolfram.com/ComplexMultiplication.html">https://mathworld.wolfram.com/ComplexMultiplication.html</a></p>
+<p>fma ( fmsub )</p>
+<p><img src="https://image.mwish.me/blog-image/4225578619877617163.png" alt="img"></p>
+<p>Dot product ( 单精度 )</p>
+<p><img src="https://image.mwish.me/blog-image/5084957690458063626.png" alt="img"></p>
+<h3 id="Comparisons-Return-type-m256-with-LSB"><a href="#Comparisons-Return-type-m256-with-LSB" class="headerlink" title="Comparisons (Return type: __m256{} with LSB)"></a>Comparisons (Return type: __m256{} with LSB)</h3><p>关于比较的，包括 <code>&lt;</code>, <code>&gt;</code>, <code>≤</code>, <code>≥</code>, <code>≠</code> 在内的基础操作. 这里返回的也是个  <code>__m256&#123;&#125;</code> 寄存器，如果是 true，对应位就是 <code>11...</code>, 否则是 <code>00...</code></p>
+<p><img src="https://image.mwish.me/blog-image/6587324812434465191.png" alt="img"></p>
+<h3 id="Casting-Converting"><a href="#Casting-Converting" class="headerlink" title="Casting / Converting"></a>Casting / Converting</h3><p><strong>并非指令的转型</strong></p>
+<p><img src="https://image.mwish.me/blog-image/2031504140606795785.png" alt="img"></p>
+<blockquote>
+<p>All these intrinsics compile into no instructions, so they’re practically free performance wise. They don’t change bits in the registers, so 32-bit 1.0f float becomes 0x3f800000 in 32-bit lanes of the destination integer register. When casting 16-byte values into 32 bytes, the upper half is undefined.</p>
+</blockquote>
+<p>实际上，这里的 cast 可以说可能只是一个类型转型（类似 reinterpret-cast）</p>
+<p><strong>类型转换</strong></p>
+<p>MXCSR 寄存器控制一些相关的模式</p>
+<p><img src="https://image.mwish.me/blog-image/2970951046836462929.png" alt="img"></p>
+<p>上面就有相关的转型，基本格式还是 <code>cvt&#123;Src&#125;_&#123;Dst&#125;</code></p>
+<h3 id="Shuffles"><a href="#Shuffles" class="headerlink" title="Shuffles"></a>Shuffles</h3><p><img src="https://image.mwish.me/blog-image/3497147159830207096.png" alt="img"></p>
+<p><img src="https://image.mwish.me/blog-image/6850816540976780297.png" alt="img"></p>
+<p><img src="https://image.mwish.me/blog-image/1441314296950327745.png" alt="img"></p>
+<p><img src="https://image.mwish.me/blog-image/4938779423082495043.png" alt="img"></p>
+<p>关于 cross-lane 操作，这里还有一些 notes: <a target="_blank" rel="noopener" href="https://stackoverflow.com/questions/47646238/do-128bit-cross-lane-operations-in-avx512-give-better-performance">https://stackoverflow.com/questions/47646238/do-128bit-cross-lane-operations-in-avx512-give-better-performance</a></p>
+<h2 id="References"><a href="#References" class="headerlink" title="References"></a>References</h2><ol>
+<li><a target="_blank" rel="noopener" href="https://acl.inf.ethz.ch/teaching/fastcode/">https://acl.inf.ethz.ch/teaching/fastcode/</a></li>
+<li>Modern Parallel Programming with C++ and Assembly Language</li>
+<li><a target="_blank" rel="noopener" href="http://const.me/articles/simd/simd.pdf">http://const.me/articles/simd/simd.pdf</a></li>
+<li><a target="_blank" rel="noopener" href="https://github.com/rust-lang/portable-simd/blob/master/beginners-guide.md">https://github.com/rust-lang/portable-simd/blob/master/beginners-guide.md</a></li>
+</ol>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#AVX-%E5%9F%BA%E6%9C%AC%E6%A6%82%E5%BF%B5"><span class="toc-number">1.</span> <span class="toc-text">AVX 基本概念</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#AVX2-amp-Intrinsics"><span class="toc-number">2.</span> <span class="toc-text">AVX2 &amp; Intrinsics</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%88%9D%E5%A7%8B%E5%8C%96%E5%AF%84%E5%AD%98%E5%99%A8-Load-amp-Stores-%E5%92%8C%E5%85%B6%E4%BB%96%E6%93%8D%E4%BD%9C"><span class="toc-number">2.1.</span> <span class="toc-text">初始化寄存器: Load &amp; Stores 和其他操作</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E7%BC%96%E8%AF%91%E5%99%A8%E7%9A%84%E7%9B%B4%E6%8E%A5%E4%BD%BF%E7%94%A8%E5%86%85%E5%AD%98%E5%92%8C%E6%93%8D%E4%BD%9C"><span class="toc-number">2.1.1.</span> <span class="toc-text">编译器的直接使用内存和操作</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Arithmetic"><span class="toc-number">2.2.</span> <span class="toc-text">Arithmetic</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Comparisons-Return-type-m256-with-LSB"><span class="toc-number">2.3.</span> <span class="toc-text">Comparisons (Return type: __m256{} with LSB)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Casting-Converting"><span class="toc-number">2.4.</span> <span class="toc-text">Casting &#x2F; Converting</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Shuffles"><span class="toc-number">2.5.</span> <span class="toc-text">Shuffles</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#References"><span class="toc-number">3.</span> <span class="toc-text">References</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2024/03/04/SIMD-Extensions-and-AVX/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2024/03/04/SIMD-Extensions-and-AVX/&text=SIMD Extensions and AVX"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2024/03/04/SIMD-Extensions-and-AVX/&title=SIMD Extensions and AVX"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2024/03/04/SIMD-Extensions-and-AVX/&is_video=false&description=SIMD Extensions and AVX"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=SIMD Extensions and AVX&body=Check out this article: http://blog.mwish.me/2024/03/04/SIMD-Extensions-and-AVX/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2024/03/04/SIMD-Extensions-and-AVX/&title=SIMD Extensions and AVX"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2024/03/04/SIMD-Extensions-and-AVX/&title=SIMD Extensions and AVX"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2024/03/04/SIMD-Extensions-and-AVX/&title=SIMD Extensions and AVX"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2024/03/04/SIMD-Extensions-and-AVX/&title=SIMD Extensions and AVX"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2024/03/04/SIMD-Extensions-and-AVX/&name=SIMD Extensions and AVX&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2024/03/04/SIMD-Extensions-and-AVX/&t=SIMD Extensions and AVX"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>
