@@ -9,7 +9,7 @@
     <meta name="description" content="这一节离前面一节又过了很久，写前一节的时候还没过年，现在都年后了。我们复习一下前面的目录：  https:&#x2F;&#x2F;blog.mwish.me&#x2F;2022&#x2F;11&#x2F;05&#x2F;x86-and-SIMD-programming&#x2F; https:&#x2F;&#x2F;blog.mwish.me&#x2F;2023&#x2F;11&#x2F;15&#x2F;Fast-Scalar-Code-and-Compiler&#x2F; https:&#x2F;&#x2F;blog.mwish.me&#x2F;2023&#x2F;12&#x2F;">
 <meta property="og:type" content="article">
 <meta property="og:title" content="SIMD Extensions and AVX">
-<meta property="og:url" content="http://blog.mwish.me/2024/03/04/SIMD-Extensions-and-AVX/index.html">
+<meta property="og:url" content="http://blog.mwish.me/2024/03/24/SIMD-Extensions-and-AVX/index.html">
 <meta property="og:site_name" content="风空之岛">
 <meta property="og:description" content="这一节离前面一节又过了很久，写前一节的时候还没过年，现在都年后了。我们复习一下前面的目录：  https:&#x2F;&#x2F;blog.mwish.me&#x2F;2022&#x2F;11&#x2F;05&#x2F;x86-and-SIMD-programming&#x2F; https:&#x2F;&#x2F;blog.mwish.me&#x2F;2023&#x2F;11&#x2F;15&#x2F;Fast-Scalar-Code-and-Compiler&#x2F; https:&#x2F;&#x2F;blog.mwish.me&#x2F;2023&#x2F;12&#x2F;">
 <meta property="og:locale" content="zh_CN">
@@ -38,8 +38,8 @@
 <meta property="og:image" content="https://image.mwish.me/blog-image/6850816540976780297.png">
 <meta property="og:image" content="https://image.mwish.me/blog-image/1441314296950327745.png">
 <meta property="og:image" content="https://image.mwish.me/blog-image/4938779423082495043.png">
-<meta property="article:published_time" content="2024-03-04T03:49:29.000Z">
-<meta property="article:modified_time" content="2024-03-23T17:25:18.756Z">
+<meta property="article:published_time" content="2024-03-24T03:49:29.000Z">
+<meta property="article:modified_time" content="2024-04-16T18:20:54.919Z">
 <meta property="article:author" content="mwish">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:image" content="https://image.mwish.me/blog-image/5944116006493778418.png">
@@ -99,6 +99,8 @@
     <span id="actions">
       <ul>
         
+        <li><a class="icon" aria-label="上一篇" href="/2024/04/17/Rethink-SIMD-Vectorization-for-In-Memory-Databases/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
         
         <li><a class="icon" aria-label="下一篇" href="/2024/02/17/Expression-Execution-in-Velox-Part-3-SpecialForm/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
         
@@ -113,17 +115,17 @@
     <br/>
     <div id="share" style="display: none">
       <ul>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2024/03/04/SIMD-Extensions-and-AVX/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2024/03/04/SIMD-Extensions-and-AVX/&text=SIMD Extensions and AVX"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2024/03/04/SIMD-Extensions-and-AVX/&title=SIMD Extensions and AVX"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2024/03/04/SIMD-Extensions-and-AVX/&is_video=false&description=SIMD Extensions and AVX"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
-  <li><a class="icon" href="mailto:?subject=SIMD Extensions and AVX&body=Check out this article: http://blog.mwish.me/2024/03/04/SIMD-Extensions-and-AVX/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2024/03/04/SIMD-Extensions-and-AVX/&title=SIMD Extensions and AVX"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2024/03/04/SIMD-Extensions-and-AVX/&title=SIMD Extensions and AVX"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2024/03/04/SIMD-Extensions-and-AVX/&title=SIMD Extensions and AVX"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2024/03/04/SIMD-Extensions-and-AVX/&title=SIMD Extensions and AVX"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2024/03/04/SIMD-Extensions-and-AVX/&name=SIMD Extensions and AVX&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2024/03/04/SIMD-Extensions-and-AVX/&t=SIMD Extensions and AVX"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2024/03/24/SIMD-Extensions-and-AVX/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2024/03/24/SIMD-Extensions-and-AVX/&text=SIMD Extensions and AVX"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2024/03/24/SIMD-Extensions-and-AVX/&title=SIMD Extensions and AVX"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2024/03/24/SIMD-Extensions-and-AVX/&is_video=false&description=SIMD Extensions and AVX"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=SIMD Extensions and AVX&body=Check out this article: http://blog.mwish.me/2024/03/24/SIMD-Extensions-and-AVX/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2024/03/24/SIMD-Extensions-and-AVX/&title=SIMD Extensions and AVX"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2024/03/24/SIMD-Extensions-and-AVX/&title=SIMD Extensions and AVX"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2024/03/24/SIMD-Extensions-and-AVX/&title=SIMD Extensions and AVX"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2024/03/24/SIMD-Extensions-and-AVX/&title=SIMD Extensions and AVX"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2024/03/24/SIMD-Extensions-and-AVX/&name=SIMD Extensions and AVX&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2024/03/24/SIMD-Extensions-and-AVX/&t=SIMD Extensions and AVX"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
 </ul>
 
     </div>
@@ -152,7 +154,7 @@
       
     <div class="postdate">
       
-        <time datetime="2024-03-04T03:49:29.000Z" itemprop="datePublished">2024-03-04</time>
+        <time datetime="2024-03-24T03:49:29.000Z" itemprop="datePublished">2024-03-24</time>
         
       
     </div>
@@ -325,17 +327,17 @@
 
     <div id="share-footer" style="display: none">
       <ul>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2024/03/04/SIMD-Extensions-and-AVX/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2024/03/04/SIMD-Extensions-and-AVX/&text=SIMD Extensions and AVX"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2024/03/04/SIMD-Extensions-and-AVX/&title=SIMD Extensions and AVX"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2024/03/04/SIMD-Extensions-and-AVX/&is_video=false&description=SIMD Extensions and AVX"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" href="mailto:?subject=SIMD Extensions and AVX&body=Check out this article: http://blog.mwish.me/2024/03/04/SIMD-Extensions-and-AVX/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2024/03/04/SIMD-Extensions-and-AVX/&title=SIMD Extensions and AVX"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2024/03/04/SIMD-Extensions-and-AVX/&title=SIMD Extensions and AVX"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2024/03/04/SIMD-Extensions-and-AVX/&title=SIMD Extensions and AVX"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2024/03/04/SIMD-Extensions-and-AVX/&title=SIMD Extensions and AVX"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2024/03/04/SIMD-Extensions-and-AVX/&name=SIMD Extensions and AVX&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2024/03/04/SIMD-Extensions-and-AVX/&t=SIMD Extensions and AVX"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2024/03/24/SIMD-Extensions-and-AVX/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2024/03/24/SIMD-Extensions-and-AVX/&text=SIMD Extensions and AVX"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2024/03/24/SIMD-Extensions-and-AVX/&title=SIMD Extensions and AVX"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2024/03/24/SIMD-Extensions-and-AVX/&is_video=false&description=SIMD Extensions and AVX"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=SIMD Extensions and AVX&body=Check out this article: http://blog.mwish.me/2024/03/24/SIMD-Extensions-and-AVX/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2024/03/24/SIMD-Extensions-and-AVX/&title=SIMD Extensions and AVX"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2024/03/24/SIMD-Extensions-and-AVX/&title=SIMD Extensions and AVX"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2024/03/24/SIMD-Extensions-and-AVX/&title=SIMD Extensions and AVX"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2024/03/24/SIMD-Extensions-and-AVX/&title=SIMD Extensions and AVX"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2024/03/24/SIMD-Extensions-and-AVX/&name=SIMD Extensions and AVX&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2024/03/24/SIMD-Extensions-and-AVX/&t=SIMD Extensions and AVX"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
 </ul>
 
     </div>

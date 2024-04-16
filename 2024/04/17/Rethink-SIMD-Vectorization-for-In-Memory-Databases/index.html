@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="本文是 Oracle 和哥伦比亚大学工程师发表在 VLDB’15 上的论文，论文探讨了了几个 SIMD 原语（部分原语实际上是没有 SIMD 直接指令对应的，但是类似 SIMD 宏，可以用多条 SIMD intrinsics 实现，并且满足需要的并行度）。然后基于这些原语，提到了一些 SIMD 化的 Operator 实现，包含：  Scan(Filter) HashTable BloomFilt">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Rethink SIMD Vectorization for In-Memory Databases">
+<meta property="og:url" content="http://blog.mwish.me/2024/04/17/Rethink-SIMD-Vectorization-for-In-Memory-Databases/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="本文是 Oracle 和哥伦比亚大学工程师发表在 VLDB’15 上的论文，论文探讨了了几个 SIMD 原语（部分原语实际上是没有 SIMD 直接指令对应的，但是类似 SIMD 宏，可以用多条 SIMD intrinsics 实现，并且满足需要的并行度）。然后基于这些原语，提到了一些 SIMD 化的 Operator 实现，包含：  Scan(Filter) HashTable BloomFilt">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/8122142177223959269.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/8718583325025689146.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/2564081262760965696.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/5627057599892081163.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/7916791357685813431.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/8794712996074669139.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/1974750469971436834.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/2545776021847238299.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/5526059977034241717.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/5326351994352817292.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/8834005199594432370.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/7427386415838033073.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/789512822400845209.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/263564282047677000.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/3610129211675459520.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/8237441743315793940.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/8953170629963604531.png">
+<meta property="article:published_time" content="2024-04-16T18:18:08.000Z">
+<meta property="article:modified_time" content="2024-04-16T18:20:15.877Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/8122142177223959269.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>Rethink SIMD Vectorization for In-Memory Databases</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2024/03/24/SIMD-Extensions-and-AVX/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2024/04/17/Rethink-SIMD-Vectorization-for-In-Memory-Databases/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2024/04/17/Rethink-SIMD-Vectorization-for-In-Memory-Databases/&text=Rethink SIMD Vectorization for In-Memory Databases"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2024/04/17/Rethink-SIMD-Vectorization-for-In-Memory-Databases/&title=Rethink SIMD Vectorization for In-Memory Databases"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2024/04/17/Rethink-SIMD-Vectorization-for-In-Memory-Databases/&is_video=false&description=Rethink SIMD Vectorization for In-Memory Databases"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Rethink SIMD Vectorization for In-Memory Databases&body=Check out this article: http://blog.mwish.me/2024/04/17/Rethink-SIMD-Vectorization-for-In-Memory-Databases/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2024/04/17/Rethink-SIMD-Vectorization-for-In-Memory-Databases/&title=Rethink SIMD Vectorization for In-Memory Databases"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2024/04/17/Rethink-SIMD-Vectorization-for-In-Memory-Databases/&title=Rethink SIMD Vectorization for In-Memory Databases"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2024/04/17/Rethink-SIMD-Vectorization-for-In-Memory-Databases/&title=Rethink SIMD Vectorization for In-Memory Databases"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2024/04/17/Rethink-SIMD-Vectorization-for-In-Memory-Databases/&title=Rethink SIMD Vectorization for In-Memory Databases"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2024/04/17/Rethink-SIMD-Vectorization-for-In-Memory-Databases/&name=Rethink SIMD Vectorization for In-Memory Databases&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2024/04/17/Rethink-SIMD-Vectorization-for-In-Memory-Databases/&t=Rethink SIMD Vectorization for In-Memory Databases"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%A1%AC%E4%BB%B6%E5%92%8C%E4%B8%80%E4%BA%9B%E5%AE%9A%E4%B9%89"><span class="toc-number">1.</span> <span class="toc-text">硬件和一些定义</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%AE%BA%E6%96%87%E4%BD%BF%E7%94%A8%E7%9A%84%E5%8E%9F%E8%AF%AD"><span class="toc-number">2.</span> <span class="toc-text">论文使用的原语</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Selection-Scans"><span class="toc-number">3.</span> <span class="toc-text">Selection Scans</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Hash-Tables"><span class="toc-number">4.</span> <span class="toc-text">Hash Tables</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Linear-probing"><span class="toc-number">4.1.</span> <span class="toc-text">Linear probing</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Double-Hashing"><span class="toc-number">4.2.</span> <span class="toc-text">Double Hashing</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Cuckoo-Hashing"><span class="toc-number">4.3.</span> <span class="toc-text">Cuckoo Hashing</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Bloom-Filter"><span class="toc-number">5.</span> <span class="toc-text">Bloom Filter</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Partition"><span class="toc-number">6.</span> <span class="toc-text">Partition</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Radix-amp-Hash-Histogram"><span class="toc-number">6.1.</span> <span class="toc-text">Radix &amp; Hash Histogram</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Range-Histogram"><span class="toc-number">6.2.</span> <span class="toc-text">Range Histogram</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Shuffle"><span class="toc-number">6.3.</span> <span class="toc-text">Shuffle</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Buffered-Shuf%EF%AC%82ing"><span class="toc-number">6.4.</span> <span class="toc-text">Buffered Shufﬂing</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Sort"><span class="toc-number">7.</span> <span class="toc-text">Sort</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Hash-Join"><span class="toc-number">8.</span> <span class="toc-text">Hash Join</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Rethink SIMD Vectorization for In-Memory Databases
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2024-04-16T18:18:08.000Z" itemprop="datePublished">2024-04-17</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>本文是 Oracle 和哥伦比亚大学工程师发表在 VLDB’15 上的论文，论文探讨了了几个 SIMD 原语（部分原语实际上是没有 SIMD 直接指令对应的，但是类似 SIMD 宏，可以用多条 SIMD intrinsics 实现，并且满足需要的并行度）。然后基于这些原语，提到了一些 SIMD 化的 Operator 实现，包含：</p>
+<ol>
+<li>Scan(Filter)</li>
+<li>HashTable</li>
+<li>BloomFilter</li>
+<li>Partition ( Shuffle, etc)</li>
+<li>Hash Join</li>
+</ol>
+<p>本文可能15年不那么晚，然后也介绍了一些加速器用到的没有 OoO 的 CPU，比如 Intel Xeon Phi 作为评估。但是论文的一些核心观点还是比较站得住脚的，所以我们来细读一下。</p>
+<h2 id="硬件和一些定义"><a href="#硬件和一些定义" class="headerlink" title="硬件和一些定义"></a>硬件和一些定义</h2><p>论文分成了 Mainstream CPU 和 MIC CPU，前者我们大家都很熟了。后者论文提到了 Intel Xeon Phi ，它的特点是多核心胶水核，砍掉了或者多了一些 SIMD 指令，没有 Out-of-order 模块，算是在 CPU 上抄 GPGPU 的一些设计吧。这种芯片在当时也提供了 gather 和 scatter 的支持。</p>
+<p>论文提到了 fully vectorize 的定义：</p>
+<blockquote>
+<p>Formally, assume an algorithm that solves a problem with optimal complexity, its simplest scalar implementation, and a vectorized implementation. We say that the algorithm can be fully vectorized, if the vector implementation executes O(f(n)/W) vector instructions instead of O(f(n)) scalar instructions where W is the vector length, excluding random memory accesses that are by deﬁnition not data-parallel.</p>
+</blockquote>
+<p>这里还是说，以能否将计算拆分到 vector lane 上，然后让大家的操作都并行起来。关于 auto-vectorization 我之前的博客或许有一点参考意义：<a href="https://blog.mwish.me/2023/12/10/Compiler-Optimizations-Power-Limits-Auto-vetorize/">https://blog.mwish.me/2023/12/10/Compiler-Optimizations-Power-Limits-Auto-vetorize/</a> . 这么看 scatter-gather 一般也不一定划得来。</p>
+<p>论文第二章提到了一些之前的工作和 auto-vectorization。可以看到大伙儿都挺行的，能 SIMD 化的东西感觉已经被犁地一样犁过一阵子了</p>
+<h2 id="论文使用的原语"><a href="#论文使用的原语" class="headerlink" title="论文使用的原语"></a>论文使用的原语</h2><p>论文使用的原语包含 Selectivity load/store, Gather, Scatter 。其实一些自动向量化也能检查到一些，</p>
+<p><img src="https://image.mwish.me/blog-image/8122142177223959269.png" alt="img"></p>
+<p>上面是 selective store，下面是 selective load(印象中 avx2 是一组 <code>__mm256</code>，avx512 有一组专门的寄存器）。分别是：</p>
+<ol>
+<li>根据 mask 去 store，把不连续的 vector 写到连续的内存中</li>
+<li>根据 mask 去 load，把连续内存根据 mask 写到不连续的 Vector 中</li>
+</ol>
+<p><img src="https://image.mwish.me/blog-image/8718583325025689146.png" alt="img"></p>
+<p>然后是 gather 和 scatter. 这里 selective load/store 的操作数是 mask，这里就是对应的 index 了。这段也比较好理解</p>
+<p><img src="https://image.mwish.me/blog-image/2564081262760965696.png" alt="img"></p>
+<p><img src="https://image.mwish.me/blog-image/5627057599892081163.png" alt="img"></p>
+<p>好，那么我们开始讨论这套操作的实现和性能</p>
+<ul>
+<li>Gather / Scatter 操作本身受限于 cache，见：<a href="https://blog.mwish.me/2024/03/04/SIMD-Extensions-and-AVX/">https://blog.mwish.me/2024/03/04/SIMD-Extensions-and-AVX/</a> 。因为 CPU 每个周期可能只能做一定的 L1 cache 访存 . 这里也有个很好玩的 case: <a target="_blank" rel="noopener" href="https://github.com/llvm/llvm-project/issues/53435">https://github.com/llvm/llvm-project/issues/53435</a> .</li>
+<li>Selective Load/Store 可以通过 permutation 实现. CPU 有 maskload 和 maskstore 指令，但是 maskload 和 maskstore 并不等价于 Selective Load 和 Selective Store。论文提到可以用 permute 之类的 shuffle 指令模拟。首先根据情况从 selective 生成一个 mask ( 这块论文提到可以使用一个 pre-generated table，我觉得 bmi2 也可以使用）。这里写入的时候可以生成table -&gt; maskmove/maskstore 指令，读的时候可以先读上来再 shuffle （ <a target="_blank" rel="noopener" href="https://stackoverflow.com/questions/62183557/how-to-most-efficiently-store-a-part-of-m128i-m256i-while-ignoring-some-num">https://stackoverflow.com/questions/62183557/how-to-most-efficiently-store-a-part-of-m128i-m256i-while-ignoring-some-num</a> 题外话，我发现这个链接也很好）</li>
+<li>需要注意的是，这里的 selective store / load 操作也是可能跨两个 cacheline 的</li>
+</ul>
+<p>论文 appendix 3 中列举了 TableScan 的实现：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/* load permutation mask for selective store */</span> </span><br><span class="line">m <span class="operator">=</span> _mm256_movemask_ps(_mm256_castsi256_ps(cmp));</span><br><span class="line">perm_comp <span class="operator">=</span> _mm_loadl_epi64(<span class="operator">&amp;</span>perm[m]);</span><br><span class="line">perm <span class="operator">=</span> _mm256_cvtepi8_epi32(perm_comp); </span><br><span class="line"><span class="comment">/* permute and store the input pointers */</span> </span><br><span class="line">cmp <span class="operator">=</span> _mm256_permutevar8x32_epi32(cmp, perm);</span><br><span class="line">ptr <span class="operator">=</span> _mm256_permutevar8x32_epi32(rid, perm);</span><br><span class="line">_mm256_maskstore_epi32(<span class="operator">&amp;</span>rids_buf[k], cmp, ptr);</span><br></pre></td></tr></table></figure>
+<p>关于 load:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/* load permutation masks */</span></span><br><span class="line">m_out <span class="operator">=</span> _mm256_movemask_ps(_mm256_castsi256_ps(<span class="keyword">out</span>));</span><br><span class="line">m_inv <span class="operator">=</span> _mm256_movemask_ps(_mm256_castsi256_ps(inv));</span><br><span class="line">perm_out_comp <span class="operator">=</span> _mm_loadl_epi64(<span class="operator">&amp;</span>perm[m_out]);</span><br><span class="line">perm_inv_comp <span class="operator">=</span> _mm_loadl_epi64(<span class="operator">&amp;</span>perm[m_inv <span class="operator">^</span> <span class="number">255</span>]);</span><br><span class="line">perm_out <span class="operator">=</span> _mm256_cvtepi8_epi32(perm_out_comp);</span><br><span class="line">perm_inv <span class="operator">=</span> _mm256_cvtepi8_epi32(perm_inv_comp);</span><br></pre></td></tr></table></figure>
+<h2 id="Selection-Scans"><a href="#Selection-Scans" class="headerlink" title="Selection Scans"></a>Selection Scans</h2><p>关于 TableScan 的讨论，有一部分是在高效 Scan 压缩数据上的，包括下面的材料：</p>
+<ol>
+<li>SIMD-Scan: Ultra Fast in-Memory Table Scan using onChip Vector Processing Units</li>
+<li>BitSlice / BitWeaving</li>
+</ol>
+<p>Scan 首先有个关键点是谓词处理。发表于 TODS’04 的论文 <Selection conditions in main memory> 给了个很简单的白盒场景（实际上感觉 filter 会复杂很多，包括各种 UDF？不过这块结论还是比较清晰的，表达式甚至会有 auto vectorization, codegen 之类的）</p>
+<p><img src="https://image.mwish.me/blog-image/7916791357685813431.png" alt="img"></p>
+<p>本章的 scan 介绍了 Scalar Scan -&gt; Scalar Scan(branchless) -&gt; Vectorize Scan 的基础思路：</p>
+<p>设计要点：</p>
+<ul>
+<li>Branching 可以被避免，但是另一方面，如果选择率低，load 成本也过高，尤其是表比较宽的时候，复制这些 和谓词不相关的 Payload 是有一定的开销的</li>
+<li>Payload Store 可以考虑按照情况避免写入 cache，使用 bypass cache 的指令（见下图的 stream store 段）</li>
+<li>通过 indices buffer 来操作 Payload ( 我也在想如果表就那几个字段或者 selectivity 高是不是也没必要，不过这个算法思路还是很完善的）</li>
+</ul>
+<p><img src="https://image.mwish.me/blog-image/8794712996074669139.png" alt="img"></p>
+<h2 id="Hash-Tables"><a href="#Hash-Tables" class="headerlink" title="Hash Tables"></a>Hash Tables</h2><p>Hash Table 操作分为 Build / Probe 两步，在 Hash Join 和 Hash Agg 之类的地方都会遇到。论文把 Hash Table 的并行分为两种，对于 Probe 有：</p>
+<ul>
+<li>Horizontal vectorization: 对比一个 input probe 和多个存在的 hash table keys。对于 CPU，load 32bits 和 load 128bits 开销可能是一样的，这样能并行化 probe。swiss table 就用了这种策略，用 SSE 指令来 cmp 多个 flags。作者认为，单个 key 去比较还是很废的，假设一个 key 需要访问平均 1.5 个 bucket，打会儿的并行度就上不去了</li>
+<li>Vertical vectorization: 每个 vector lane 携带不同的 hash probe key，也访问不同的内存（这么看来，CPU Prefetch 对大 Hash Table 其实是很重要的）</li>
+</ul>
+<p>论文写了 Linear Probing, Double Hashing, Cuckoo Hashing 等方式。Hash 函数论文介绍单个 Hash 函数选择 multiplicative hashing( 通过 <code>(key * f) mod k</code> 的方式处理，bucket 总共有 2^n 个，这里操作相当于 mul + shift，能很好的被 SIMD 支持)( 作为单个 hash 函数 <a target="_blank" rel="noopener" href="https://www.zhihu.com/question/20820286/answer/2584176348">https://www.zhihu.com/question/20820286/answer/2584176348</a> 这篇文章或许是个好的入口）</p>
+<h3 id="Linear-probing"><a href="#Linear-probing" class="headerlink" title="Linear probing"></a>Linear probing</h3><p>设计选择：</p>
+<ul>
+<li>每个 loop 处理 W 个不同的 probe input keys</li>
+<li>每轮 vectorized probe 之后，有的key 找到了 empty bucket，有的 key 则没找到，这个时候<ul>
+<li>对于已经 Finished 的 keys，需要 load 下一轮的 keys</li>
+<li>对于没有 FInished 的 keys，需要变更 probe offset。这里维护了一个 offset vector 作为每个 key 的 offset</li>
+</ul>
+</li>
+<li>这个算法不是 “stable” 的，旧的 probe keys 有的结束了有的没结束的话，新插入的 probe keys 可能会改变 probe 的输出顺序。比方旧的是是 0-10 匹配输出，vectorize 版本可能就是 1 - 0 - 2 - 3 这种顺序了。</li>
+<li>Probe 不需要考虑 key 冲突，反正不重复</li>
+</ul>
+<p><img src="https://image.mwish.me/blog-image/1974750469971436834.png" alt="img"></p>
+<p>对于 Build 而言，这里也差不多，需要找到一个空 bucket 来插入，但是相对 probe 而言，这里的区别是：</p>
+<ol>
+<li>Probe 的输出是个 selecitivity store，而 Build 是个 Scatter Store。</li>
+<li>这里需要做冲突检查，scatter 本身不需要特殊处理，<strong>左侧的写会被右侧的写覆盖（如 Figure 4 的 12）</strong>，scatter 向量 <code>&lt;0, 1, 2, ...&gt;</code>之后再跟一个 gather 这些值（这里应该 cache 访问开销相对较小），如果两边匹配（表示写入的 index 是能够匹配的），才表示这一次写成功。一些新的指令（in AVX512 like <code>_mm256_conflict_epi32</code> ）能够省掉这一轮的开销。如果已经是 input key 是 unique 的，这里可以直接 scatter keys 这个地方可以直接 scatter keys 到结果集中，避免一轮 <code>&lt;0, 1, 2, ...&gt;</code> 向量的中间操作。</li>
+<li>这里还提到了用 wider scatter 来避免 cache 开销，比如 32bit-32payload，这里可以尽量拆分成8-way 64bit gather + shuffle，来避免 cache 开销，这里下面也列了代码（我倒是觉得有这必要么）</li>
+</ol>
+<p><img src="https://image.mwish.me/blog-image/2545776021847238299.png" alt="img"></p>
+<p>这里是冲突检测的代码和写入的代码，这里可以看到对应的逻辑</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/* gather keys from buckets */</span></span><br><span class="line">tab = _mm512_i32gather_epi32(hash, table, <span class="comment">/*scale=*/</span><span class="number">8</span>);</span><br><span class="line"><span class="comment">/* check if buckets are empty */</span></span><br><span class="line">m = _mm512_cmpeq_epi32_mask(tab, mask_empty);</span><br><span class="line"><span class="comment">/* scatter unique values per vector lane */</span></span><br><span class="line">_mm512_mask_i32scatter_epi32(<span class="comment">/*base_addr*/</span>table, <span class="comment">/*mask*/</span>m, <span class="comment">/*v_index*/</span>hash, <span class="comment">/*a*/</span>mask_unique, <span class="comment">/*scale=*/</span><span class="number">8</span>); </span><br><span class="line"><span class="comment">/* gather back values */</span></span><br><span class="line">tab = _mm512_mask_i32gather_epi32(<span class="comment">/*src*/</span>tab, <span class="comment">/*mask*/</span>m, <span class="comment">/*v_index*/</span>hash, <span class="comment">/*base_addr*/</span>table, <span class="comment">/*scale=*/</span><span class="number">8</span>);</span><br><span class="line"><span class="comment">/* detect non-conflicting */</span></span><br><span class="line">m = _mm512_mask_cmpeq_epi32_mask(m, tab, mask_unique);</span><br><span class="line"><span class="comment">/* packs keys and payloads in pairs */</span> </span><br><span class="line">_MM512_PACK_EPI32(key, pay, lo, hi); </span><br><span class="line"><span class="comment">/* scatter key-payload pairs 1-8 */</span> </span><br><span class="line">_mm512_mask_i32loscatter_epi32(table, m, hash, lo, <span class="number">8</span>);</span><br></pre></td></tr></table></figure>
+<p>上面这段代码中，先拿到了 <code>m</code> 看这一轮 probe 的结果（ <code>tab</code> 是 gather 到的本轮的 bucket 中的 slot），然后去 scatter <code>mask_unique</code>，再读 hash 上的所有变量读回来做一轮验证，最后再去写真的值。</p>
+<blockquote>
+<p>To halve the number of cache accesses, we pack multiple gathers into fewer wider gathers. For example, when using 32-bit keys and 32-bit payloads, the two consecutive 16-way 32-bit gathers of the above code can be replaced with two 8-way 64-bit gathers and a few shuﬄe operations to split keys and payloads. The same applies to scatters (see Appendix E for details).</p>
+</blockquote>
+<h3 id="Double-Hashing"><a href="#Double-Hashing" class="headerlink" title="Double Hashing"></a>Double Hashing</h3><p>重复的 key 可以有下列的处理方式：</p>
+<ul>
+<li>把 Payload 存在额外的表上，类似 <code>key-&gt;[values]</code>  -&gt; 当大部分 key 是 repeated 的时候效果很好</li>
+<li>重复存储这些 key -&gt; 在 Linear Probe 的时候， 当大多数 key 是 unique key 时效果很好，但是 cluster 的时候效果不那么好</li>
+</ul>
+<p>Double Hashing 使用两个 Hash Function，相当于 offset + 1, 这里采取前进 <code>hashFunction(value) % (bucketSize - 1)</code></p>
+<p><img src="https://image.mwish.me/blog-image/5526059977034241717.png" alt="img"></p>
+<p>这里有个 <code>m</code> 是 probe 的时候遇到冲突的 bucket. 注意最后一步的细节：使用减法来避免 mod 的开销，因为修正前的 hash + hash 肯定不过超过两倍 hash bucket size 大小</p>
+<h3 id="Cuckoo-Hashing"><a href="#Cuckoo-Hashing" class="headerlink" title="Cuckoo Hashing"></a>Cuckoo Hashing</h3><p>Cuckoo 可以当成是 horizontal vectorization 的典范之一，probe 代码如下，这里还是没那种向量化比较槽，而是按位操作过去的。这里 Cuckoo Hashing 不支持 key repeats.</p>
+<p><img src="https://image.mwish.me/blog-image/5326351994352817292.png" alt="img"></p>
+<p>Build 要复杂一些：</p>
+<p><img src="https://image.mwish.me/blog-image/8834005199594432370.png" alt="img"></p>
+<h2 id="Bloom-Filter"><a href="#Bloom-Filter" class="headerlink" title="Bloom Filter"></a>Bloom Filter</h2><p>Bloom Filter 可以帮助 semi join，或者谓词 pushdown 到 scan 之类的地方。这里：</p>
+<ol>
+<li>论文提供了 VBF：<a target="_blank" rel="noopener" href="https://news.ycombinator.com/item?id=14385540">https://news.ycombinator.com/item?id=14385540</a> 和 <a target="_blank" rel="noopener" href="https://dl.acm.org/doi/10.1145/2619228.2619234">https://dl.acm.org/doi/10.1145/2619228.2619234</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.cs.amherst.edu/~ccmcgeoch/cs34/papers/cacheefficientbloomfilters-jea.pdf">https://www.cs.amherst.edu/~ccmcgeoch/cs34/papers/cacheefficientbloomfilters-jea.pdf</a> 这篇应该是个比较经典的文章，感觉主流的 BF 都是 vectorized 的 Split Block Bloom Filter 了</li>
+<li>然后感觉现在最流行的只读 Filter 是 XOR Filter</li>
+</ol>
+<p>这里的要点还是 SIMD并行化操作、Cache Resident</p>
+<h2 id="Partition"><a href="#Partition" class="headerlink" title="Partition"></a>Partition</h2><p>Paritition 把数据集切成多个不重合的小块，Radix/Hash/Range Shuffle 可能都依赖它，或者 Agg 这种也有可能依赖它。被切分的小块也最好能适配在 cache 中，便于后续的高效计算。</p>
+<p>Partition 有两个部分：</p>
+<ol>
+<li>Compute Histogram: 在移动数据之前，这里需要通过 histogram 来手机</li>
+<li>Shuffling: 根据 Histogram 的结果去收集数据</li>
+</ol>
+<h3 id="Radix-amp-Hash-Histogram"><a href="#Radix-amp-Hash-Histogram" class="headerlink" title="Radix &amp; Hash Histogram"></a>Radix &amp; Hash Histogram</h3><p><img src="https://image.mwish.me/blog-image/7427386415838033073.png" alt="img"></p>
+<p>这里有两点需要注意的：</p>
+<ol>
+<li>维护了 <code>H</code> 作为 bucket count * vector-lane 的大小，总觉得这块虽然悪くない，但是内存会不会开销比较高？内部检查冲突之类的会不会好一些？</li>
+<li>这里还是用 gather -&gt; inc -&gt; scatter 来处理数据，有什么更好的 inc 方式吗？</li>
+</ol>
+<h3 id="Range-Histogram"><a href="#Range-Histogram" class="headerlink" title="Range Histogram"></a>Range Histogram</h3><p>Range histogram 会显著慢于 Hash/Radix Partition。这里的逻辑主要靠在 cache resident array 中做 binary search 来实现。</p>
+<p>这里代码是靠 gather instr 来收集多个 split point，然后每个子 batch 去批量搜索查找（下面的代码应该只是比较一个子 batch）</p>
+<p><img src="https://image.mwish.me/blog-image/789512822400845209.png" alt="img"></p>
+<h3 id="Shuffle"><a href="#Shuffle" class="headerlink" title="Shuffle"></a>Shuffle</h3><p>这里处理的逻辑还是比较简单的，先算出分区位置，再写具体的 value，当然这里还要面对一个我们之前面对过两次的问题：一个 vector 内的冲突处理。这里也是用了 gather 和 scatter 的方式</p>
+<p><img src="https://image.mwish.me/blog-image/263564282047677000.png" alt="img"></p>
+<p>这个处理方式比较 sb，基本上还是每个向量内部去处理，因为每次写入的是最右侧的，所以 mask 是一个 “reversed mask”，来得到正确的顺序。有了这个处理之后，实现也会很简单了（这里还提到了算法稳定性有的时候会比较重要）：</p>
+<blockquote>
+<p>Stable partitioning is essential for algorithms such as LSB radixsort.</p>
+</blockquote>
+<p><img src="https://image.mwish.me/blog-image/3610129211675459520.png" alt="img"></p>
+<h3 id="Buffered-Shufﬂing"><a href="#Buffered-Shufﬂing" class="headerlink" title="Buffered Shufﬂing"></a>Buffered Shufﬂing</h3><p>上面那个实现用脚看都看得出性能不好，因为每个 Batch 写实在开销太高了，当结果集比 cache 大的时候，这里论文给出了两个显然的缺点：</p>
+<ol>
+<li>当 partition fanout 大于 TLB 时，会造成 TLB thrashing （ 这里提到了论文：What happens during a join? dissecting CPU and memory optimization eﬀects. </li>
+<li>论文 Fast sort on CPUs and GPUs: a case for bandwidth oblivious SIMD sort 指出，这里会生成很多的 cache conflicts ( 额，还是因为组相联 cache 不够大）</li>
+<li>normal stores 会引入 load -&gt; store，目标的内存部分只会被写，这部分会增大开销，降低实际 workload 用的内存带宽 （参考论文： Engineering a multi core radix sort. ）</li>
+</ol>
+<p>这里策略是：</p>
+<ol>
+<li>先写入小的 cache resident buffer</li>
+<li>如果某个 lane 准备 overflow，就需要刷真实 buffer，刷的时候去 stream store bypass</li>
+</ol>
+<p><img src="https://image.mwish.me/blog-image/8237441743315793940.png" alt="img"></p>
+<h2 id="Sort"><a href="#Sort" class="headerlink" title="Sort"></a>Sort</h2><p>这里参考了论文 A comprehensive study of main-memory partitioning and its application to large-scale comparison- and radix-sort</p>
+<p><img src="https://image.mwish.me/blog-image/8953170629963604531.png" alt="img"></p>
+<h2 id="Hash-Join"><a href="#Hash-Join" class="headerlink" title="Hash Join"></a>Hash Join</h2><p>这里根据 Partition 方式来分类</p>
+<ul>
+<li>No partition：在(Build 侧）所有线程共享一个哈希表，并且使用原子操作来更新表中的计数器。这种方法在现代多核CPU上可能会受到锁竞争的影响。Probe 测并发访问</li>
+<li>Minimal-partition：每个 Build 线程都有自己的哈希表，从而避免了锁竞争。Probe 操作需要选定 <hashtable, partition> 相关的内容</li>
+<li>Maximum partition：将两个表的数据分到足够小的分区，以至于每个分区都可以适应缓存。这样可以在L1或L2缓存中进行哈希表的操作，从而实现高的性能。</li>
+</ul>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%A1%AC%E4%BB%B6%E5%92%8C%E4%B8%80%E4%BA%9B%E5%AE%9A%E4%B9%89"><span class="toc-number">1.</span> <span class="toc-text">硬件和一些定义</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%AE%BA%E6%96%87%E4%BD%BF%E7%94%A8%E7%9A%84%E5%8E%9F%E8%AF%AD"><span class="toc-number">2.</span> <span class="toc-text">论文使用的原语</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Selection-Scans"><span class="toc-number">3.</span> <span class="toc-text">Selection Scans</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Hash-Tables"><span class="toc-number">4.</span> <span class="toc-text">Hash Tables</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Linear-probing"><span class="toc-number">4.1.</span> <span class="toc-text">Linear probing</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Double-Hashing"><span class="toc-number">4.2.</span> <span class="toc-text">Double Hashing</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Cuckoo-Hashing"><span class="toc-number">4.3.</span> <span class="toc-text">Cuckoo Hashing</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Bloom-Filter"><span class="toc-number">5.</span> <span class="toc-text">Bloom Filter</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Partition"><span class="toc-number">6.</span> <span class="toc-text">Partition</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Radix-amp-Hash-Histogram"><span class="toc-number">6.1.</span> <span class="toc-text">Radix &amp; Hash Histogram</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Range-Histogram"><span class="toc-number">6.2.</span> <span class="toc-text">Range Histogram</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Shuffle"><span class="toc-number">6.3.</span> <span class="toc-text">Shuffle</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Buffered-Shuf%EF%AC%82ing"><span class="toc-number">6.4.</span> <span class="toc-text">Buffered Shufﬂing</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Sort"><span class="toc-number">7.</span> <span class="toc-text">Sort</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Hash-Join"><span class="toc-number">8.</span> <span class="toc-text">Hash Join</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2024/04/17/Rethink-SIMD-Vectorization-for-In-Memory-Databases/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2024/04/17/Rethink-SIMD-Vectorization-for-In-Memory-Databases/&text=Rethink SIMD Vectorization for In-Memory Databases"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2024/04/17/Rethink-SIMD-Vectorization-for-In-Memory-Databases/&title=Rethink SIMD Vectorization for In-Memory Databases"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2024/04/17/Rethink-SIMD-Vectorization-for-In-Memory-Databases/&is_video=false&description=Rethink SIMD Vectorization for In-Memory Databases"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Rethink SIMD Vectorization for In-Memory Databases&body=Check out this article: http://blog.mwish.me/2024/04/17/Rethink-SIMD-Vectorization-for-In-Memory-Databases/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2024/04/17/Rethink-SIMD-Vectorization-for-In-Memory-Databases/&title=Rethink SIMD Vectorization for In-Memory Databases"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2024/04/17/Rethink-SIMD-Vectorization-for-In-Memory-Databases/&title=Rethink SIMD Vectorization for In-Memory Databases"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2024/04/17/Rethink-SIMD-Vectorization-for-In-Memory-Databases/&title=Rethink SIMD Vectorization for In-Memory Databases"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2024/04/17/Rethink-SIMD-Vectorization-for-In-Memory-Databases/&title=Rethink SIMD Vectorization for In-Memory Databases"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2024/04/17/Rethink-SIMD-Vectorization-for-In-Memory-Databases/&name=Rethink SIMD Vectorization for In-Memory Databases&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2024/04/17/Rethink-SIMD-Vectorization-for-In-Memory-Databases/&t=Rethink SIMD Vectorization for In-Memory Databases"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>
