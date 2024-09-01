@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="在看一个 pr 的时候 [1]，我尝试把它 port 到 C++ 时候发现有一些地方比较奇怪，如 godbolt https:&#x2F;&#x2F;godbolt.org&#x2F;z&#x2F;q8xjb8Ehe，这里 gcc 生成了没有 memcpy 和 memset 的代码，一种迫切的欲望让我想看懂这块代码。但我其实一点都不懂 x86，哈哈… X86 Basicsx86 这里有不同的 “DataType”:   之后会看到，我们">
+<meta property="og:type" content="article">
+<meta property="og:title" content="x86 basics and code analysis with ai">
+<meta property="og:url" content="http://blog.mwish.me/2024/09/01/x86-basics-and-code-analysis-with-ai/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="在看一个 pr 的时候 [1]，我尝试把它 port 到 C++ 时候发现有一些地方比较奇怪，如 godbolt https:&#x2F;&#x2F;godbolt.org&#x2F;z&#x2F;q8xjb8Ehe，这里 gcc 生成了没有 memcpy 和 memset 的代码，一种迫切的欲望让我想看懂这块代码。但我其实一点都不懂 x86，哈哈… X86 Basicsx86 这里有不同的 “DataType”:   之后会看到，我们">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/3893737260563836782.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/2653587905170748908.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/2184155800356672731.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/1937105505342483656.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/2376773386775260101.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/6151551118171053536.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/8582025810182783161.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/5652305471290558240.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/2590627728604931268.png">
+<meta property="article:published_time" content="2024-09-01T06:42:41.000Z">
+<meta property="article:modified_time" content="2024-09-01T06:43:54.736Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/3893737260563836782.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>x86 basics and code analysis with ai</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">
+    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2024/08/07/The-Faiss-Library/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2024/09/01/x86-basics-and-code-analysis-with-ai/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2024/09/01/x86-basics-and-code-analysis-with-ai/&text=x86 basics and code analysis with ai"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2024/09/01/x86-basics-and-code-analysis-with-ai/&title=x86 basics and code analysis with ai"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2024/09/01/x86-basics-and-code-analysis-with-ai/&is_video=false&description=x86 basics and code analysis with ai"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=x86 basics and code analysis with ai&body=Check out this article: http://blog.mwish.me/2024/09/01/x86-basics-and-code-analysis-with-ai/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2024/09/01/x86-basics-and-code-analysis-with-ai/&title=x86 basics and code analysis with ai"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2024/09/01/x86-basics-and-code-analysis-with-ai/&title=x86 basics and code analysis with ai"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2024/09/01/x86-basics-and-code-analysis-with-ai/&title=x86 basics and code analysis with ai"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2024/09/01/x86-basics-and-code-analysis-with-ai/&title=x86 basics and code analysis with ai"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2024/09/01/x86-basics-and-code-analysis-with-ai/&name=x86 basics and code analysis with ai&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2024/09/01/x86-basics-and-code-analysis-with-ai/&t=x86 basics and code analysis with ai"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#X86-Basics"><span class="toc-number">1.</span> <span class="toc-text">X86 Basics</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AF%84%E5%AD%98%E5%99%A8"><span class="toc-number">1.1.</span> <span class="toc-text">寄存器</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9F%BA%E6%9C%AC%E6%8C%87%E4%BB%A4%E4%BB%8B%E7%BB%8D"><span class="toc-number">1.2.</span> <span class="toc-text">基本指令介绍</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Data-Transfer-%E5%92%8C%E5%AF%BB%E5%9D%80%E6%A8%A1%E5%BC%8F"><span class="toc-number">1.2.1.</span> <span class="toc-text">Data Transfer 和寻址模式</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%9F%BA%E6%9C%AC%E8%BF%90%E7%AE%97"><span class="toc-number">1.2.2.</span> <span class="toc-text">基本运算</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Control-Instructions"><span class="toc-number">1.2.3.</span> <span class="toc-text">Control Instructions</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Calling-Convention"><span class="toc-number">1.3.</span> <span class="toc-text">Calling Convention</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Stack-Frame-and-Red-Zone"><span class="toc-number">1.3.1.</span> <span class="toc-text">Stack Frame and Red Zone</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%B5%81%E6%B0%B4%E7%BA%BF"><span class="toc-number">1.4.</span> <span class="toc-text">流水线</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Ask-AI-to-rewrite-code-into-C"><span class="toc-number">2.</span> <span class="toc-text">Ask AI to rewrite code into C++</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B9%8C%E9%BE%99"><span class="toc-number">3.</span> <span class="toc-text">乌龙</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#References"><span class="toc-number">4.</span> <span class="toc-text">References</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        x86 basics and code analysis with ai
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2024-09-01T06:42:41.000Z" itemprop="datePublished">2024-09-01</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>在看一个 pr 的时候 [1]，我尝试把它 port 到 C++ 时候发现有一些地方比较奇怪，如 godbolt <a target="_blank" rel="noopener" href="https://godbolt.org/z/q8xjb8Ehe，这里">https://godbolt.org/z/q8xjb8Ehe，这里</a> gcc 生成了没有 memcpy 和 memset 的代码，一种迫切的欲望让我想看懂这块代码。但我其实一点都不懂 x86，哈哈…</p>
+<h2 id="X86-Basics"><a href="#X86-Basics" class="headerlink" title="X86 Basics"></a>X86 Basics</h2><p>x86 这里有不同的 “DataType”:</p>
+<p><img src="https://image.mwish.me/blog-image/3893737260563836782.png" alt="img"></p>
+<p><img src="https://image.mwish.me/blog-image/2653587905170748908.png" alt="img"></p>
+<p>之后会看到，我们很多指令和它们相关。</p>
+<h3 id="寄存器"><a href="#寄存器" class="headerlink" title="寄存器"></a>寄存器</h3><p>x86-64 大体寄存器如下图。我们可以看到，这里有 General Purpose Register 和 {TODO}</p>
+<p><img src="https://image.mwish.me/blog-image/2184155800356672731.png" alt="img"></p>
+<p>General Purpose Register 如下图：</p>
+<p><img src="https://image.mwish.me/blog-image/1937105505342483656.png" alt="img"></p>
+<p>关于这块，还有个问题比较有意思：CPU寄存器的命名有没有来由？ - 知乎 <a target="_blank" rel="noopener" href="https://www.zhihu.com/question/351139937">https://www.zhihu.com/question/351139937</a></p>
+<p>此外，还有一些比较有意思的东西：</p>
+<blockquote>
+<p>尽管它们被指定为通用寄存器，但 x86-64 指令集对其使用施加了一些值得注意的限制。多条指令要么需要要么隐式使用特定寄存器作为操作数。这是从 8086 继承而来的传统方案，表面上提高了代码密度。例如，imul（乘以有符号整数）指令的某些变体将计算出的乘积保存在 RDX:RAX、EDX:EAX、DX:AX 或 AX 中。此处使用的冒号表示法表示最终乘积存储在两个寄存器中，第一个寄存器保存最高有效位。 idiv（除以有符号整数）要求将整数被除数加载到 RDX:RAX、EDX:EAX、DX:AX 或 AX 中。 x86-64 字符串指令分别使用寄存器 RSI 和 RDI 作为源缓冲区和目标缓冲区；使用重复（或长度）计数的字符串指令必须将此值加载到寄存器 RCX 中。</p>
+</blockquote>
+<p>这里面，使用上有一些 idiom</p>
+<p><img src="https://image.mwish.me/blog-image/2376773386775260101.png" alt="img"></p>
+<p>SIMD/Float 有关的寄存器见之前的博客：<a href="https://blog.mwish.me/2024/03/24/SIMD-Extensions-and-AVX/">https://blog.mwish.me/2024/03/24/SIMD-Extensions-and-AVX/</a></p>
+<h3 id="基本指令介绍"><a href="#基本指令介绍" class="headerlink" title="基本指令介绍"></a>基本指令介绍</h3><p>在介绍 calling convention 之前，我们可以介绍一下基本的指令</p>
+<h4 id="Data-Transfer-和寻址模式"><a href="#Data-Transfer-和寻址模式" class="headerlink" title="Data Transfer 和寻址模式"></a>Data Transfer 和寻址模式</h4><p>我们在很久之前（我刚毕业的时候，哈哈…）介绍过 RISC-V，可以看到 rv 没有这么多狗屁倒灶。这里有个乐子就是 x86 mov 据说是图灵完备的，很神秘。</p>
+<p><img src="https://image.mwish.me/blog-image/6151551118171053536.png" alt="img"></p>
+<p>上面的规则看上去无所不能，所以我们直接关注有什么是「不能」的：</p>
+<ul>
+<li>The destination cannot be a constant (duh!)</li>
+<li>You cannot access memory twice in one instruction</li>
+</ul>
+<p>有一条比较有意思的常见指令 <code>lea</code>，就是算出寻址后的位置，然后给对应的寄存器</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">lea rax, [<span class="keyword">var</span>]</span><br><span class="line">lea rdi, [rbx+<span class="number">4</span>*rsi]</span><br></pre></td></tr></table></figure>
+<p>此外，这里还有一条 <code>push</code> 指令，会把 <code>rsp - 8</code>, 然后把数据拷贝上去；pop 则相反，<code>rsp + 8</code>，然后 pop 出数据</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">push rax</span><br><span class="line">push [<span class="keyword">var</span>]</span><br><span class="line">pushq --&gt; push quad word</span><br><span class="line"></span><br><span class="line">pop rax</span><br><span class="line">pop [<span class="keyword">var</span>]</span><br><span class="line">popq</span><br></pre></td></tr></table></figure>
+<h4 id="基本运算"><a href="#基本运算" class="headerlink" title="基本运算"></a>基本运算</h4><p>这里需要记住浮点数那堆指令集。这里不介绍，但是有一些特殊的可以快速记忆一下</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">and rax, <span class="number">0</span>fH -- 给低位清零</span><br><span class="line">xor rcx, rcx -- rcx = <span class="number">0</span></span><br></pre></td></tr></table></figure>
+<h4 id="Control-Instructions"><a href="#Control-Instructions" class="headerlink" title="Control Instructions"></a>Control Instructions</h4><p>我们有个最初的 unconditional jump，这个一定很好理解，就不介绍了：<code>jmp</code>。</p>
+<p>另一个关键指令是 <code>cmp</code>，<code>cmp</code> 的限制和 <code>mov</code> 一样，这里会设置对应的状态寄存器。之后这里可能可以有对应的 <code>j&#123;</code><em><code>condition&#125;</code></em> 指令，condition 代表跳转的条件。猜一猜下面这几个都是啥：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">jne, jz, jg, jge, jl, jle, js</span><br></pre></td></tr></table></figure>
+<p>答案列在下面</p>
+<div class="table-container">
+<table>
+<thead>
+<tr>
+<th><strong>Instruction</strong></th>
+<th>Useful to…</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>jmp</td>
+<td>Always jump</td>
+</tr>
+<tr>
+<td>ja</td>
+<td>Unsigned &gt;</td>
+</tr>
+<tr>
+<td>jae</td>
+<td>Unsigned &gt;=</td>
+</tr>
+<tr>
+<td>jb</td>
+<td>Unsigned &lt;</td>
+</tr>
+<tr>
+<td>jbe</td>
+<td>Unsigned &lt;=</td>
+</tr>
+<tr>
+<td>jc</td>
+<td>Unsigned overflow, or multiprecision add</td>
+</tr>
+<tr>
+<td>jecxz</td>
+<td>Compare ecx with 0 (Seriously!?)</td>
+</tr>
+<tr>
+<td>je</td>
+<td>Equality</td>
+</tr>
+<tr>
+<td>jg</td>
+<td>Signed &gt;</td>
+</tr>
+<tr>
+<td>jge</td>
+<td>Signed &gt;=</td>
+</tr>
+<tr>
+<td>jl</td>
+<td>Signed &lt;</td>
+</tr>
+<tr>
+<td>jle</td>
+<td>Signed &lt;=</td>
+</tr>
+<tr>
+<td>jl</td>
+<td>Signed &lt;</td>
+</tr>
+<tr>
+<td>jle</td>
+<td>Signed &lt;=</td>
+</tr>
+<tr>
+<td>jne</td>
+<td>Inequality</td>
+</tr>
+<tr>
+<td>jo</td>
+<td>Signed overflow</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>此外，还有 <code>call</code> 和 <code>ret</code>. 在 RISC-V 中有差不多的指令。</p>
+<p>这里还有个指令是 <code>cmov</code> 族，比如：<a target="_blank" rel="noopener" href="https://kristerw.github.io/2022/05/24/branchless/">https://kristerw.github.io/2022/05/24/branchless/</a> 。这种用于在短指令的时候帮助生成 branchless 友好的代码</p>
+<h3 id="Calling-Convention"><a href="#Calling-Convention" class="headerlink" title="Calling Convention"></a>Calling Convention</h3><p>这里有：</p>
+<ol>
+<li>Ykiko 大佬的博客，这段介绍 C++ 的 Calling Convention 的部分非常详细 <a target="_blank" rel="noopener" href="https://www.ykiko.me/en/articles/692886292/">https://www.ykiko.me/en/articles/692886292/</a></li>
+<li><a target="_blank" rel="noopener" href="https://en.wikipedia.org/wiki/X86_calling_conventions">https://en.wikipedia.org/wiki/X86_calling_conventions</a> wiki</li>
+<li><a target="_blank" rel="noopener" href="https://aaronbloomfield.github.io/pdr/book/x86-64bit-ccc-chapter.pdf">https://aaronbloomfield.github.io/pdr/book/x86-64bit-ccc-chapter.pdf</a></li>
+</ol>
+<p>1-3 看完可以回头看看 1。这里阅读之前，可以看到 x86 非 64 位有一堆神鬼莫测的坑，包括不同的 calling convention。64 位基本统一到了 System V ABI 和 Windows ABI。前者在 Linux MacOS 等系统上为事实标准。著名的神坑 Red Zone 也是这个标准下的一部分。</p>
+<p>这个标准的 Spec 见: <a target="_blank" rel="noopener" href="https://gitlab.com/x86-psABIs/x86-64-ABI">https://gitlab.com/x86-psABIs/x86-64-ABI</a></p>
+<p>首先关注下面</p>
+<p><img src="https://image.mwish.me/blog-image/8582025810182783161.png" alt="img"></p>
+<p>关于参数传递，这里有意思的是 16B 以下的 pod 结构可能会拆成两个寄存器（见 spec 里面的 Parameter Passing 一节，这里也有个帮助理解的 SO <a target="_blank" rel="noopener" href="https://stackoverflow.com/questions/65992291/x86-64-system-v-abi-argument-classification-for-parameter-passing">https://stackoverflow.com/questions/65992291/x86-64-system-v-abi-argument-classification-for-parameter-passing</a> )</p>
+<p>简单规则是（这里我大概读了一下原文，意外的很简单）：</p>
+<ul>
+<li>参数类型有：MEMORY, SSE, SSEUP, INTEGER, X87_FPU 和一些为初始化的条件</li>
+<li>MEMORY 在内存栈上传递参数，Integer 在 <code>%rdi, %rsi, %rdx, %rcx, %r8, %r9</code> 这几个寄存器中参数传递，SSE/SSEUP 用 <code>%xmm0 - %xmm7</code></li>
+<li>64B 以下的对齐结构中（不对齐只走mem），有的结构能拆到寄存器中传参数，不考虑 SSE 类型的话，这里需要不大于 16B，然后允许拆分成寄存器</li>
+</ul>
+<p>返回规则也是用这一套做类型判定的：</p>
+<blockquote>
+<p><strong>MEMORY 类型:</strong> 调用者在内存中预留空间，并将该空间的地址作为第一个参数传递给函数。函数将返回值存储在这个空间中，并返回该地址（在 %rax 中）。这里可以看到有点像咱们写代码里面直接输出参数了。</p>
+<p><strong>INTEGER 类型:</strong> 返回值存储在下一个可用的通用寄存器 %rax 或 %rdx 中。</p>
+<p><strong>SSE 类型:</strong> 返回值存储在下一个可用的 SSE 寄存器 %xmm0 或 %xmm1 中。</p>
+<p><strong>SSEUP 类型:</strong> 返回值存储在上一个使用的 SSE 寄存器的下一个可用 8 字节块中。</p>
+</blockquote>
+<h4 id="Stack-Frame-and-Red-Zone"><a href="#Stack-Frame-and-Red-Zone" class="headerlink" title="Stack Frame and Red Zone"></a>Stack Frame and Red Zone</h4><blockquote>
+<p>The 128-byte area beyond the location pointed to by %rsp is considered to be reserved and shall not be modiﬁed by signal or interrupt handlers. Therefore, functions may use this area for temporary data that is not needed across function calls. In particular, leaf functions may use this area for their entire stack frame, rather than adjusting the stack pointer in the prologue and epilogue. This area is known as the red zone.</p>
+</blockquote>
+<p><img src="https://image.mwish.me/blog-image/5652305471290558240.png" alt="img"></p>
+<h3 id="流水线"><a href="#流水线" class="headerlink" title="流水线"></a>流水线</h3><p>这里可以看到下面的 CPU 执行。这里也可以看到，指令的执行是个很含糊的概念，和很多东西有关，但是代码多也不一定真的就慢了，具体还是得靠 benchmark 工具来测试。</p>
+<p><img src="https://image.mwish.me/blog-image/2590627728604931268.png" alt="img"></p>
+<h2 id="Ask-AI-to-rewrite-code-into-C"><a href="#Ask-AI-to-rewrite-code-into-C" class="headerlink" title="Ask AI to rewrite code into C++"></a>Ask AI to rewrite code into C++</h2><p>回到我们最初的问题，我们现在已经熟悉了 x86 的指令，但你以为我就会看他代码了？我先把全部代码贴一下</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br></pre></td><td class="code"><pre><span class="line">makeInline1(char const*, int):</span><br><span class="line">        mov     DWORD PTR [rsp-40], esi</span><br><span class="line">        movsx   rsi, esi --&gt; int 成4位</span><br><span class="line">        lea     rax, [rsp-36] --&gt; 输入放到 rax 重</span><br><span class="line">        mov     QWORD PTR [rsp-36], 0</span><br><span class="line">        mov     DWORD PTR [rsp-28], 0</span><br><span class="line">        cmp     rsi, 8 --&gt; </span><br><span class="line">        jnb     .L2</span><br><span class="line">        test    sil, 4</span><br><span class="line">        jne     .L16</span><br><span class="line">        test    rsi, rsi</span><br><span class="line">        je      .L3</span><br><span class="line">        movzx   eax, BYTE PTR [rdi] --&gt; 这条指令会从 rdi 指向的内存地址读取一个字节，并将这个字节的值存储到 eax 寄存器的低8位（即 al 寄存器），同时将 eax 的高24位清零。</span><br><span class="line">        mov     BYTE PTR [rsp-36], al --&gt; 目标操作数，表示将数据存储到 rsp-36 寄存器指向的内存地址，并且只存储一个字节。al 是 eax 的低八位</span><br><span class="line">        test    sil, 2</span><br><span class="line">        jne     .L17</span><br><span class="line">.L3:</span><br><span class="line">        mov     rax, QWORD PTR [rsp-40]</span><br><span class="line">        mov     rdx, QWORD PTR [rsp-32]</span><br><span class="line">        ret</span><br><span class="line">.L2:</span><br><span class="line">        mov     rdx, QWORD PTR [rdi]</span><br><span class="line">        mov     QWORD PTR [rsp-36], rdx</span><br><span class="line">        mov     rdx, QWORD PTR [rdi-8+rsi]</span><br><span class="line">        mov     QWORD PTR [rsp-44+rsi], rdx</span><br><span class="line">        lea     rdx, [rsp-32]</span><br><span class="line">        sub     rax, rdx</span><br><span class="line">        add     rsi, rax</span><br><span class="line">        sub     rdi, rax</span><br><span class="line">        and     rsi, -8</span><br><span class="line">        cmp     rsi, 8</span><br><span class="line">        jb      .L3</span><br><span class="line">        and     rsi, -8</span><br><span class="line">        xor     eax, eax</span><br><span class="line">.L6:</span><br><span class="line">        mov     rcx, QWORD PTR [rdi+rax]</span><br><span class="line">        mov     QWORD PTR [rdx+rax], rcx</span><br><span class="line">        add     rax, 8</span><br><span class="line">        cmp     rax, rsi</span><br><span class="line">        jb      .L6</span><br><span class="line">        jmp     .L3</span><br><span class="line">.L16:</span><br><span class="line">        mov     eax, DWORD PTR [rdi]</span><br><span class="line">        mov     DWORD PTR [rsp-36], eax</span><br><span class="line">        mov     eax, DWORD PTR [rdi-4+rsi]</span><br><span class="line">        mov     DWORD PTR [rsp-40+rsi], eax</span><br><span class="line">        jmp     .L3</span><br><span class="line">.L17:</span><br><span class="line">        movzx   eax, WORD PTR [rdi-2+rsi]</span><br><span class="line">        mov     WORD PTR [rsp-38+rsi], ax</span><br><span class="line">        jmp     .L3</span><br></pre></td></tr></table></figure>
+<p>然后这里，我让 gemini 帮我把这段代码改写成 C 语言</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br></pre></td><td class="code"><pre><span class="line">c_type makeInline1(const char* data, int32_t size) &#123;</span><br><span class="line">    // Ensure data size is within inline limit</span><br><span class="line">    ARROW_COMPILER_ASSUME(size &lt;= kInlineSize); </span><br><span class="line"></span><br><span class="line">    c_type out;</span><br><span class="line">    out.inlined = &#123;size, &#123;&#125;&#125;; // Initialize &#x27;out&#x27; with size and empty data</span><br><span class="line"></span><br><span class="line">    // Handle cases where size is less than 8 bytes</span><br><span class="line">    if (size &lt; 8) &#123;</span><br><span class="line">        if (size &amp; 4) &#123; // Check if size is a multiple of 4</span><br><span class="line">            memcpy(&amp;out.inlined.data, data, size); // Direct copy if not a multiple of 4</span><br><span class="line">        &#125; else &#123;</span><br><span class="line">            if (size &gt; 0) &#123;</span><br><span class="line">                out.inlined.data[0] = data[0]; // Copy first byte</span><br><span class="line">            &#125;</span><br><span class="line">            if (size &amp; 2) &#123; // Check if size is odd</span><br><span class="line">                memcpy(&amp;out.inlined.data[size - 2], &amp;data[size - 2], 2); // Copy last two bytes if odd</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        return out;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    // Handle cases where size is 8 bytes or more</span><br><span class="line">    memcpy(&amp;out.inlined.data, data, 8); // Copy first 8 bytes</span><br><span class="line"></span><br><span class="line">    // Calculate remaining bytes to copy, ensuring it&#x27;s a multiple of 8</span><br><span class="line">    int64_t remaining_bytes = size - 8;</span><br><span class="line">    remaining_bytes = remaining_bytes &amp; -8; // Round down to nearest multiple of 8</span><br><span class="line"></span><br><span class="line">    if (remaining_bytes &gt; 0) &#123;</span><br><span class="line">        memcpy(&amp;out.inlined.data[8], &amp;data[8], remaining_bytes); // Copy remaining bytes in chunks of 8</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    return out;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>我们不难看出，这段代码是错的。或许有一天 AI 或者 fine-tune 的 ai 能生成对应的代码，但是至少…今天不行？</p>
+<p>那么我们想到…C汇编转 goto 会不会好一些？还真是。我把 prompt 改成</p>
+<blockquote>
+<p>能再次尝试把汇编翻译为 C 语言代码吗？跳转的地方，比如</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">je      .L3</span><br></pre></td></tr></table></figure>
+<p>和</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">test    sil, 2</span><br><span class="line">        jne     .L17</span><br></pre></td></tr></table></figure>
+<p>使用 Goto 来翻译</p>
+</blockquote>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br></pre></td><td class="code"><pre><span class="line">c_type <span class="title function_">makeInline1</span><span class="params">(<span class="type">const</span> <span class="type">char</span>* data, <span class="type">int32_t</span> size)</span> &#123;</span><br><span class="line">    ARROW_COMPILER_ASSUME(size &lt;= kInlineSize);</span><br><span class="line"></span><br><span class="line">    c_type out;</span><br><span class="line">    out.inlined = &#123;size, &#123;&#125;&#125;;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (size &gt;= <span class="number">8</span>) &#123; </span><br><span class="line">        <span class="keyword">goto</span> L2; </span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> ((size &amp; <span class="number">4</span>) != <span class="number">0</span>) &#123; <span class="comment">// Check if size is a multiple of 4</span></span><br><span class="line">        <span class="keyword">goto</span> L16;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (size == <span class="number">0</span>) &#123;</span><br><span class="line">        <span class="keyword">goto</span> L3;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    out.inlined.data[<span class="number">0</span>] = data[<span class="number">0</span>];</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> ((size &amp; <span class="number">2</span>) != <span class="number">0</span>) &#123; <span class="comment">// Check if size is odd</span></span><br><span class="line">        <span class="keyword">goto</span> L17;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">L3:</span><br><span class="line">    <span class="keyword">return</span> out;</span><br><span class="line"></span><br><span class="line">L2:</span><br><span class="line">    <span class="built_in">memcpy</span>(&amp;out.inlined.data, data, <span class="number">8</span>);</span><br><span class="line"></span><br><span class="line">    <span class="type">int64_t</span> remaining_bytes = size - <span class="number">8</span>;</span><br><span class="line">    remaining_bytes &amp;= <span class="number">-8</span>; <span class="comment">// Round down to nearest multiple of 8</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (remaining_bytes &lt; <span class="number">8</span>) &#123;</span><br><span class="line">        <span class="keyword">goto</span> L3;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">for</span> (<span class="type">int64_t</span> offset = <span class="number">0</span>; offset &lt; remaining_bytes; offset += <span class="number">8</span>) &#123;</span><br><span class="line">        <span class="built_in">memcpy</span>(&amp;out.inlined.data[<span class="number">8</span> + offset], &amp;data[<span class="number">8</span> + offset], <span class="number">8</span>);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">goto</span> L3;</span><br><span class="line"></span><br><span class="line">L16:</span><br><span class="line">    <span class="built_in">memcpy</span>(&amp;out.inlined.data, data, size);</span><br><span class="line">    <span class="keyword">goto</span> L3;</span><br><span class="line"></span><br><span class="line">L17:</span><br><span class="line">    <span class="built_in">memcpy</span>(&amp;out.inlined.data[size - <span class="number">2</span>], &amp;data[size - <span class="number">2</span>], <span class="number">2</span>);</span><br><span class="line">    <span class="keyword">goto</span> L3;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>成了兄弟！完美！</p>
+<h2 id="乌龙"><a href="#乌龙" class="headerlink" title="乌龙"></a>乌龙</h2><p>最后发现这段代码其实就是 memset，memcpy 的具体实现这个例子本质上是 gcc 把 memcpy memset 拆开了，拆到了计算里面. 为什么 LLVM 没有这个呢，我也不知道，可能等后续探索了。</p>
+<h2 id="References"><a href="#References" class="headerlink" title="References"></a>References</h2><ol>
+<li><a target="_blank" rel="noopener" href="https://github.com/apache/arrow-rs/issues/6034">https://github.com/apache/arrow-rs/issues/6034</a> Improve performance of constructing <code>ByteView</code>s for small strings</li>
+<li><a target="_blank" rel="noopener" href="https://godbolt.org/z/q8xjb8Ehe">https://godbolt.org/z/q8xjb8Ehe</a> 上面这对应的可优化代码</li>
+<li><a target="_blank" rel="noopener" href="https://gitlab.com/x86-psABIs/x86-64-ABI">https://gitlab.com/x86-psABIs/x86-64-ABI</a> x86-64 System V ABI</li>
+<li>Ykiko 大佬的博客，这段介绍 C++ 的 Calling Convention 的部分非常详细 <a target="_blank" rel="noopener" href="https://www.ykiko.me/en/articles/692886292/">https://www.ykiko.me/en/articles/692886292/</a></li>
+<li><a target="_blank" rel="noopener" href="https://en.wikipedia.org/wiki/X86_calling_conventions">https://en.wikipedia.org/wiki/X86_calling_conventions</a> wiki</li>
+<li><a target="_blank" rel="noopener" href="https://aaronbloomfield.github.io/pdr/book/x86-64bit-ccc-chapter.pdf">https://aaronbloomfield.github.io/pdr/book/x86-64bit-ccc-chapter.pdf</a></li>
+<li><a target="_blank" rel="noopener" href="https://kristerw.github.io/2022/05/24/branchless/">https://kristerw.github.io/2022/05/24/branchless/</a></li>
+</ol>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#X86-Basics"><span class="toc-number">1.</span> <span class="toc-text">X86 Basics</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AF%84%E5%AD%98%E5%99%A8"><span class="toc-number">1.1.</span> <span class="toc-text">寄存器</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9F%BA%E6%9C%AC%E6%8C%87%E4%BB%A4%E4%BB%8B%E7%BB%8D"><span class="toc-number">1.2.</span> <span class="toc-text">基本指令介绍</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Data-Transfer-%E5%92%8C%E5%AF%BB%E5%9D%80%E6%A8%A1%E5%BC%8F"><span class="toc-number">1.2.1.</span> <span class="toc-text">Data Transfer 和寻址模式</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%9F%BA%E6%9C%AC%E8%BF%90%E7%AE%97"><span class="toc-number">1.2.2.</span> <span class="toc-text">基本运算</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Control-Instructions"><span class="toc-number">1.2.3.</span> <span class="toc-text">Control Instructions</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Calling-Convention"><span class="toc-number">1.3.</span> <span class="toc-text">Calling Convention</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Stack-Frame-and-Red-Zone"><span class="toc-number">1.3.1.</span> <span class="toc-text">Stack Frame and Red Zone</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%B5%81%E6%B0%B4%E7%BA%BF"><span class="toc-number">1.4.</span> <span class="toc-text">流水线</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Ask-AI-to-rewrite-code-into-C"><span class="toc-number">2.</span> <span class="toc-text">Ask AI to rewrite code into C++</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B9%8C%E9%BE%99"><span class="toc-number">3.</span> <span class="toc-text">乌龙</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#References"><span class="toc-number">4.</span> <span class="toc-text">References</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2024/09/01/x86-basics-and-code-analysis-with-ai/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2024/09/01/x86-basics-and-code-analysis-with-ai/&text=x86 basics and code analysis with ai"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2024/09/01/x86-basics-and-code-analysis-with-ai/&title=x86 basics and code analysis with ai"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2024/09/01/x86-basics-and-code-analysis-with-ai/&is_video=false&description=x86 basics and code analysis with ai"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=x86 basics and code analysis with ai&body=Check out this article: http://blog.mwish.me/2024/09/01/x86-basics-and-code-analysis-with-ai/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2024/09/01/x86-basics-and-code-analysis-with-ai/&title=x86 basics and code analysis with ai"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2024/09/01/x86-basics-and-code-analysis-with-ai/&title=x86 basics and code analysis with ai"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2024/09/01/x86-basics-and-code-analysis-with-ai/&title=x86 basics and code analysis with ai"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2024/09/01/x86-basics-and-code-analysis-with-ai/&title=x86 basics and code analysis with ai"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2024/09/01/x86-basics-and-code-analysis-with-ai/&name=x86 basics and code analysis with ai&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2024/09/01/x86-basics-and-code-analysis-with-ai/&t=x86 basics and code analysis with ai"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+</body>
+</html>
