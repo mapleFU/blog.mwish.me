@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="我们在之前介绍过 Strict Alias，也介绍过 __restrict__ 对自动向量化的影响。可以看到，在编译阶段，如果手动告诉编译器相关的知识，它也能更好的指导你的代码的生成。实际上，在写一些函数的时候，如果你能保证输入符合需求的话，那么 「ub is good」，比如在 [1] 的例子中，我们有如下的函数： 1234567891011121314151617181920212223242">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Compiler Assume">
+<meta property="og:url" content="http://blog.mwish.me/2024/09/07/Compiler-Assume/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="我们在之前介绍过 Strict Alias，也介绍过 __restrict__ 对自动向量化的影响。可以看到，在编译阶段，如果手动告诉编译器相关的知识，它也能更好的指导你的代码的生成。实际上，在写一些函数的时候，如果你能保证输入符合需求的话，那么 「ub is good」，比如在 [1] 的例子中，我们有如下的函数： 1234567891011121314151617181920212223242">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2024-09-07T15:59:41.000Z">
+<meta property="article:modified_time" content="2024-09-07T16:02:42.641Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>Compiler Assume</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2024/09/01/x86-basics-and-code-analysis-with-ai/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2024/09/07/Compiler-Assume/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2024/09/07/Compiler-Assume/&text=Compiler Assume"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2024/09/07/Compiler-Assume/&title=Compiler Assume"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2024/09/07/Compiler-Assume/&is_video=false&description=Compiler Assume"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Compiler Assume&body=Check out this article: http://blog.mwish.me/2024/09/07/Compiler-Assume/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2024/09/07/Compiler-Assume/&title=Compiler Assume"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2024/09/07/Compiler-Assume/&title=Compiler Assume"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2024/09/07/Compiler-Assume/&title=Compiler Assume"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2024/09/07/Compiler-Assume/&title=Compiler Assume"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2024/09/07/Compiler-Assume/&name=Compiler Assume&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2024/09/07/Compiler-Assume/&t=Compiler Assume"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Assume-%E7%9A%84%E4%BD%BF%E7%94%A8"><span class="toc-number">1.</span> <span class="toc-text">Assume 的使用</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#assume-amp-assert"><span class="toc-number">2.</span> <span class="toc-text">assume &amp; assert</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%9C%9F%E7%9A%84%E6%9C%89%E4%BC%98%E5%8C%96%E5%90%97"><span class="toc-number">3.</span> <span class="toc-text">真的有优化吗</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#References"><span class="toc-number">4.</span> <span class="toc-text">References</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Compiler Assume
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2024-09-07T15:59:41.000Z" itemprop="datePublished">2024-09-07</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>我们在之前介绍过 Strict Alias，也介绍过 <code>__restrict__</code> 对自动向量化的影响。可以看到，在编译阶段，如果手动告诉编译器相关的知识，它也能更好的指导你的代码的生成。实际上，在写一些函数的时候，如果你能保证输入符合需求的话，那么 「ub is good」，比如在 [1] 的例子中，我们有如下的函数：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// Bitmask selecting the k-th bit in a byte</span></span><br><span class="line"><span class="type">static</span> <span class="keyword">constexpr</span> <span class="type">uint8_t</span> kBitmask[] = &#123;<span class="number">1</span>, <span class="number">2</span>, <span class="number">4</span>, <span class="number">8</span>, <span class="number">16</span>, <span class="number">32</span>, <span class="number">64</span>, <span class="number">128</span>&#125;;</span><br><span class="line"></span><br><span class="line"><span class="comment">// Gets the i-th bit from a byte. Should only be used with i &lt;= 7.</span></span><br><span class="line"><span class="function"><span class="type">static</span> <span class="keyword">constexpr</span> <span class="type">bool</span> <span class="title">GetBitFromByte1</span><span class="params">(<span class="type">uint8_t</span> byte, <span class="type">uint8_t</span> i)</span> </span>&#123;</span><br><span class="line">  <span class="keyword">return</span> byte &amp; <span class="built_in">GetBitMask</span>(i);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T&gt;</span><br><span class="line"><span class="function"><span class="type">static</span> <span class="keyword">constexpr</span> <span class="type">uint8_t</span> <span class="title">GetBitMask</span><span class="params">(T index)</span> </span>&#123;</span><br><span class="line">  <span class="comment">// DCHECK(index &gt;= 0 &amp;&amp; index &lt;= 7);</span></span><br><span class="line">  <span class="built_in">ARROW_COMPILER_ASSUME</span>(index &gt;= <span class="number">0</span>);</span><br><span class="line">  <span class="keyword">return</span> <span class="built_in">static_cast</span>&lt;<span class="type">uint8_t</span>&gt;(<span class="number">1</span>) &lt;&lt; index;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// Gets the i-th bit from a byte. Should only be used with i &lt;= 7.</span></span><br><span class="line"><span class="function"><span class="type">static</span> <span class="keyword">constexpr</span> <span class="type">bool</span> <span class="title">GetBitFromByte2</span><span class="params">(<span class="type">uint8_t</span> byte, <span class="type">uint8_t</span> i)</span> </span>&#123;</span><br><span class="line">  <span class="keyword">return</span> byte &amp; <span class="built_in">GetBitMask</span>(i);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">SetBit2</span><span class="params">(<span class="type">uint8_t</span>* bits, <span class="type">int64_t</span> i)</span> </span>&#123; bits[i / <span class="number">8</span>] |= <span class="built_in">GetBitmask2</span>(i % <span class="number">8</span>); &#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">SetBit2NNeg</span><span class="params">(<span class="type">uint8_t</span>* bits, <span class="type">int64_t</span> i)</span> </span>&#123;</span><br><span class="line">  <span class="built_in">ASSUME</span>(i &gt;= <span class="number">0</span>);</span><br><span class="line">  bits[i / <span class="number">8</span>] |= <span class="built_in">GetBitmask2</span>(i % <span class="number">8</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>可以看到，<code>GetBitFromByte2</code> 中，<code>GetBitMask</code> 实际上可以告诉编译器「这里 index 只会，只应该是 [0,7] 中的数字」，在 <code>GetBitFromByte1</code> 中，这个操作也是一份 UB。在这种情况下，如果调用的地方没被编译器找出来 index 的范围，直接优化掉的话，可能会有多余的 checking 代码，相关例子见：[2]</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">SetBit2</span>(<span class="type">unsigned</span> <span class="type">char</span>*, <span class="type">long</span>):</span><br><span class="line">        mov     rcx, rsi</span><br><span class="line">        lea     rax, [rsi + <span class="number">7</span>]</span><br><span class="line">        test    rsi, rsi</span><br><span class="line">        cmovns  rax, rsi</span><br><span class="line">        mov     edx, eax</span><br><span class="line">        <span class="keyword">and</span>     edx, <span class="number">248</span></span><br><span class="line">        sub     ecx, edx</span><br><span class="line">        mov     edx, <span class="number">1</span></span><br><span class="line">        shl     edx, cl</span><br><span class="line">        sar     rax, <span class="number">3</span></span><br><span class="line">        <span class="keyword">or</span>      byte ptr [rdi + rax], <span class="function">dl</span></span><br><span class="line"><span class="function">        ret</span></span><br><span class="line"><span class="function"></span></span><br><span class="line"><span class="function"><span class="title">SetBit2NNeg</span><span class="params">(<span class="type">unsigned</span> <span class="type">char</span>*, <span class="type">long</span>)</span>:</span></span><br><span class="line"><span class="function">        mov     ecx, esi</span></span><br><span class="line"><span class="function">        and     cl, <span class="number">7</span></span></span><br><span class="line"><span class="function">        mov     al, <span class="number">1</span></span></span><br><span class="line"><span class="function">        shl     al, cl</span></span><br><span class="line"><span class="function">        shr     rsi, <span class="number">3</span></span></span><br><span class="line"><span class="function">        or      byte ptr [rdi + rsi], al</span></span><br><span class="line"><span class="function">        ret</span></span><br></pre></td></tr></table></figure>
+<p>在这里，下面这个就是个明显的负数检验</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">test    rsi, rsi</span><br><span class="line">cmovns  rax, rsi</span><br></pre></td></tr></table></figure>
+<p>有的时候编译器能发现这些，有的时候则像我们写 <code>__restrict__</code> 一样，需要我们手动的一些帮助。这也是 C++23 引入的 C++ attribute: assume [3] 的作用：Portable Compiler Assumption</p>
+<h2 id="Assume-的使用"><a href="#Assume-的使用" class="headerlink" title="Assume 的使用"></a>Assume 的使用</h2><p>这里你在 [3] 会看到，assume 的语法是 <code>[[assume(expression)]]</code>。在 C++23 之前的版本里面，也有类似的操作，Arrow [4] 和 Folly[5] 都有库的形式来提供 Compiler 的 Intrinsics. 我们可以简单摘抄一份 Folly 和 Arrow 的实现：</p>
+<p>Folly</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">FOLLY_ALWAYS_INLINE <span class="type">void</span> <span class="title">compiler_may_unsafely_assume</span><span class="params">(<span class="type">bool</span> cond)</span> </span>&#123;</span><br><span class="line">  <span class="built_in">FOLLY_SAFE_DCHECK</span>(cond, <span class="string">&quot;compiler-hint assumption fails at runtime&quot;</span>);</span><br><span class="line"><span class="meta">#<span class="keyword">if</span> defined(__clang__)</span></span><br><span class="line">  __builtin_assume(cond);</span><br><span class="line"><span class="meta">#<span class="keyword">elif</span> defined(__GNUC__)</span></span><br><span class="line">  <span class="keyword">if</span> (!cond) &#123;</span><br><span class="line">    __builtin_unreachable();</span><br><span class="line">  &#125;</span><br><span class="line"><span class="meta">#<span class="keyword">elif</span> defined(_MSC_VER)</span></span><br><span class="line">  __assume(cond);</span><br><span class="line"><span class="meta">#<span class="keyword">else</span></span></span><br><span class="line">  <span class="keyword">while</span> (!cond)</span><br><span class="line">    ;</span><br><span class="line"><span class="meta">#<span class="keyword">endif</span></span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>Arrow:</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#  <span class="keyword">if</span> defined(__clang__)  <span class="comment">// clang-specific</span></span></span><br><span class="line"><span class="meta">#    <span class="keyword">define</span> ARROW_COMPILER_ASSUME(expr) __builtin_assume(expr)</span></span><br><span class="line"><span class="meta">#  <span class="keyword">else</span>  <span class="comment">// GCC-specific</span></span></span><br><span class="line"><span class="meta">#    <span class="keyword">if</span> __GNUC__ &gt;= 13</span></span><br><span class="line"><span class="meta">#      <span class="keyword">define</span> ARROW_COMPILER_ASSUME(expr) __attribute__((assume(expr)))</span></span><br><span class="line"><span class="meta">#    <span class="keyword">else</span></span></span><br><span class="line"><span class="comment">// GCC does not have a built-in assume intrinsic before GCC 13, so we use an</span></span><br><span class="line"><span class="comment">// if statement and __builtin_unreachable() to achieve the same effect [2].</span></span><br><span class="line"><span class="comment">// Unlike clang&#x27;s __builtin_assume and C++23&#x27;s [[assume(expr)]], using this</span></span><br><span class="line"><span class="comment">// on GCC won&#x27;t warn about side-effects in the expression, so make sure expr</span></span><br><span class="line"><span class="comment">// is side-effect free when working with GCC versions before 13 (Jan-2024),</span></span><br><span class="line"><span class="comment">// otherwise clang/MSVC builds will fail in CI.</span></span><br><span class="line"><span class="meta">#      <span class="keyword">define</span> ARROW_COMPILER_ASSUME(expr) \</span></span><br><span class="line"><span class="meta">        <span class="keyword">if</span> (expr) &#123;                       \</span></span><br><span class="line"><span class="meta">        &#125; <span class="keyword">else</span> &#123;                          \</span></span><br><span class="line"><span class="meta">          __builtin_unreachable();        \</span></span><br><span class="line"><span class="meta">        &#125;</span></span><br><span class="line"><span class="meta">#    <span class="keyword">endif</span>  <span class="comment">// __GNUC__ &gt;= 13</span></span></span><br><span class="line"><span class="meta">#  <span class="keyword">endif</span></span></span><br></pre></td></tr></table></figure>
+<p>这里我们注意到，folly 提供的是一个 boolean 参数，Arrow 以宏的形式提供，而 C++23 以 attribute 形式提供。这个在 p1774r4 [6] 也有指出：</p>
+<ul>
+<li>不选择函数的形式，是因为 compiler assume 里面的东西不会被调用。而 assert 则不一样。</li>
+</ul>
+<p>所以，这里提供了 attribute 的形式。具体的使用可以参考 [3] 和 Arrow Folly 中的例子</p>
+<p>当然说到这里，我们就会好奇 Assume / Assert 的关系，以及…如何减少写搓了带来的问题？</p>
+<h2 id="assume-amp-assert"><a href="#assume-amp-assert" class="headerlink" title="assume &amp; assert"></a>assume &amp; assert</h2><p>我们以一篇博客作为开头，即 “Assertions Are Pessimistic, Assumptions Are Optimistic” [7] 。我们将在这里讨论 assume 的语义学和它和我们的老朋友 <code>assert</code> 的区别。</p>
+<p>我们复习一下 assert 的语义 [8]:</p>
+<ul>
+<li>如果定义了 <code>NDEBUG</code> 宏，那么它什么都不做</li>
+<li>否则，进行断言，检查 condition 的结果</li>
+</ul>
+<p>总的来看，这里在 <code>!NDEBUG</code> 的环境下，代码部分还是被执行了，文章认为它是「悲观的」，而 assume 假设一切都不会为 false，有就是 ub，里面的内容不会被执行。</p>
+<p>这个地方很有趣，某种意义上说，assume 在代码里引入了新的 UB. 我们注意到 [9][10] 的文章，即「Undefined behavior can result in time travel 」，这里的意思是，下面的 <code>assume_or_ub</code> 可以影响到之前的代码。就像春秋蝉一样，这个 assume 能够对 assume 之前的代码施加影响。</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">T <span class="title">function</span><span class="params">(..)</span> </span>&#123;</span><br><span class="line">  <span class="comment">// code part 1</span></span><br><span class="line">  ...</span><br><span class="line">  <span class="built_in">assume_or_ub</span>(...); <span class="comment">// assume_or_ub</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>那么，我们怎么安全的 assume 呢？我们回到 Folly 的答案:</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">FOLLY_ALWAYS_INLINE <span class="type">void</span> <span class="title">compiler_may_unsafely_assume</span><span class="params">(<span class="type">bool</span> cond)</span> </span>&#123;</span><br><span class="line">  <span class="built_in">FOLLY_SAFE_DCHECK</span>(cond, <span class="string">&quot;compiler-hint assumption fails at runtime&quot;</span>);</span><br><span class="line">  <span class="comment">// assume cond 为真</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>可以看到，这里进行了一轮 DCHECK。下面的 assume 会影响 DCHECK 吗导致它不执行吗，春秋蝉会成功吗？</p>
+<p>答案是不会的，这里如果在 <code>!NDEBUG</code> 的情况下，代码会类似：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> (cond) &#123;</span><br><span class="line">    assertion <span class="keyword">and</span> <span class="keyword">break</span></span><br><span class="line">&#125;</span><br><span class="line"><span class="comment">// cond 已经被满足</span></span><br><span class="line"><span class="built_in">assume</span>(cond);</span><br></pre></td></tr></table></figure>
+<p>实际上，这里可以理解为「<code>!NDEBUG</code> 的情况下，assert 某种程度上（包括 if 也有这个功能）也有 assume 后面不会 failed 的含义，即后续 assume 为 true」。</p>
+<p>在 LLVM 中，也有类似的代码，见 [11]</p>
+<p>那么 assume 和 assert 能互相推导吗？p2064r0 [12] 中 Herb Sutter 大段论述了他们的区别。简而言之，实践上，我个人感觉用户可以在自己的库里实现 Folly 类似的 Checking，就不要先想着这两个互相推导了。</p>
+<h2 id="真的有优化吗"><a href="#真的有优化吗" class="headerlink" title="真的有优化吗"></a>真的有优化吗</h2><p>无论如何，assume 仍然是个危险的操作。一般认为要试过了有优化才能加上，我们可以举出一个反例 [13]. 在这个例子中。assume 会阻止优化，当然这是 LLVM 实现的问题。笔者在 Arrow 社区也遇到过有趣的问题[14]. 这里是 Assume 不能够进行预期的优化。</p>
+<p>笔者想说的是：</p>
+<ul>
+<li>编译器比我们想象的聪明，但可能很多地方还是可能遇到问题，当然有问题报修就是了</li>
+<li>Assume 是危险的，如果没有可衡量的优化，那就别开吧！有优化的话就小心前进吧！</li>
+</ul>
+<h2 id="References"><a href="#References" class="headerlink" title="References"></a>References</h2><ol>
+<li><a target="_blank" rel="noopener" href="https://github.com/apache/arrow/pull/41690#discussion_r1603723000">https://github.com/apache/arrow/pull/41690#discussion_r1603723000</a> </li>
+<li><a target="_blank" rel="noopener" href="https://godbolt.org/z/Ez974vE3d">https://godbolt.org/z/Ez974vE3d</a></li>
+<li><a target="_blank" rel="noopener" href="https://en.cppreference.com/w/cpp/language/attributes/assume">https://en.cppreference.com/w/cpp/language/attributes/assume</a></li>
+<li>Arrow: Introduce portable compiler assumptions <a target="_blank" rel="noopener" href="https://github.com/apache/arrow/pull/41021">https://github.com/apache/arrow/pull/41021</a></li>
+<li>Folly Assume <a target="_blank" rel="noopener" href="https://github.com/facebook/folly/blob/ce5edfb9b08ead9e78cb46879e7b9499861f7cd2/folly/lang/Assume.h">https://github.com/facebook/folly/blob/ce5edfb9b08ead9e78cb46879e7b9499861f7cd2/folly/lang/Assume.h</a></li>
+<li>Portable assumptions <a target="_blank" rel="noopener" href="https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2021/p1774r4.pdf">https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2021/p1774r4.pdf</a></li>
+<li>“Assertions Are Pessimistic, Assumptions Are Optimistic” <a target="_blank" rel="noopener" href="https://blog.regehr.org/archives/1096">https://blog.regehr.org/archives/1096</a></li>
+<li>assert <a target="_blank" rel="noopener" href="https://en.cppreference.com/w/cpp/error/assert">https://en.cppreference.com/w/cpp/error/assert</a></li>
+<li>浅谈 C++ Undefined Behavior - Lancern的文章 - 知乎 <a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/391088391">https://zhuanlan.zhihu.com/p/391088391</a></li>
+<li>Undefined behavior can result in time travel (among other things, but time travel is the funkiest) <a target="_blank" rel="noopener" href="https://devblogs.microsoft.com/oldnewthing/20140627-00/?p=633">https://devblogs.microsoft.com/oldnewthing/20140627-00/?p=633</a></li>
+<li><a target="_blank" rel="noopener" href="https://github.com/llvm/llvm-project/blob/23a26e7120df474f37f7369e8e06fd90f21a58b5/libcxx/include/__assert#L76">https://github.com/llvm/llvm-project/blob/23a26e7120df474f37f7369e8e06fd90f21a58b5/libcxx/include/__assert#L76</a></li>
+<li>p2064r0 Assumptions: <a target="_blank" rel="noopener" href="https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2020/p2064r0.pdf">https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2020/p2064r0.pdf</a></li>
+<li>llvm.assume blocks optimization: <a target="_blank" rel="noopener" href="https://discourse.llvm.org/t/llvm-assume-blocks-optimization/71609/14">https://discourse.llvm.org/t/llvm-assume-blocks-optimization/71609/14</a></li>
+<li><a target="_blank" rel="noopener" href="https://github.com/llvm/llvm-project/issues/106895">https://github.com/llvm/llvm-project/issues/106895</a></li>
+</ol>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Assume-%E7%9A%84%E4%BD%BF%E7%94%A8"><span class="toc-number">1.</span> <span class="toc-text">Assume 的使用</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#assume-amp-assert"><span class="toc-number">2.</span> <span class="toc-text">assume &amp; assert</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%9C%9F%E7%9A%84%E6%9C%89%E4%BC%98%E5%8C%96%E5%90%97"><span class="toc-number">3.</span> <span class="toc-text">真的有优化吗</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#References"><span class="toc-number">4.</span> <span class="toc-text">References</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2024/09/07/Compiler-Assume/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2024/09/07/Compiler-Assume/&text=Compiler Assume"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2024/09/07/Compiler-Assume/&title=Compiler Assume"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2024/09/07/Compiler-Assume/&is_video=false&description=Compiler Assume"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Compiler Assume&body=Check out this article: http://blog.mwish.me/2024/09/07/Compiler-Assume/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2024/09/07/Compiler-Assume/&title=Compiler Assume"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2024/09/07/Compiler-Assume/&title=Compiler Assume"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2024/09/07/Compiler-Assume/&title=Compiler Assume"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2024/09/07/Compiler-Assume/&title=Compiler Assume"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2024/09/07/Compiler-Assume/&name=Compiler Assume&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2024/09/07/Compiler-Assume/&t=Compiler Assume"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>
