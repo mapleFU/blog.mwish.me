@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="如之前 Sort 的文章 [1] 所述，Tournament Tree 核心是减少 Winner 流切换的比较次数。本文不对败者树做概论，而是看一下工程实现。DuckDB 靠 Merge Path 算法来实现 Sort，而 DataFusion 和 Velox 都实现了败者树的接口。ClickHouse 也实现了一个 Queue 相关的接口，但并没有使用 Loser Tree ClickHouse">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Tournament Trees">
+<meta property="og:url" content="http://blog.mwish.me/2024/10/09/Tournament-Trees/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="如之前 Sort 的文章 [1] 所述，Tournament Tree 核心是减少 Winner 流切换的比较次数。本文不对败者树做概论，而是看一下工程实现。DuckDB 靠 Merge Path 算法来实现 Sort，而 DataFusion 和 Velox 都实现了败者树的接口。ClickHouse 也实现了一个 Queue 相关的接口，但并没有使用 Loser Tree ClickHouse">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/2431106656156715480.png">
+<meta property="article:published_time" content="2024-10-09T15:40:24.000Z">
+<meta property="article:modified_time" content="2024-10-09T15:41:42.348Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/2431106656156715480.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>Tournament Trees</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2024/09/27/Sorting-in-Database-System-Part1/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2024/10/09/Tournament-Trees/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2024/10/09/Tournament-Trees/&text=Tournament Trees"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2024/10/09/Tournament-Trees/&title=Tournament Trees"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2024/10/09/Tournament-Trees/&is_video=false&description=Tournament Trees"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Tournament Trees&body=Check out this article: http://blog.mwish.me/2024/10/09/Tournament-Trees/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2024/10/09/Tournament-Trees/&title=Tournament Trees"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2024/10/09/Tournament-Trees/&title=Tournament Trees"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2024/10/09/Tournament-Trees/&title=Tournament Trees"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2024/10/09/Tournament-Trees/&title=Tournament Trees"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2024/10/09/Tournament-Trees/&name=Tournament Trees&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2024/10/09/Tournament-Trees/&t=Tournament Trees"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#ClickHouse-%E7%9A%84%E5%AE%9E%E7%8E%B0"><span class="toc-number">1.</span> <span class="toc-text">ClickHouse 的实现</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Velox-%E7%9A%84%E5%AE%9E%E7%8E%B0"><span class="toc-number">2.</span> <span class="toc-text">Velox 的实现</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%86%85%E9%83%A8%E5%AE%9E%E7%8E%B0%E9%80%BB%E8%BE%91"><span class="toc-number">2.1.</span> <span class="toc-text">内部实现逻辑</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%A4%96%E9%83%A8%E7%94%A8%E4%BE%8B"><span class="toc-number">2.2.</span> <span class="toc-text">外部用例</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Datafusion"><span class="toc-number">3.</span> <span class="toc-text">Datafusion</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Async-%E7%9A%84%E5%A4%84%E7%90%86"><span class="toc-number">3.1.</span> <span class="toc-text">Async 的处理</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Oceanbase"><span class="toc-number">4.</span> <span class="toc-text">Oceanbase</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#References"><span class="toc-number">5.</span> <span class="toc-text">References</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Tournament Trees
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2024-10-09T15:40:24.000Z" itemprop="datePublished">2024-10-09</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>如之前 Sort 的文章 [1] 所述，Tournament Tree 核心是减少 Winner 流切换的比较次数。本文不对败者树做概论，而是看一下工程实现。DuckDB 靠 Merge Path 算法来实现 Sort，而 DataFusion 和 Velox 都实现了败者树的接口。ClickHouse 也实现了一个 Queue 相关的接口，但并没有使用 Loser Tree</p>
+<h2 id="ClickHouse-的实现"><a href="#ClickHouse-的实现" class="headerlink" title="ClickHouse 的实现"></a>ClickHouse 的实现</h2><p>代码在 [2]，算是写文章这天的 Master。这里的核心是：</p>
+<ol>
+<li>实现是一个标准的 Heap，而不是我们的败者树。</li>
+<li>Element 被抽象为 <code>Cursor</code>，然后 Cursor 一些接口满足了 STL 的定义，可以利用 <code>std::make_heap</code> 等接口。这样也没有中间节点了。</li>
+<li>当 <code>Cursor</code>消费完的时候，从 Queue 中直接移除</li>
+<li>按照标准的 Heap 算法调整堆</li>
+<li>额外实现了一种 Batch 模式，在 batch 模式下，堆也会被 batch 处理<ol>
+<li>因为是 Heap，所以可以通过比较快速拿到第二大的流</li>
+<li>定位到 最大的流 - 第二大的流 中的 batchSize</li>
+<li>根据这个 BatchSize 来 Hint 用户的 nextBatch</li>
+</ol>
+</li>
+</ol>
+<p>具体的 next 靠 Cursor 来实现</p>
+<p>ClickHouse 实现的亮点是 C++ 上很细的工程实现，比如这段代码：<a target="_blank" rel="noopener" href="https://github.com/ClickHouse/ClickHouse/blob/6f88ada7a9b4aacaaa6c86e5341aecedeeb291f5/src/Core/SortCursor.h#L675">https://github.com/ClickHouse/ClickHouse/blob/6f88ada7a9b4aacaaa6c86e5341aecedeeb291f5/src/Core/SortCursor.h#L675</a> ，感觉这种特化肯定是比 Comparable Key 有前途的。不过这也是大家都可以做的优化。</p>
+<h2 id="Velox-的实现"><a href="#Velox-的实现" class="headerlink" title="Velox 的实现"></a>Velox 的实现</h2><p>Velox 实现了一个标准的 TreeOfLosers 接口，这套接口有下面的成员：</p>
+<p>这里没有 <code>next</code> 的实现，其实是大家各显神通了，使用 MergeStream 其实也是 CRTP 的形式，令人唏嘘。</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// Abstract class defining the interface for a stream of values to be merged by</span></span><br><span class="line"><span class="comment">/// TreeOfLosers or MergeArray. In addition to these, the MergeStream must have</span></span><br><span class="line"><span class="comment">/// a way of accessing its first value and popping off the first value.</span></span><br><span class="line"><span class="comment">/// TreeOfLosers and similar do not call these, so these are left out of this</span></span><br><span class="line"><span class="comment">/// interface.</span></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">MergeStream</span> &#123;</span><br><span class="line"> <span class="keyword">public</span>:</span><br><span class="line">  <span class="keyword">virtual</span> ~<span class="built_in">MergeStream</span>() = <span class="keyword">default</span>;</span><br><span class="line"></span><br><span class="line">  <span class="comment">/// True if this has a value. If this returns true, it is valid to call &lt;. A</span></span><br><span class="line">  <span class="comment">/// false value means that there will not be any more data in &#x27;this&#x27;.</span></span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> <span class="type">bool</span> <span class="title">hasData</span><span class="params">()</span> <span class="type">const</span> </span>= <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">  <span class="comment">/// Returns true if the first element of &#x27;this&#x27; is less than the first element</span></span><br><span class="line">  <span class="comment">/// of &#x27;other&#x27;. hasData() must be true of &#x27;this&#x27; and &#x27;other&#x27;.</span></span><br><span class="line">  <span class="keyword">virtual</span> <span class="type">bool</span> <span class="keyword">operator</span>&lt;(<span class="type">const</span> MergeStream&amp; other) <span class="type">const</span> &#123;</span><br><span class="line">    <span class="keyword">return</span> <span class="built_in">compare</span>(other) &lt; <span class="number">0</span>;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">/// Returns &lt; 0 if &#x27;this&#x27; is &lt; &#x27;other, &#x27;0&#x27; if equal and &gt; 0 otherwise. This is</span></span><br><span class="line">  <span class="comment">/// not required for TreeOfLosers::next() but is required for</span></span><br><span class="line">  <span class="comment">/// TreeOfLosers::nextWithEquals().</span></span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> <span class="type">int32_t</span> <span class="title">compare</span><span class="params">(<span class="type">const</span> MergeStream&amp; <span class="comment">/*other*/</span>)</span> <span class="type">const</span> </span>&#123;</span><br><span class="line">    <span class="built_in">VELOX_UNSUPPORTED</span>();</span><br><span class="line">  &#125;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>这里有两种实现：</p>
+<ol>
+<li><code>MergeArray</code>: 第一次构建的时候 Sort 所有序列，然后每次 <code>next()</code> 之后，把第一个元素调整位置。有点像简陋版的堆</li>
+<li><code>TreeOfLosers</code>: 败者树</li>
+</ol>
+<p>这两套接口的特征是：</p>
+<ul>
+<li>都是以 <code>Sorter</code> 的形式提供的</li>
+<li><code>next</code> 返回 <code>MergeStreamImpl*</code>, 然后下次 <code>next</code> 的时候做内部调整再返回</li>
+</ul>
+<p>比较有意思的是，和 ClickHouse 的 Batch 模式类似，Velox 的 <code>TreeOfLosers</code> 提供了两套接口：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// Returns the stream with the lowest first element and a flag that is true</span></span><br><span class="line"><span class="comment">/// if there is another equal value to come from some other stream. The</span></span><br><span class="line"><span class="comment">/// streams should have ordered unique values when using this function. This</span></span><br><span class="line"><span class="comment">/// is useful for merging aggregate states that are unique by their key in</span></span><br><span class="line"><span class="comment">/// each stream.  The caller is expected to pop off the first element of the</span></span><br><span class="line"><span class="comment">/// stream before calling this again. Returns &#123;nullptr, false&#125; when all</span></span><br><span class="line"><span class="comment">/// streams are at end.</span></span><br><span class="line"><span class="comment">///</span></span><br><span class="line"><span class="comment">/// 这里的 Equal 指的是 Equal value from other stream, 本 Stream 的 Equal 不受理.</span></span><br><span class="line"><span class="function">std::pair&lt;Stream*, <span class="type">bool</span>&gt; <span class="title">nextWithEquals</span><span class="params">()</span></span>;</span><br><span class="line"><span class="comment">/// Returns the stream with the lowest first element. The caller is expected</span></span><br><span class="line"><span class="comment">/// to pop off the first element of the stream before calling this again.</span></span><br><span class="line"><span class="comment">/// Returns nullptr when all streams are at end.</span></span><br><span class="line"><span class="function">Stream* <span class="title">next</span><span class="params">()</span></span>;</span><br></pre></td></tr></table></figure>
+<h3 id="内部实现逻辑"><a href="#内部实现逻辑" class="headerlink" title="内部实现逻辑"></a>内部实现逻辑</h3><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">class</span> <span class="title class_">TreeOfLosers</span> &#123;</span><br><span class="line">  <span class="type">static</span> <span class="keyword">constexpr</span> TIndex kEmpty = std::numeric_limits&lt;TIndex&gt;::<span class="built_in">max</span>();</span><br><span class="line"></span><br><span class="line">  <span class="type">const</span> std::vector&lt;std::unique_ptr&lt;Stream&gt;&gt; streams_;</span><br><span class="line"></span><br><span class="line">  std::vector&lt;TIndex&gt; values_;</span><br><span class="line">  <span class="comment">// &#x27;true&#x27; if the corresponding element of &#x27;values_&#x27; has met an equal</span></span><br><span class="line">  <span class="comment">// element on its way to its present position. Used only in nextWithEquals().</span></span><br><span class="line">  <span class="comment">// A byte vector is in this case faster than one of bool.</span></span><br><span class="line">  <span class="comment">//</span></span><br><span class="line">  <span class="comment">// 额外判定一个 Equal</span></span><br><span class="line">  std::vector&lt;<span class="type">uint8_t</span>&gt; equals_;</span><br><span class="line">  <span class="comment">// 最后一个数据的 Index, 初始化为 kEmpty</span></span><br><span class="line">  TIndex lastIndex_ = kEmpty;</span><br><span class="line">  <span class="comment">// First Data Stream offset</span></span><br><span class="line">  <span class="type">int32_t</span> firstStream_;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>这里的结构其实是一个逻辑的树结构:</p>
+<p><img src="https://image.mwish.me/blog-image/2431106656156715480.png" alt="img"></p>
+<ol>
+<li><code>streams_</code> 是下游的 <code>inputs</code>, 固定，即使 Stream 被消费完了，依旧存在于 <code>LoserOfTrees</code> 中 （但是 <code>values_</code> 标记为 <code>kEmpty</code> )</li>
+<li><code>values_</code> 和 <code>equals_</code> 是核心，这里的树结构如上图:<ol>
+<li><code>0</code> 的位置在 Velox 的实现中并不存在，取而代之的是特殊成员 <code>lastIndex_</code> , 指向 <code>streams_</code>，表示第一条流</li>
+<li><code>values_</code> 和 <code>equals_</code> 的 size 是 <code>firstStream_</code>. 这句话有点抽象，举例来说，上图 Fig8 里面的 Inputs 是 <code>Stream</code>，<code>Stream</code> 不会出现在 <code>values_</code> 中。如果 <code>Stream</code> 大小不是 2 的倍数，那么树的形状就会和下面 ascii 图一样. 在这里，1有两个成员，3，4 有两个成员，这是 6个 stream 的 <code>TreeOfLosers</code>. <code>firstStream_</code> 在树中的逻辑位置是 5（虽然实际上 <code>values_</code> 中没有这个成员）; 同样的，如果有一个 stream 有 4条流，那么 <code>firstStream_</code> 就是 3</li>
+<li>流里面所有 <code>values_</code>被初始化为 <code>kEmpty</code>，<code>lastIndex_</code> 也被初始化为 <code>kEmpty</code></li>
+</ol>
+</li>
+<li>流比较的时候，如果是 Equal 系接口，调用 <code>compare</code>；否则直接拿 <code>operator&lt;</code></li>
+<li>第一次调用的时候 （即 <code>lastIndex_ = kEmpty</code> 的时候），递归的 build 整个树的 equals 和 values</li>
+<li>后续从 <code>lastIndex_</code> 向上 <code>propagate</code></li>
+<li>边界处理：空流对外返回 <code>kEmpty</code> 做为 Index。<code>values_</code>中的内容也是 Index。当整棵树都为 <code>kEmpty</code> 的时候，树被消费完成，对外返回 <code>nullptr</code> 做为 <code>next</code> 的结果</li>
+</ol>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">  <span class="number">0</span></span><br><span class="line"> / \</span><br><span class="line"> <span class="number">1</span>   <span class="number">2</span></span><br><span class="line">/ \  / \</span><br><span class="line"><span class="number">3</span>  <span class="number">4</span> s0 s1 &lt;-- 所有的 stream 都是树上的虚拟节点. 实际不存储在 values_ 中, 不过访问的时候逻辑上当这些节点存在</span><br><span class="line">/\ /\</span><br><span class="line">.....</span><br><span class="line"></span><br><span class="line">    <span class="number">0</span></span><br><span class="line">  /   \</span><br><span class="line"> <span class="number">1</span>     <span class="number">2</span></span><br><span class="line">/ \   / \</span><br><span class="line">s0 s1 s2 s3</span><br></pre></td></tr></table></figure>
+<h3 id="外部用例"><a href="#外部用例" class="headerlink" title="外部用例"></a>外部用例</h3><p><code>GroupingSet</code> 是一个这个的 user-case, 存放 Spill 的结果，这里会按照行来消费。我也不知道为啥没有 Batch 消费的实现。</p>
+<h2 id="Datafusion"><a href="#Datafusion" class="headerlink" title="Datafusion"></a>Datafusion</h2><p><a target="_blank" rel="noopener" href="https://github.com/apache/datafusion/blob/c21d025df463ce623f9193c4b24d86141fce81ca/datafusion/physical-plan/src/sorts/merge.rs">https://github.com/apache/datafusion/blob/c21d025df463ce623f9193c4b24d86141fce81ca/datafusion/physical-plan/src/sorts/merge.rs</a></p>
+<p>这里实现和 Velox 大致相同，目前 Datafusion 使用 <code>SortPreservingMergeStream</code> 来处理 Loser Tree</p>
+<p>它的基础成员是 <code>PartitionedStream</code>:</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// A [`Stream`](futures::Stream) that has multiple partitions that can</span></span><br><span class="line"><span class="comment">/// be polled separately but not concurrently</span></span><br><span class="line"><span class="comment">///</span></span><br><span class="line"><span class="comment">/// Used by sort preserving merge to decouple the cursor merging logic from</span></span><br><span class="line"><span class="comment">/// the source of the cursors, the intention being to allow preserving</span></span><br><span class="line"><span class="comment">/// any row encoding performed for intermediate sorts</span></span><br><span class="line"><span class="keyword">pub</span> <span class="keyword">trait</span> <span class="title class_">PartitionedStream</span>: std::fmt::<span class="built_in">Debug</span> + <span class="built_in">Send</span> &#123;</span><br><span class="line">    <span class="keyword">type</span> <span class="title class_">Output</span>;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/// Returns the number of partitions</span></span><br><span class="line">    <span class="keyword">fn</span> <span class="title function_">partitions</span>(&amp;<span class="keyword">self</span>) <span class="punctuation">-&gt;</span> <span class="type">usize</span>;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">fn</span> <span class="title function_">poll_next</span>(</span><br><span class="line">        &amp;<span class="keyword">mut</span> <span class="keyword">self</span>,</span><br><span class="line">        cx: &amp;<span class="keyword">mut</span> Context&lt;<span class="symbol">&#x27;_</span>&gt;,</span><br><span class="line">        stream_idx: <span class="type">usize</span>,</span><br><span class="line">    ) <span class="punctuation">-&gt;</span> Poll&lt;<span class="type">Option</span>&lt;<span class="keyword">Self</span>::Output&gt;&gt;;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>读者们可以看出这是个 Async 的玩意。它生成的成员被当作 <code>CursorValues</code>：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// A fallible [`PartitionedStream`] of [`Cursor`] and [`RecordBatch`]</span></span><br><span class="line"><span class="keyword">type</span> <span class="title class_">CursorStream</span>&lt;C&gt; = <span class="type">Box</span>&lt;<span class="keyword">dyn</span> PartitionedStream&lt;Output = <span class="type">Result</span>&lt;(C, RecordBatch)&gt;&gt;&gt;;</span><br></pre></td></tr></table></figure>
+<p>此外，这里还有 Cursor 的抽象，做为「单一的 Comparable 成员」，是 <code>CursorValues</code> 中某个 Index 的引用。</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#[derive(Debug)]</span></span><br><span class="line"><span class="keyword">pub</span> <span class="keyword">struct</span> <span class="title class_">Cursor</span>&lt;T: CursorValues&gt; &#123;</span><br><span class="line">    offset: <span class="type">usize</span>,</span><br><span class="line">    values: T,</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>在 <code>SortPreservingMergeStream</code> 中，生成的目标会是 Batch，以 <code>BatchBuilder</code> 做为成员，在内部完成 BuildBatch，而 Velox 则是把 <code>Stream*</code> 传给外部，便于直接给 <code>RowContainer</code> 之类的 Build Row。</p>
+<p>我们只关注这里面 Async 的部分，逻辑层和 Velox 几乎没有区别，我们就不赘述了</p>
+<h3 id="Async-的处理"><a href="#Async-的处理" class="headerlink" title="Async 的处理"></a>Async 的处理</h3><figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#[derive(Debug)]</span></span><br><span class="line"><span class="title function_ invoke__">pub</span>(<span class="keyword">crate</span>) <span class="keyword">struct</span> <span class="title class_">SortPreservingMergeStream</span>&lt;C: CursorValues&gt; &#123;</span><br><span class="line">    <span class="comment">/// This queue contains partition indices in order. When a partition is polled and returns `Poll::Ready`,</span></span><br><span class="line">    <span class="comment">/// it is removed from the vector. If a partition returns `Poll::Pending`, it is moved to the end of the</span></span><br><span class="line">    <span class="comment">/// vector to ensure the next iteration starts with a different partition, preventing the same partition</span></span><br><span class="line">    <span class="comment">/// from being continuously polled.</span></span><br><span class="line">    uninitiated_partitions: VecDeque&lt;<span class="type">usize</span>&gt;,</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>如上所述，<code>PartitionedStream</code> 是异步的。这里会记录 Stream 的 async 信息，然后放到 <code>uninitiated_partitions</code> 中，来做初始化队列。<strong>这部分只会在初始化的时候使用</strong></p>
+<p>在后续读取中，只有 Winner Cursor 会被消费，所以只有 Winner 需要被 check async。</p>
+<h2 id="Oceanbase"><a href="#Oceanbase" class="headerlink" title="Oceanbase"></a>Oceanbase</h2><p><a target="_blank" rel="noopener" href="https://github.com/oceanbase/oceanbase/blob/fb38c3159e185cdb36c62eb5c03b4a112feae18c/src/storage/access/ob_scan_merge_loser_tree.h">https://github.com/oceanbase/oceanbase/blob/fb38c3159e185cdb36c62eb5c03b4a112feae18c/src/storage/access/ob_scan_merge_loser_tree.h</a></p>
+<p><a target="_blank" rel="noopener" href="https://github.com/oceanbase/oceanbase/blob/develop/deps/oblib/src/lib/container/ob_loser_tree.h#L54">https://github.com/oceanbase/oceanbase/blob/develop/deps/oblib/src/lib/container/ob_loser_tree.h#L54</a></p>
+<p>OceanBase 的 Tree 看着像 winner-loser 混合，它的结构相比 Velox，记录的东西稍微多一些 （ <code>is_draw</code> 等价于 equal ):</p>
+<p>这里同时记录了 winner 和 loser 和 <code>replay</code>。这里似乎是因为这个 LoserTree 是动态的，在 <code>push</code> 加入 Player 的时候，这部分能够快速调整 Loser Tree 的信息。当成员变更的时候，ob 得以快速 replay</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">struct</span> <span class="title class_">MatchResult</span></span><br><span class="line">&#123;</span><br><span class="line">public:</span><br><span class="line">  <span class="title function_ invoke__">MatchResult</span>() &#123; <span class="title function_ invoke__">reset</span>(); &#125;;</span><br><span class="line">  ~<span class="title function_ invoke__">MatchResult</span>() = default;</span><br><span class="line">  void <span class="title function_ invoke__">reset</span>()</span><br><span class="line">  &#123;</span><br><span class="line">    winner_idx_ = INVALID_IDX;</span><br><span class="line">    loser_idx_ = INVALID_IDX;</span><br><span class="line">    is_draw_ = <span class="literal">false</span>;</span><br><span class="line">    replay_ = ReplayType::NO_CHANGE;</span><br><span class="line">  &#125;</span><br><span class="line">  int64_t winner_idx_;</span><br><span class="line">  int64_t loser_idx_;</span><br><span class="line">  <span class="type">bool</span> is_draw_;</span><br><span class="line">  ReplayType replay_;</span><br><span class="line"></span><br><span class="line">  <span class="title function_ invoke__">TO_STRING_KV</span>(<span class="title function_ invoke__">K</span>(winner_idx_), <span class="title function_ invoke__">K</span>(loser_idx_), <span class="title function_ invoke__">K</span>(is_draw_), <span class="title function_ invoke__">K</span>(replay_));</span><br><span class="line"></span><br><span class="line">  int <span class="title function_ invoke__">set_replay_type</span>(<span class="keyword">const</span> int64_t player);</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<h2 id="References"><a href="#References" class="headerlink" title="References"></a>References</h2><ol>
+<li><a href="https://blog.mwish.me/2024/09/27/Sorting-in-Database-System-Part1/">https://blog.mwish.me/2024/09/27/Sorting-in-Database-System-Part1/</a></li>
+<li><a target="_blank" rel="noopener" href="https://github.com/ClickHouse/ClickHouse/blob/6f88ada7a9b4aacaaa6c86e5341aecedeeb291f5/src/Core/SortCursor.h#L581">https://github.com/ClickHouse/ClickHouse/blob/6f88ada7a9b4aacaaa6c86e5341aecedeeb291f5/src/Core/SortCursor.h#L581</a></li>
+</ol>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#ClickHouse-%E7%9A%84%E5%AE%9E%E7%8E%B0"><span class="toc-number">1.</span> <span class="toc-text">ClickHouse 的实现</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Velox-%E7%9A%84%E5%AE%9E%E7%8E%B0"><span class="toc-number">2.</span> <span class="toc-text">Velox 的实现</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%86%85%E9%83%A8%E5%AE%9E%E7%8E%B0%E9%80%BB%E8%BE%91"><span class="toc-number">2.1.</span> <span class="toc-text">内部实现逻辑</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%A4%96%E9%83%A8%E7%94%A8%E4%BE%8B"><span class="toc-number">2.2.</span> <span class="toc-text">外部用例</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Datafusion"><span class="toc-number">3.</span> <span class="toc-text">Datafusion</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Async-%E7%9A%84%E5%A4%84%E7%90%86"><span class="toc-number">3.1.</span> <span class="toc-text">Async 的处理</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Oceanbase"><span class="toc-number">4.</span> <span class="toc-text">Oceanbase</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#References"><span class="toc-number">5.</span> <span class="toc-text">References</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2024/10/09/Tournament-Trees/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2024/10/09/Tournament-Trees/&text=Tournament Trees"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2024/10/09/Tournament-Trees/&title=Tournament Trees"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2024/10/09/Tournament-Trees/&is_video=false&description=Tournament Trees"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Tournament Trees&body=Check out this article: http://blog.mwish.me/2024/10/09/Tournament-Trees/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2024/10/09/Tournament-Trees/&title=Tournament Trees"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2024/10/09/Tournament-Trees/&title=Tournament Trees"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2024/10/09/Tournament-Trees/&title=Tournament Trees"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2024/10/09/Tournament-Trees/&title=Tournament Trees"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2024/10/09/Tournament-Trees/&name=Tournament Trees&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2024/10/09/Tournament-Trees/&t=Tournament Trees"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>
