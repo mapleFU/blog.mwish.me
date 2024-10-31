@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="Array &amp; ArrayData在之前的博客 https:&#x2F;&#x2F;blog.mwish.me&#x2F;2023&#x2F;05&#x2F;04&#x2F;Type-and-Array-in-Columnar-System&#x2F; 和 https:&#x2F;&#x2F;blog.mwish.me&#x2F;2024&#x2F;06&#x2F;02&#x2F;Arrow-Compute-Scalar-Function-Framework&#x2F; 中，我们简单的聊到了 Arrow Array 这一 Ar">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Arrow Scalar">
+<meta property="og:url" content="http://blog.mwish.me/2024/10/31/Arrow-Scalar/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="Array &amp; ArrayData在之前的博客 https:&#x2F;&#x2F;blog.mwish.me&#x2F;2023&#x2F;05&#x2F;04&#x2F;Type-and-Array-in-Columnar-System&#x2F; 和 https:&#x2F;&#x2F;blog.mwish.me&#x2F;2024&#x2F;06&#x2F;02&#x2F;Arrow-Compute-Scalar-Function-Framework&#x2F; 中，我们简单的聊到了 Arrow Array 这一 Ar">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2024-10-31T15:04:41.000Z">
+<meta property="article:modified_time" content="2024-10-31T15:06:28.201Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>Arrow Scalar</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2024/10/29/Tour-Tokyo/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2024/10/31/Arrow-Scalar/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2024/10/31/Arrow-Scalar/&text=Arrow Scalar"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2024/10/31/Arrow-Scalar/&title=Arrow Scalar"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2024/10/31/Arrow-Scalar/&is_video=false&description=Arrow Scalar"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Arrow Scalar&body=Check out this article: http://blog.mwish.me/2024/10/31/Arrow-Scalar/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2024/10/31/Arrow-Scalar/&title=Arrow Scalar"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2024/10/31/Arrow-Scalar/&title=Arrow Scalar"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2024/10/31/Arrow-Scalar/&title=Arrow Scalar"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2024/10/31/Arrow-Scalar/&title=Arrow Scalar"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2024/10/31/Arrow-Scalar/&name=Arrow Scalar&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2024/10/31/Arrow-Scalar/&t=Arrow Scalar"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Array-amp-ArrayData"><span class="toc-number">1.</span> <span class="toc-text">Array &amp; ArrayData</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Span-of-array"><span class="toc-number">2.</span> <span class="toc-text">Span of array</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Scalar"><span class="toc-number">3.</span> <span class="toc-text">Scalar</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Primitive"><span class="toc-number">3.1.</span> <span class="toc-text">Primitive</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Dict"><span class="toc-number">3.2.</span> <span class="toc-text">Dict</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Var-length-amp-scratch-space"><span class="toc-number">3.3.</span> <span class="toc-text">Var-length &amp; scratch space</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Struct"><span class="toc-number">3.4.</span> <span class="toc-text">Struct</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Lists-Map"><span class="toc-number">3.5.</span> <span class="toc-text">Lists &#x2F; Map</span></a></li></ol></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Arrow Scalar
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2024-10-31T15:04:41.000Z" itemprop="datePublished">2024-10-31</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <h2 id="Array-amp-ArrayData"><a href="#Array-amp-ArrayData" class="headerlink" title="Array &amp; ArrayData"></a>Array &amp; ArrayData</h2><p>在之前的博客 <a href="https://blog.mwish.me/2023/05/04/Type-and-Array-in-Columnar-System/">https://blog.mwish.me/2023/05/04/Type-and-Array-in-Columnar-System/</a> 和 <a href="https://blog.mwish.me/2024/06/02/Arrow-Compute-Scalar-Function-Framework/">https://blog.mwish.me/2024/06/02/Arrow-Compute-Scalar-Function-Framework/</a> 中，我们简单的聊到了 Arrow Array 这一 Arrow 数据的核心。我们简单总结一下：</p>
+<ul>
+<li>Array: 不同种类的 <code>::arrow::Array</code>, <code>Array</code> 上封装了对成员的访问( IsNull, 和不同类型的 visit ith 成员, 迭代器等）</li>
+<li>ArrayData: 相对于 Array 是一个基础类型，<code>ArrayData</code> 则是 <code>Array</code> 的实际 Payload，它以组合的形式内嵌在 <code>Array</code> 中，并且可以被视作是 <code>final</code> 类型. <code>ArrayData</code> 包含 <code>type</code> 和 <code>buffer</code> ，null flag 和可能拥有的子节点，<code>buffer</code> 包含数据 buffer 和 Arrow Columnar 标准指定了对于每种 <code>type</code> . 我们在下面贴出 <code>ArrayData</code> 的成员</li>
+</ul>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line">  std::shared_ptr&lt;DataType&gt; type;</span><br><span class="line">  <span class="type">int64_t</span> length = <span class="number">0</span>;</span><br><span class="line">  <span class="keyword">mutable</span> std::atomic&lt;<span class="type">int64_t</span>&gt; null_count&#123;<span class="number">0</span>&#125;;</span><br><span class="line">  <span class="comment">// The logical start point into the physical buffers (in values, not bytes).</span></span><br><span class="line">  <span class="comment">// Note that, for child data, this must be *added* to the child data&#x27;s own offset.</span></span><br><span class="line">  <span class="type">int64_t</span> offset = <span class="number">0</span>;</span><br><span class="line">  std::vector&lt;std::shared_ptr&lt;Buffer&gt;&gt; buffers;</span><br><span class="line">  std::vector&lt;std::shared_ptr&lt;ArrayData&gt;&gt; child_data;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// The dictionary for this Array, if any. Only used for dictionary type</span></span><br><span class="line">  std::shared_ptr&lt;ArrayData&gt; dictionary;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// The statistics for this Array.</span></span><br><span class="line">  std::shared_ptr&lt;ArrayStatistics&gt; statistics;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>通常来说，从 <code>ArrayData</code> 可以直接生成一个 <code>Array</code>.</p>
+<h2 id="Span-of-array"><a href="#Span-of-array" class="headerlink" title="Span of array"></a>Span of array</h2><p><code>arrow::Buffer</code> 是一个简单的 own or not owned buffer. 我们可以看到，实际上，这里还有一种类型 <code>ArraySpan</code> 表示对 <code>Array</code> 的引用</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// \brief A non-owning Buffer reference</span></span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">ARROW_EXPORT</span> BufferSpan &#123;</span><br><span class="line">  <span class="comment">// It is the user of this class&#x27;s responsibility to ensure that</span></span><br><span class="line">  <span class="comment">// buffers that were const originally are not written to</span></span><br><span class="line">  <span class="comment">// accidentally.</span></span><br><span class="line">  <span class="type">uint8_t</span>* data = NULLPTR;</span><br><span class="line">  <span class="type">int64_t</span> size = <span class="number">0</span>;</span><br><span class="line">  <span class="comment">// Pointer back to buffer that owns this memory</span></span><br><span class="line">  <span class="type">const</span> std::shared_ptr&lt;Buffer&gt;* owner = NULLPTR;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>而 <code>ArraySpan</code> 本质上也是 <code>Array</code> 的 ref, 看其结构体如下:</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// \brief EXPERIMENTAL: A non-owning ArrayData reference that is cheaply</span></span><br><span class="line"><span class="comment">/// copyable and does not contain any shared_ptr objects. Do not use in public</span></span><br><span class="line"><span class="comment">/// APIs aside from compute kernels for now</span></span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">ARROW_EXPORT</span> ArraySpan &#123;</span><br><span class="line">  <span class="type">const</span> DataType* type = NULLPTR;</span><br><span class="line">  <span class="type">int64_t</span> length = <span class="number">0</span>;</span><br><span class="line">  <span class="keyword">mutable</span> <span class="type">int64_t</span> null_count = kUnknownNullCount;</span><br><span class="line">  <span class="type">int64_t</span> offset = <span class="number">0</span>;</span><br><span class="line">  BufferSpan buffers[<span class="number">3</span>];</span><br><span class="line">  </span><br><span class="line">  <span class="comment">/// If dictionary-encoded, put dictionary in the first entry</span></span><br><span class="line">  std::vector&lt;ArraySpan&gt; child_data;</span><br><span class="line">    </span><br><span class="line">  <span class="comment">/// \brief Populate ArraySpan to look like an array of length 1 pointing at</span></span><br><span class="line">  <span class="comment">/// the data members of a Scalar value</span></span><br><span class="line">  <span class="function"><span class="type">void</span> <span class="title">FillFromScalar</span><span class="params">(<span class="type">const</span> Scalar&amp; value)</span></span>;</span><br><span class="line">  </span><br><span class="line">  <span class="function">std::shared_ptr&lt;ArrayData&gt; <span class="title">ToArrayData</span><span class="params">()</span> <span class="type">const</span></span>;</span><br><span class="line">  <span class="function">std::shared_ptr&lt;Array&gt; <span class="title">ToArray</span><span class="params">()</span> <span class="type">const</span></span>;</span><br><span class="line">  </span><br><span class="line">  <span class="built_in">ArraySpan</span>(<span class="type">const</span> ArrayData&amp; data);</span><br><span class="line">  <span class="function"><span class="keyword">explicit</span> <span class="title">ArraySpan</span><span class="params">(<span class="type">const</span> Scalar&amp; data)</span> </span>&#123; <span class="built_in">FillFromScalar</span>(data); &#125;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>这部分含义很好懂，实际上一些计算 kernel 也是走这块来实现执行的。但是你会发现，这里还有个 <code>ArraySpan(const Scalar&amp; data)</code>, 直接从 Scalar 构造 Span! 神秘吧，所以我们接下来会走到 Span</p>
+<h2 id="Scalar"><a href="#Scalar" class="headerlink" title="Scalar"></a>Scalar</h2><p>扯了这么久，我们终于到了 <code>::arrow::Scalar</code>. <code>::arrow::Scalar</code> 是和 <code>::arrow::Array</code> 一样的基类型. 上面也绑定了很多和 <code>Array</code> 一样的操作</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// \brief Base class for scalar values</span></span><br><span class="line"><span class="comment">///</span></span><br><span class="line"><span class="comment">/// A Scalar represents a single value with a specific DataType.</span></span><br><span class="line"><span class="comment">/// Scalars are useful for passing single value inputs to compute functions,</span></span><br><span class="line"><span class="comment">/// or for representing individual array elements (with a non-trivial</span></span><br><span class="line"><span class="comment">/// wrapping cost, though).</span></span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">ARROW_EXPORT</span> Scalar : <span class="keyword">public</span> std::enable_shared_from_this&lt;Scalar&gt;,</span><br><span class="line">                             <span class="keyword">public</span> util::EqualityComparable&lt;Scalar&gt; &#123;</span><br><span class="line">  <span class="comment">/// \brief The type of the scalar value</span></span><br><span class="line">  std::shared_ptr&lt;DataType&gt; type;</span><br><span class="line"></span><br><span class="line">  <span class="comment">/// \brief Whether the value is valid (not null) or not</span></span><br><span class="line">  <span class="type">bool</span> is_valid = <span class="literal">false</span>;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<h3 id="Primitive"><a href="#Primitive" class="headerlink" title="Primitive"></a>Primitive</h3><p>这里提供了给非 Null 类型 Scalar 的基类：</p>
+<ul>
+<li>PrimitiveScalar 提供了一个 <code>T</code> 作为 <code>ArrowType</code>，然后用 <code>CType</code> 当成内部的 value type</li>
+</ul>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">namespace</span> internal &#123;</span><br><span class="line"></span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">ARROW_EXPORT</span> PrimitiveScalarBase : <span class="keyword">public</span> Scalar &#123;</span><br><span class="line">  <span class="function"><span class="keyword">explicit</span> <span class="title">PrimitiveScalarBase</span><span class="params">(std::shared_ptr&lt;DataType&gt; type)</span></span></span><br><span class="line"><span class="function">      : Scalar(std::move(type), false) &#123;</span>&#125;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">using</span> Scalar::Scalar;</span><br><span class="line">  <span class="comment">/// \brief Get a const pointer to the value of this scalar. May be null.</span></span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> <span class="type">const</span> <span class="type">void</span>* <span class="title">data</span><span class="params">()</span> <span class="type">const</span> </span>= <span class="number">0</span>;</span><br><span class="line">  <span class="comment">/// \brief Get an immutable view of the value of this scalar as bytes.</span></span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> std::string_view <span class="title">view</span><span class="params">()</span> <span class="type">const</span> </span>= <span class="number">0</span>;</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T, <span class="keyword">typename</span> CType = <span class="keyword">typename</span> T::c_type&gt;</span><br><span class="line"><span class="keyword">struct</span> PrimitiveScalar : <span class="keyword">public</span> PrimitiveScalarBase &#123;</span><br><span class="line">  <span class="keyword">using</span> PrimitiveScalarBase::PrimitiveScalarBase;</span><br><span class="line">  <span class="keyword">using</span> TypeClass = T;</span><br><span class="line">  <span class="keyword">using</span> ValueType = CType;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// Non-null constructor.</span></span><br><span class="line">  <span class="built_in">PrimitiveScalar</span>(ValueType value, std::shared_ptr&lt;DataType&gt; type)</span><br><span class="line">      : <span class="built_in">PrimitiveScalarBase</span>(std::<span class="built_in">move</span>(type), <span class="literal">true</span>), <span class="built_in">value</span>(value) &#123;&#125;</span><br><span class="line"></span><br><span class="line">  <span class="function"><span class="keyword">explicit</span> <span class="title">PrimitiveScalar</span><span class="params">(std::shared_ptr&lt;DataType&gt; type)</span></span></span><br><span class="line"><span class="function">      : PrimitiveScalarBase(std::move(type), false) &#123;</span>&#125;</span><br><span class="line"></span><br><span class="line">  ValueType value&#123;&#125;;</span><br><span class="line"></span><br><span class="line">  <span class="function"><span class="type">const</span> <span class="type">void</span>* <span class="title">data</span><span class="params">()</span> <span class="type">const</span> <span class="keyword">override</span> </span>&#123; <span class="keyword">return</span> &amp;value; &#125;</span><br><span class="line">  <span class="function">std::string_view <span class="title">view</span><span class="params">()</span> <span class="type">const</span> <span class="keyword">override</span> </span>&#123;</span><br><span class="line">    <span class="keyword">return</span> std::<span class="built_in">string_view</span>(<span class="built_in">reinterpret_cast</span>&lt;<span class="type">const</span> <span class="type">char</span>*&gt;(&amp;value), <span class="built_in">sizeof</span>(ValueType));</span><br><span class="line">  &#125;;</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line">&#125;  <span class="comment">// namespace internal</span></span><br></pre></td></tr></table></figure>
+<p>当 Primitive 实现时，它用 <code>ValueType</code>来存储数据，然后生成 <code>ArraySpan</code> 的时候，流程如下（忽略 null 之类数据的填充）：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> (type_id == Type::BOOL) &#123;</span><br><span class="line">  <span class="type">const</span> <span class="keyword">auto</span>&amp; scalar = <span class="built_in">checked_cast</span>&lt;<span class="type">const</span> BooleanScalar&amp;&gt;(value);</span><br><span class="line">  <span class="keyword">this</span>-&gt;buffers[<span class="number">1</span>].data = scalar.value ? &amp;kTrueBit : &amp;kFalseBit;</span><br><span class="line">  <span class="keyword">this</span>-&gt;buffers[<span class="number">1</span>].size = <span class="number">1</span>;</span><br><span class="line">&#125; <span class="keyword">else</span> <span class="keyword">if</span> (<span class="built_in">is_primitive</span>(type_id) || <span class="built_in">is_decimal</span>(type_id) ||</span><br><span class="line">           type_id == Type::DICTIONARY) &#123;</span><br><span class="line">  <span class="type">const</span> <span class="keyword">auto</span>&amp; scalar = <span class="built_in">checked_cast</span>&lt;<span class="type">const</span> internal::PrimitiveScalarBase&amp;&gt;(value);</span><br><span class="line">  <span class="type">const</span> <span class="type">uint8_t</span>* scalar_data = <span class="built_in">reinterpret_cast</span>&lt;<span class="type">const</span> <span class="type">uint8_t</span>*&gt;(scalar.<span class="built_in">view</span>().<span class="built_in">data</span>());</span><br><span class="line">  <span class="keyword">this</span>-&gt;buffers[<span class="number">1</span>].data = <span class="built_in">const_cast</span>&lt;<span class="type">uint8_t</span>*&gt;(scalar_data);</span><br><span class="line">  <span class="keyword">this</span>-&gt;buffers[<span class="number">1</span>].size = scalar.type-&gt;<span class="built_in">byte_width</span>();</span><br><span class="line">  <span class="keyword">if</span> (type_id == Type::DICTIONARY) &#123;</span><br><span class="line">    <span class="comment">// Populate dictionary data</span></span><br><span class="line">    <span class="type">const</span> <span class="keyword">auto</span>&amp; dict_scalar = <span class="built_in">checked_cast</span>&lt;<span class="type">const</span> DictionaryScalar&amp;&gt;(value);</span><br><span class="line">    <span class="keyword">this</span>-&gt;child_data.<span class="built_in">resize</span>(<span class="number">1</span>);</span><br><span class="line">    <span class="keyword">this</span>-&gt;child_data[<span class="number">0</span>].<span class="built_in">SetMembers</span>(*dict_scalar.value.dictionary-&gt;<span class="built_in">data</span>());</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="Dict"><a href="#Dict" class="headerlink" title="Dict"></a>Dict</h3><p>上面这段代码也有 Dict 相关的实现，Dict Scalar 实现如下:</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// \brief A Scalar value for DictionaryType</span></span><br><span class="line"><span class="comment">///</span></span><br><span class="line"><span class="comment">/// `is_valid` denotes the validity of the `index`, regardless of</span></span><br><span class="line"><span class="comment">/// the corresponding value in the `dictionary`.</span></span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">ARROW_EXPORT</span> DictionaryScalar : <span class="keyword">public</span> internal::PrimitiveScalarBase &#123;</span><br><span class="line">  <span class="keyword">using</span> TypeClass = DictionaryType;</span><br><span class="line">  <span class="keyword">struct</span> <span class="title class_">ValueType</span> &#123;</span><br><span class="line">    <span class="comment">// Index 可能是各种 int 类型, 所以用一个 Scalar 来抽象.</span></span><br><span class="line">    std::shared_ptr&lt;Scalar&gt; index;</span><br><span class="line">    std::shared_ptr&lt;Array&gt; dictionary;</span><br><span class="line">  &#125; value;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<h3 id="Var-length-amp-scratch-space"><a href="#Var-length-amp-scratch-space" class="headerlink" title="Var-length &amp; scratch space"></a>Var-length &amp; scratch space</h3><p>这里有一个比较重要的部分是 <code>scratch_space_</code>, 这部分内容相当于人造了一份 buffer 的内存空间，然后在构造函数里 <code>Impl::FillScratchSpace</code> 填充</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">namespace</span> internal &#123;</span><br><span class="line"></span><br><span class="line"><span class="keyword">constexpr</span> <span class="keyword">auto</span> kScalarScratchSpaceSize = <span class="built_in">sizeof</span>(<span class="type">int64_t</span>) * <span class="number">2</span>;</span><br><span class="line"></span><br><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> Impl&gt;</span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">ArraySpanFillFromScalarScratchSpace</span> &#123;</span><br><span class="line">  <span class="comment">//  16 bytes of scratch space to enable ArraySpan to be a view onto any</span></span><br><span class="line">  <span class="comment">//  Scalar- including binary scalars where we need to create a buffer</span></span><br><span class="line">  <span class="comment">//  that looks like two 32-bit or 64-bit offsets.</span></span><br><span class="line">  <span class="built_in">alignas</span>(<span class="type">int64_t</span>) <span class="keyword">mutable</span> <span class="type">uint8_t</span> scratch_space_[kScalarScratchSpaceSize];</span><br><span class="line"></span><br><span class="line"> <span class="keyword">private</span>:</span><br><span class="line">  <span class="keyword">template</span> &lt;<span class="keyword">typename</span>... Args&gt;</span><br><span class="line">  <span class="function"><span class="keyword">explicit</span> <span class="title">ArraySpanFillFromScalarScratchSpace</span><span class="params">(Args&amp;&amp;... args)</span> </span>&#123;</span><br><span class="line">    Impl::<span class="built_in">FillScratchSpace</span>(scratch_space_, std::forward&lt;Args&gt;(args)...);</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="built_in">ArraySpanFillFromScalarScratchSpace</span>() = <span class="keyword">delete</span>;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">friend</span> Impl;</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line">&#125; <span class="comment">// namespace internal</span></span><br></pre></td></tr></table></figure>
+<p>Scratch 是做什么的呢？我们回顾一下 Arrow 的几个 Buffer:</p>
+<ol>
+<li>Validity Buffer</li>
+<li>DataBuffer</li>
+<li>扩展的变长或者其他内容。这里本身 Arrow ArrayData 可以有不止3个 Buffer，但是 <code>ArraySpan</code> 最多三个，因为 StringView 这种类型单个 str 也至多引用一个 Buffer</li>
+</ol>
+<p>那么 Validity Buffer 指向 <code>static</code> 的内存区域（ Boolean Scalar 的 Data Buffer 也是这么做的）。对于 Primitive Type，这里 DataBuffer 指向 <code>PrimitiveScalar</code> 的 <code>&amp;value</code> 。这是个很好理解的。对于 List 和 Binary 来说，他们的 <code>DataBuffer</code> 可能是：</p>
+<ul>
+<li>Offset Buffer ( 对于 List/String ）</li>
+<li>Offset/Pointer Buffer ( 对于 StringView 等）</li>
+<li>Offset-Length （对于 ListView 等）</li>
+</ul>
+<p>BinaryScalar 就借用了这份 scratch:</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">struct</span> <span class="title class_">ARROW_EXPORT</span> BinaryScalar</span><br><span class="line">    : <span class="keyword">public</span> BaseBinaryScalar,</span><br><span class="line">      <span class="keyword">private</span> internal::ArraySpanFillFromScalarScratchSpace&lt;BinaryScalar&gt; &#123;</span><br><span class="line">  <span class="keyword">using</span> TypeClass = BinaryType;</span><br><span class="line">  <span class="keyword">using</span> ArraySpanFillFromScalarScratchSpace =</span><br><span class="line">      internal::ArraySpanFillFromScalarScratchSpace&lt;BinaryScalar&gt;;</span><br><span class="line">      </span><br><span class="line">  <span class="function"><span class="keyword">explicit</span> <span class="title">BinaryScalar</span><span class="params">(std::shared_ptr&lt;DataType&gt; type)</span></span></span><br><span class="line"><span class="function">    : BaseBinaryScalar(std::move(type)),</span></span><br><span class="line"><span class="function">      ArraySpanFillFromScalarScratchSpace(this-&gt;value) &#123;</span>&#125;</span><br><span class="line"></span><br><span class="line">  <span class="built_in">BinaryScalar</span>(std::shared_ptr&lt;Buffer&gt; value, std::shared_ptr&lt;DataType&gt; type)</span><br><span class="line">    : <span class="built_in">BaseBinaryScalar</span>(std::<span class="built_in">move</span>(value), std::<span class="built_in">move</span>(type)),</span><br><span class="line">      <span class="built_in">ArraySpanFillFromScalarScratchSpace</span>(<span class="keyword">this</span>-&gt;value) &#123;&#125;</span><br><span class="line">  <span class="comment">/// ...</span></span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>这个 Scratch 给足静态空间，然后用来填充需要的 DataBuffer 等 Buffer。至于 Binary 的数据 Buffer 则存放在 Base 类型上：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">struct</span> <span class="title class_">ARROW_EXPORT</span> BaseBinaryScalar : <span class="keyword">public</span> internal::PrimitiveScalarBase &#123;</span><br><span class="line">  <span class="keyword">using</span> ValueType = std::shared_ptr&lt;Buffer&gt;;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// The value is not supposed to be modified after construction, because subclasses have</span></span><br><span class="line">  <span class="comment">// a scratch space whose content need to be kept consistent with the value. It is also</span></span><br><span class="line">  <span class="comment">// the user of this class&#x27;s responsibility to ensure that the buffer is not written to</span></span><br><span class="line">  <span class="comment">// accidentally.</span></span><br><span class="line">  <span class="type">const</span> std::shared_ptr&lt;Buffer&gt; value = NULLPTR;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<h3 id="Struct"><a href="#Struct" class="headerlink" title="Struct"></a>Struct</h3><p>StructArray 本身被实现为 validity + 子节点。这里的 Scalar 包含多个子 Scalar</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">struct</span> <span class="title class_">ARROW_EXPORT</span> StructScalar : <span class="keyword">public</span> Scalar &#123;</span><br><span class="line">  <span class="keyword">using</span> TypeClass = StructType;</span><br><span class="line">  <span class="keyword">using</span> ValueType = std::vector&lt;std::shared_ptr&lt;Scalar&gt;&gt;;</span><br><span class="line"></span><br><span class="line">  ScalarVector value;</span><br></pre></td></tr></table></figure>
+<p>转化为</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> (type_id == Type::STRUCT) &#123;</span><br><span class="line">  <span class="type">const</span> <span class="keyword">auto</span>&amp; scalar = <span class="built_in">checked_cast</span>&lt;<span class="type">const</span> StructScalar&amp;&gt;(value);</span><br><span class="line">  <span class="keyword">this</span>-&gt;child_data.<span class="built_in">resize</span>(<span class="keyword">this</span>-&gt;type-&gt;<span class="built_in">num_fields</span>());</span><br><span class="line">  <span class="built_in">DCHECK_EQ</span>(<span class="keyword">this</span>-&gt;type-&gt;<span class="built_in">num_fields</span>(), <span class="built_in">static_cast</span>&lt;<span class="type">int</span>&gt;(scalar.value.<span class="built_in">size</span>()));</span><br><span class="line">  <span class="keyword">for</span> (<span class="type">size_t</span> i = <span class="number">0</span>; i &lt; scalar.value.<span class="built_in">size</span>(); ++i) &#123;</span><br><span class="line">    <span class="keyword">this</span>-&gt;child_data[i].<span class="built_in">FillFromScalar</span>(*scalar.value[i]);</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="Lists-Map"><a href="#Lists-Map" class="headerlink" title="Lists / Map"></a>Lists / Map</h3><p>List Map 都是嵌套的结构，他们有着「相同的、未知长度的子类型」。在这里，子类型被巧妙的用 <code>::arrow::Array</code> 来实现。</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">struct</span> <span class="title class_">ARROW_EXPORT</span> BaseListScalar : <span class="keyword">public</span> Scalar &#123;</span><br><span class="line">  <span class="keyword">using</span> ValueType = std::shared_ptr&lt;Array&gt;;</span><br><span class="line">  <span class="comment">// The value is not supposed to be modified after construction, because subclasses have</span></span><br><span class="line">  <span class="comment">// a scratch space whose content need to be kept consistent with the value. It is also</span></span><br><span class="line">  <span class="comment">// the user of this class&#x27;s responsibility to ensure that the array is not modified</span></span><br><span class="line">  <span class="comment">// accidentally.</span></span><br><span class="line">  <span class="type">const</span> std::shared_ptr&lt;Array&gt; value;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>而不同的 Scalar 实现了独立的 Scratch 填充逻辑。</p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Array-amp-ArrayData"><span class="toc-number">1.</span> <span class="toc-text">Array &amp; ArrayData</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Span-of-array"><span class="toc-number">2.</span> <span class="toc-text">Span of array</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Scalar"><span class="toc-number">3.</span> <span class="toc-text">Scalar</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Primitive"><span class="toc-number">3.1.</span> <span class="toc-text">Primitive</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Dict"><span class="toc-number">3.2.</span> <span class="toc-text">Dict</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Var-length-amp-scratch-space"><span class="toc-number">3.3.</span> <span class="toc-text">Var-length &amp; scratch space</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Struct"><span class="toc-number">3.4.</span> <span class="toc-text">Struct</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Lists-Map"><span class="toc-number">3.5.</span> <span class="toc-text">Lists &#x2F; Map</span></a></li></ol></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2024/10/31/Arrow-Scalar/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2024/10/31/Arrow-Scalar/&text=Arrow Scalar"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2024/10/31/Arrow-Scalar/&title=Arrow Scalar"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2024/10/31/Arrow-Scalar/&is_video=false&description=Arrow Scalar"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Arrow Scalar&body=Check out this article: http://blog.mwish.me/2024/10/31/Arrow-Scalar/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2024/10/31/Arrow-Scalar/&title=Arrow Scalar"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2024/10/31/Arrow-Scalar/&title=Arrow Scalar"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2024/10/31/Arrow-Scalar/&title=Arrow Scalar"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2024/10/31/Arrow-Scalar/&title=Arrow Scalar"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2024/10/31/Arrow-Scalar/&name=Arrow Scalar&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2024/10/31/Arrow-Scalar/&t=Arrow Scalar"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>
