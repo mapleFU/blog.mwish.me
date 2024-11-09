@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="在之前的系列中介绍过 Arrow Expression: https:&#x2F;&#x2F;blog.mwish.me&#x2F;2023&#x2F;07&#x2F;06&#x2F;arrow-expression&#x2F; 在 Arrow 读取 Parquet 的时候，一般可能 Reader 会有某个 Filter，上层推下这个 Filter 来执行过滤。Parquet 的 min-max stats 会被抽取成 Arrow 的 Expression，然后这个">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Arrow simplifies expression with guarantee">
+<meta property="og:url" content="http://blog.mwish.me/2024/11/10/Arrow-simplifies-expression-with-guarantee/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="在之前的系列中介绍过 Arrow Expression: https:&#x2F;&#x2F;blog.mwish.me&#x2F;2023&#x2F;07&#x2F;06&#x2F;arrow-expression&#x2F; 在 Arrow 读取 Parquet 的时候，一般可能 Reader 会有某个 Filter，上层推下这个 Filter 来执行过滤。Parquet 的 min-max stats 会被抽取成 Arrow 的 Expression，然后这个">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2024-11-09T18:34:43.000Z">
+<meta property="article:modified_time" content="2024-11-09T18:35:59.008Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>Arrow simplifies expression with guarantee</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2024/11/05/cn-economics-essential-knowledge/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2024/11/10/Arrow-simplifies-expression-with-guarantee/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2024/11/10/Arrow-simplifies-expression-with-guarantee/&text=Arrow simplifies expression with guarantee"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2024/11/10/Arrow-simplifies-expression-with-guarantee/&title=Arrow simplifies expression with guarantee"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2024/11/10/Arrow-simplifies-expression-with-guarantee/&is_video=false&description=Arrow simplifies expression with guarantee"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Arrow simplifies expression with guarantee&body=Check out this article: http://blog.mwish.me/2024/11/10/Arrow-simplifies-expression-with-guarantee/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2024/11/10/Arrow-simplifies-expression-with-guarantee/&title=Arrow simplifies expression with guarantee"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2024/11/10/Arrow-simplifies-expression-with-guarantee/&title=Arrow simplifies expression with guarantee"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2024/11/10/Arrow-simplifies-expression-with-guarantee/&title=Arrow simplifies expression with guarantee"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2024/11/10/Arrow-simplifies-expression-with-guarantee/&title=Arrow simplifies expression with guarantee"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2024/11/10/Arrow-simplifies-expression-with-guarantee/&name=Arrow simplifies expression with guarantee&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2024/11/10/Arrow-simplifies-expression-with-guarantee/&t=Arrow simplifies expression with guarantee"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Gurantee-%E7%9A%84%E6%8A%BD%E5%8F%96"><span class="toc-number">1.</span> <span class="toc-text">Gurantee 的抽取</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#SimplifyWithGuarantee"><span class="toc-number">2.</span> <span class="toc-text">SimplifyWithGuarantee</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#KnowValues-guarantee-equal"><span class="toc-number">2.1.</span> <span class="toc-text">KnowValues: guarantee equal</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#ModifyExpression-%E7%9A%84%E5%AE%9E%E7%8E%B0"><span class="toc-number">2.1.1.</span> <span class="toc-text">ModifyExpression 的实现</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#is-valid-Nullablity"><span class="toc-number">2.2.</span> <span class="toc-text">is_valid: Nullablity</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Inequality-Bound-optimization"><span class="toc-number">2.3.</span> <span class="toc-text">Inequality: Bound optimization</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Inequality-Simplify"><span class="toc-number">2.3.1.</span> <span class="toc-text">Inequality::Simplify</span></a></li></ol></li></ol></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Arrow simplifies expression with guarantee
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2024-11-09T18:34:43.000Z" itemprop="datePublished">2024-11-10</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>在之前的系列中介绍过 Arrow Expression: <a href="https://blog.mwish.me/2023/07/06/arrow-expression/">https://blog.mwish.me/2023/07/06/arrow-expression/</a></p>
+<p>在 Arrow 读取 Parquet 的时候，一般可能 Reader 会有某个 Filter，上层推下这个 Filter 来执行过滤。Parquet 的 min-max stats 会被抽取成 Arrow 的 Expression，然后这个 Expression 会被视作 Gurantee。Gurantee 返回给上层，用来简化 Filter。如果 Filter 注定是 false（即可以被视为，读出来的数据一定会被过滤掉），这个 RowGroup 就可以不再需要被读取。</p>
+<p>下面分布介绍这个流程。</p>
+<h2 id="Gurantee-的抽取"><a href="#Gurantee-的抽取" class="headerlink" title="Gurantee 的抽取"></a>Gurantee 的抽取</h2><p>在</p>
+<ul>
+<li>Dataset 的 schema 层: <a href="https://blog.mwish.me/2023/07/23/Arrow-Dataset/#%E4%B8%8A%E5%B1%82%E6%93%8D%E4%BD%9C">https://blog.mwish.me/2023/07/23/Arrow-Dataset/#%E4%B8%8A%E5%B1%82%E6%93%8D%E4%BD%9C</a></li>
+<li><code>Fragment::partition_expression()</code> 中，抽取分区列表达式</li>
+<li><code>ParquetFileFragment::EvaluateStatisticsAsExpression</code> 会在每个 RowGroup 的各个 ColumnChunk 被抽取出来，然后用 <code>kleene_and</code> 把这些表达式（每个 Column 的）抽取到一起，作为整个 RowGroup 的 Guarantee。 <code>ParquetFileFragment::TestRowGroups</code> 去推一个表达式下来，拿到所有 RowGroup 化简后的表达式，尝试对其 <code>SimplifyWithGuarantee</code>，然后消除 <code>!Expression::IsSatisfiable()</code> 的 RowGroup</li>
+</ul>
+<p>这几个地方之前都有介绍，便不赘述了. <code>Expression::IsSatisfiable()</code> 大部分还是靠手写规则来实现的。这里有个比较有意思的是 <code>null</code> 被判断为不可满足的</p>
+<h2 id="SimplifyWithGuarantee"><a href="#SimplifyWithGuarantee" class="headerlink" title="SimplifyWithGuarantee"></a>SimplifyWithGuarantee</h2><p>签名如下：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// Simplify an expression by replacing subexpressions based on a guarantee:</span></span><br><span class="line"><span class="comment">/// a boolean expression which is guaranteed to evaluate to `true`. For example, this is</span></span><br><span class="line"><span class="comment">/// used to remove redundant function calls from a filter expression or to replace a</span></span><br><span class="line"><span class="comment">/// reference to a constant-value field with a literal.</span></span><br><span class="line"><span class="function">ARROW_EXPORT</span></span><br><span class="line"><span class="function">Result&lt;Expression&gt; <span class="title">SimplifyWithGuarantee</span><span class="params">(Expression,</span></span></span><br><span class="line"><span class="params"><span class="function">                                         <span class="type">const</span> Expression&amp; guaranteed_true_predicate)</span></span>;</span><br></pre></td></tr></table></figure>
+<p>根据 <code>guaranteed_true_predicate</code> 的表达式，来优化 <code>Expression</code>。这里实现如下：</p>
+<ol>
+<li>通过 <code>GuaranteeConjunctionMembers</code> ，抽取 <code>guarantee</code> 中 <code>kleene_and</code> 的成员列表作为 <code>vector</code></li>
+<li>下列用各种 adhoc 手段进行尝试<ol>
+<li><code>ExtractKnownFieldValues</code> 尝试抽取 and 列表中所有 <code>a = value</code> 这样的规则，抽成 <code>map</code> 的形式（ 见 <code>KnownFieldValues</code> ），然后用这个等式带入待优化的表达式，进行化简。化简调用了 <code>ReplaceFieldsWithKnownValues</code></li>
+<li>对于 <code>vector</code> 的成员，尝试抽取 <code>Inequality</code>, 用 <code>Inequality::ExtractOne</code> 来尝试抽取成员。然后尝试用 Inequality 来优化</li>
+</ol>
+</li>
+</ol>
+<p>我们可以分析一下中间的过程：</p>
+<p>这里有表达式的中间工具，我们之前提到的 Canonical 和 Consant Folding 的形式：</p>
+<ul>
+<li><a href="https://blog.mwish.me/2023/07/06/arrow-expression/#Canonicalize">https://blog.mwish.me/2023/07/06/arrow-expression/#Canonicalize</a></li>
+</ul>
+<p>这里具体是，原先的表达式（而不是 guarantee）被优化后，对其尝试 Canonical 成 <code>Call(FieldRef, Literal)</code> 和按照 Call 来折叠的形式 ，然后尝试常量折叠，来化简这个表达式。</p>
+<h3 id="KnowValues-guarantee-equal"><a href="#KnowValues-guarantee-equal" class="headerlink" title="KnowValues: guarantee equal"></a>KnowValues: guarantee equal</h3><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// \brief Extract an equality from an expression.</span></span><br><span class="line"><span class="comment">///</span></span><br><span class="line"><span class="comment">/// Recognizes expressions of the form:</span></span><br><span class="line"><span class="comment">/// equal(a, 2)</span></span><br><span class="line"><span class="comment">/// is_null(a)</span></span><br><span class="line">std::optional&lt;std::pair&lt;FieldRef, Datum&gt;&gt; <span class="built_in">ExtractOneFieldValue</span>(<span class="type">const</span> Expression&amp; guarantee);</span><br></pre></td></tr></table></figure>
+<p><code>ExtractKnownFieldValues</code> 是一版本还是挺 adhoc 的实现，特殊在于其实来一个 <code>or</code>，就能报废掉这玩意，因为 <code>Expression</code> 里面有 <code>or</code> 代表无法抽取出合适的 <code>ExtractOneFieldValue</code>，只能说这是特定场景（因为 Parquet 的 Guarantee 和分区之类地方产生的 Guarantee 无法生成这样的数据？）的实现吧。</p>
+<p>注意到一个特别的特点，这里抽取了 <code>is_null</code>，而不只是 <code>equal</code>，此外，<code>is_valid</code> 会在下面的逻辑中被处理。</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// Conjunction members which are represented in known_values are erased from</span></span><br><span class="line"><span class="comment">// conjunction_members</span></span><br><span class="line"><span class="function">Status <span class="title">ExtractKnownFieldValues</span><span class="params">(std::vector&lt;Expression&gt;* conjunction_members,</span></span></span><br><span class="line"><span class="params"><span class="function">                               KnownFieldValues* known_values)</span> </span>&#123;</span><br><span class="line">  <span class="comment">// filter out consumed conjunction members, leaving only unconsumed</span></span><br><span class="line">  *conjunction_members = arrow::internal::<span class="built_in">FilterVector</span>(</span><br><span class="line">      std::<span class="built_in">move</span>(*conjunction_members),</span><br><span class="line">      [known_values](<span class="type">const</span> Expression&amp; guarantee) -&gt; <span class="type">bool</span> &#123;</span><br><span class="line">        <span class="keyword">if</span> (<span class="keyword">auto</span> known_value = <span class="built_in">ExtractOneFieldValue</span>(guarantee)) &#123;</span><br><span class="line">          known_values-&gt;map.<span class="built_in">insert</span>(std::<span class="built_in">move</span>(*known_value));</span><br><span class="line">          <span class="keyword">return</span> <span class="literal">false</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">true</span>;</span><br><span class="line">      &#125;);</span><br><span class="line"></span><br><span class="line">  <span class="keyword">return</span> Status::<span class="built_in">OK</span>();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这里调用 <code>ReplaceFieldsWithKnownValues</code> 去覆盖用户表达式中的逻辑。这里<strong>可能需要在替换的时候插入 cast</strong>。</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">Result&lt;Expression&gt; <span class="title">ReplaceFieldsWithKnownValues</span><span class="params">(<span class="type">const</span> KnownFieldValues&amp; known_values,</span></span></span><br><span class="line"><span class="params"><span class="function">                                                Expression expr)</span> </span>&#123;</span><br><span class="line">  <span class="keyword">if</span> (!expr.<span class="built_in">IsBound</span>()) &#123;</span><br><span class="line">    <span class="keyword">return</span> Status::<span class="built_in">Invalid</span>(</span><br><span class="line">        <span class="string">&quot;ReplaceFieldsWithKnownValues called on an unbound Expression&quot;</span>);</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">return</span> <span class="built_in">ModifyExpression</span>(</span><br><span class="line">      std::<span class="built_in">move</span>(expr),</span><br><span class="line">      [&amp;known_values](Expression expr) -&gt; Result&lt;Expression&gt; &#123;</span><br><span class="line">        <span class="keyword">if</span> (<span class="keyword">auto</span> ref = expr.<span class="built_in">field_ref</span>()) &#123;</span><br><span class="line">          <span class="keyword">auto</span> it = known_values.map.<span class="built_in">find</span>(*ref);</span><br><span class="line">          <span class="keyword">if</span> (it != known_values.map.<span class="built_in">end</span>()) &#123;</span><br><span class="line">            Datum lit = it-&gt;second;</span><br><span class="line">            <span class="keyword">if</span> (lit.<span class="built_in">type</span>()-&gt;<span class="built_in">Equals</span>(*expr.<span class="built_in">type</span>())) <span class="keyword">return</span> <span class="built_in">literal</span>(std::<span class="built_in">move</span>(lit));</span><br><span class="line">            <span class="comment">// type mismatch, try casting the known value to the correct type</span></span><br><span class="line"></span><br><span class="line">            <span class="keyword">if</span> (expr.<span class="built_in">type</span>()-&gt;<span class="built_in">id</span>() == Type::DICTIONARY &amp;&amp;</span><br><span class="line">                lit.<span class="built_in">type</span>()-&gt;<span class="built_in">id</span>() != Type::DICTIONARY) &#123;</span><br><span class="line">              <span class="comment">// the known value must be dictionary encoded</span></span><br><span class="line"></span><br><span class="line">              <span class="type">const</span> <span class="keyword">auto</span>&amp; dict_type = <span class="built_in">checked_cast</span>&lt;<span class="type">const</span> DictionaryType&amp;&gt;(*expr.<span class="built_in">type</span>());</span><br><span class="line">              <span class="keyword">if</span> (!lit.<span class="built_in">type</span>()-&gt;<span class="built_in">Equals</span>(dict_type.<span class="built_in">value_type</span>())) &#123;</span><br><span class="line">                <span class="built_in">ARROW_ASSIGN_OR_RAISE</span>(lit, compute::<span class="built_in">Cast</span>(lit, dict_type.<span class="built_in">value_type</span>()));</span><br><span class="line">              &#125;</span><br><span class="line"></span><br><span class="line">              <span class="keyword">if</span> (lit.<span class="built_in">is_scalar</span>()) &#123;</span><br><span class="line">                <span class="built_in">ARROW_ASSIGN_OR_RAISE</span>(<span class="keyword">auto</span> dictionary,</span><br><span class="line">                                      <span class="built_in">MakeArrayFromScalar</span>(*lit.<span class="built_in">scalar</span>(), <span class="number">1</span>));</span><br><span class="line"></span><br><span class="line">                lit = Datum&#123;DictionaryScalar::<span class="built_in">Make</span>(<span class="built_in">MakeScalar</span>&lt;<span class="type">int32_t</span>&gt;(<span class="number">0</span>),</span><br><span class="line">                                                   std::<span class="built_in">move</span>(dictionary))&#125;;</span><br><span class="line">              &#125;</span><br><span class="line">            &#125;</span><br><span class="line"></span><br><span class="line">            <span class="built_in">ARROW_ASSIGN_OR_RAISE</span>(lit, compute::<span class="built_in">Cast</span>(lit, expr.<span class="built_in">type</span>()-&gt;<span class="built_in">GetSharedPtr</span>()));</span><br><span class="line">            <span class="keyword">return</span> <span class="built_in">literal</span>(std::<span class="built_in">move</span>(lit));</span><br><span class="line">          &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> expr;</span><br><span class="line">      &#125;,</span><br><span class="line">      [](Expression expr, ...) &#123; <span class="keyword">return</span> expr; &#125;);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h4 id="ModifyExpression-的实现"><a href="#ModifyExpression-的实现" class="headerlink" title="ModifyExpression 的实现"></a>ModifyExpression 的实现</h4><p>这里有个很有意思的地方是它调用 <code>ModifyExpression</code> 去优化每个子表达式，这函数我原封不动搬上来，因为非常好理解。</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// Modify an Expression with pre-order and post-order visitation.</span></span><br><span class="line"><span class="comment">/// `pre` will be invoked on each Expression. `pre` will visit Calls before their</span></span><br><span class="line"><span class="comment">/// arguments, `post_call` will visit Calls (and no other Expressions) after their</span></span><br><span class="line"><span class="comment">/// arguments. Visitors should return the Identical expression to indicate no change; this</span></span><br><span class="line"><span class="comment">/// will prevent unnecessary construction in the common case where a modification is not</span></span><br><span class="line"><span class="comment">/// possible/necessary/...</span></span><br><span class="line"><span class="comment">///</span></span><br><span class="line"><span class="comment">/// If an argument was modified, `post_call` visits a reconstructed Call with the modified</span></span><br><span class="line"><span class="comment">/// arguments but also receives a pointer to the unmodified Expression as a second</span></span><br><span class="line"><span class="comment">/// argument. If no arguments were modified the unmodified Expression* will be nullptr.</span></span><br><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> PreVisit, <span class="keyword">typename</span> PostVisitCall&gt;</span><br><span class="line"><span class="function">Result&lt;Expression&gt; <span class="title">ModifyExpression</span><span class="params">(Expression expr, <span class="type">const</span> PreVisit&amp; pre,</span></span></span><br><span class="line"><span class="params"><span class="function">                                    <span class="type">const</span> PostVisitCall&amp; post_call)</span> </span>&#123;</span><br><span class="line">  <span class="built_in">ARROW_ASSIGN_OR_RAISE</span>(expr, <span class="built_in">Result</span>&lt;Expression&gt;(<span class="built_in">pre</span>(std::<span class="built_in">move</span>(expr))));</span><br><span class="line"></span><br><span class="line">  <span class="keyword">auto</span> call = expr.<span class="built_in">call</span>();</span><br><span class="line">  <span class="keyword">if</span> (!call) <span class="keyword">return</span> expr;</span><br><span class="line"></span><br><span class="line">  <span class="type">bool</span> at_least_one_modified = <span class="literal">false</span>;</span><br><span class="line">  std::vector&lt;Expression&gt; modified_arguments;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">for</span> (<span class="type">size_t</span> i = <span class="number">0</span>; i &lt; call-&gt;arguments.<span class="built_in">size</span>(); ++i) &#123;</span><br><span class="line">    <span class="built_in">ARROW_ASSIGN_OR_RAISE</span>(<span class="keyword">auto</span> modified_argument,</span><br><span class="line">                          <span class="built_in">ModifyExpression</span>(call-&gt;arguments[i], pre, post_call));</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (<span class="built_in">Identical</span>(modified_argument, call-&gt;arguments[i])) &#123;</span><br><span class="line">      <span class="keyword">continue</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (!at_least_one_modified) &#123;</span><br><span class="line">      modified_arguments = call-&gt;arguments;</span><br><span class="line">      at_least_one_modified = <span class="literal">true</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    modified_arguments[i] = std::<span class="built_in">move</span>(modified_argument);</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span> (at_least_one_modified) &#123;</span><br><span class="line">    <span class="comment">// reconstruct the call expression with the modified arguments</span></span><br><span class="line">    <span class="keyword">auto</span> modified_call = *call;</span><br><span class="line">    modified_call.arguments = std::<span class="built_in">move</span>(modified_arguments);</span><br><span class="line">    <span class="keyword">return</span> <span class="built_in">post_call</span>(<span class="built_in">Expression</span>(std::<span class="built_in">move</span>(modified_call)), &amp;expr);</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">return</span> <span class="built_in">post_call</span>(std::<span class="built_in">move</span>(expr), NULLPTR);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="is-valid-Nullablity"><a href="#is-valid-Nullablity" class="headerlink" title="is_valid: Nullablity"></a>is_valid: Nullablity</h3><p>这段逻辑非常弱智:</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">for</span> (<span class="type">const</span> <span class="keyword">auto</span>&amp; guarantee : conjunction_members) &#123;</span><br><span class="line">  <span class="keyword">if</span> (!guarantee.<span class="built_in">call</span>()) <span class="keyword">continue</span>;</span><br><span class="line">  </span><br><span class="line">  <span class="comment">// ...</span></span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span> (guarantee.<span class="built_in">call</span>()-&gt;function_name == <span class="string">&quot;is_valid&quot;</span>) &#123;</span><br><span class="line">    <span class="built_in">ARROW_ASSIGN_OR_RAISE</span>(</span><br><span class="line">        <span class="keyword">auto</span> simplified,</span><br><span class="line">        <span class="built_in">SimplifyIsValidGuarantee</span>(std::<span class="built_in">move</span>(expr), *<span class="built_in">CallNotNull</span>(guarantee)));</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (<span class="built_in">Identical</span>(simplified, expr)) <span class="keyword">continue</span>;</span><br><span class="line"></span><br><span class="line">    expr = std::<span class="built_in">move</span>(simplified);</span><br><span class="line">    <span class="built_in">RETURN_NOT_OK</span>(<span class="built_in">CanonicalizeAndFoldConstants</span>());</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>和替换：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// \brief Simplify an expression given a guarantee, if the guarantee</span></span><br><span class="line"><span class="comment">///   is is_valid().</span></span><br><span class="line"><span class="function">Result&lt;Expression&gt; <span class="title">SimplifyIsValidGuarantee</span><span class="params">(Expression expr,</span></span></span><br><span class="line"><span class="params"><span class="function">                                            <span class="type">const</span> Expression::Call&amp; guarantee)</span> </span>&#123;</span><br><span class="line">  <span class="keyword">if</span> (guarantee.function_name != <span class="string">&quot;is_valid&quot;</span>) <span class="keyword">return</span> expr;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">return</span> <span class="built_in">ModifyExpression</span>(</span><br><span class="line">      std::<span class="built_in">move</span>(expr), [](Expression expr) &#123; <span class="keyword">return</span> expr; &#125;,</span><br><span class="line">      [&amp;](Expression expr, ...) -&gt; Result&lt;Expression&gt; &#123;</span><br><span class="line">        <span class="keyword">auto</span> call = expr.<span class="built_in">call</span>();</span><br><span class="line">        <span class="keyword">if</span> (!call) <span class="keyword">return</span> expr;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (call-&gt;arguments[<span class="number">0</span>] != guarantee.arguments[<span class="number">0</span>]) <span class="keyword">return</span> expr;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (call-&gt;function_name == <span class="string">&quot;is_valid&quot;</span>) <span class="keyword">return</span> <span class="built_in">literal</span>(<span class="literal">true</span>);</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (call-&gt;function_name == <span class="string">&quot;true_unless_null&quot;</span>) <span class="keyword">return</span> <span class="built_in">literal</span>(<span class="literal">true</span>);</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (call-&gt;function_name == <span class="string">&quot;is_null&quot;</span>) <span class="keyword">return</span> <span class="built_in">literal</span>(<span class="literal">false</span>);</span><br><span class="line"></span><br><span class="line">        <span class="keyword">return</span> expr;</span><br><span class="line">      &#125;);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>需要注意的是，这里其实也可以处理</p>
+<h3 id="Inequality-Bound-optimization"><a href="#Inequality-Bound-optimization" class="headerlink" title="Inequality: Bound optimization"></a>Inequality: Bound optimization</h3><p><code>Inequality</code> 实际上是这里比较有意思的代码，这里抽取的是 <code>&gt;=</code> <code>&lt;</code> 这种表达式和 <code>is_in</code> 这样的表达式。</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// An inequality comparison which a target Expression is known to satisfy. If nullable,</span></span><br><span class="line"><span class="comment">// the target may evaluate to null in addition to values satisfying the comparison.</span></span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">Inequality</span> &#123;</span><br><span class="line">  <span class="comment">// The inequality type</span></span><br><span class="line">  Comparison::type cmp;</span><br><span class="line">  <span class="comment">// The LHS of the inequality</span></span><br><span class="line">  <span class="type">const</span> FieldRef&amp; target;</span><br><span class="line">  <span class="comment">// The RHS of the inequality</span></span><br><span class="line">  <span class="type">const</span> Datum&amp; bound;</span><br><span class="line">  <span class="comment">// Whether target can be null</span></span><br><span class="line">  <span class="type">bool</span> nullable;</span><br><span class="line">  <span class="comment">// Extract an Inequality if possible, derived from &quot;less&quot;,</span></span><br><span class="line">  <span class="comment">// &quot;greater&quot;, &quot;less_equal&quot;, and &quot;greater_equal&quot; expressions,</span></span><br><span class="line">  <span class="comment">// possibly disjuncted with an &quot;is_null&quot; Expression.</span></span><br><span class="line">  <span class="comment">// cmp(a, 2)</span></span><br><span class="line">  <span class="comment">// cmp(a, 2) or is_null(a)</span></span><br><span class="line">  <span class="function"><span class="type">static</span> std::optional&lt;Inequality&gt; <span class="title">ExtractOne</span><span class="params">(<span class="type">const</span> Expression&amp; guarantee)</span></span></span><br><span class="line"><span class="function">&#125;</span>;</span><br><span class="line"></span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">Comparison</span> &#123;</span><br><span class="line">  <span class="keyword">enum</span> <span class="title class_">type</span> &#123;</span><br><span class="line">    NA = <span class="number">0</span>,</span><br><span class="line">    EQUAL = <span class="number">1</span>,</span><br><span class="line">    LESS = <span class="number">2</span>,</span><br><span class="line">    GREATER = <span class="number">4</span>,</span><br><span class="line">    NOT_EQUAL = LESS | GREATER,</span><br><span class="line">    LESS_EQUAL = LESS | EQUAL,</span><br><span class="line">    GREATER_EQUAL = GREATER | EQUAL,</span><br><span class="line">  &#125;;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>这里形式上会抽取出 <code>Inequality</code> 的形式。然后得以用这个 <code>Inequality</code> 去优化 <code>Expression</code>。这部分的抽取代码相对简单一点:</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">static</span> std::optional&lt;Inequality&gt; <span class="title">ExtractOneFromComparison</span><span class="params">(<span class="type">const</span> Expression&amp; guarantee)</span> </span>&#123;</span><br><span class="line">  <span class="keyword">auto</span> call = guarantee.<span class="built_in">call</span>();</span><br><span class="line">  <span class="keyword">if</span> (!call) <span class="keyword">return</span> std::<span class="literal">nullopt</span>;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span> (<span class="keyword">auto</span> cmp = Comparison::<span class="built_in">Get</span>(call-&gt;function_name)) &#123;</span><br><span class="line">    <span class="comment">// not_equal comparisons are not very usable as guarantees</span></span><br><span class="line">    <span class="keyword">if</span> (*cmp == Comparison::NOT_EQUAL) <span class="keyword">return</span> std::<span class="literal">nullopt</span>;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">auto</span> target = call-&gt;arguments[<span class="number">0</span>].<span class="built_in">field_ref</span>();</span><br><span class="line">    <span class="keyword">if</span> (!target) <span class="keyword">return</span> std::<span class="literal">nullopt</span>;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">auto</span> bound = call-&gt;arguments[<span class="number">1</span>].<span class="built_in">literal</span>();</span><br><span class="line">    <span class="keyword">if</span> (!bound) <span class="keyword">return</span> std::<span class="literal">nullopt</span>;</span><br><span class="line">    <span class="keyword">if</span> (!bound-&gt;<span class="built_in">is_scalar</span>()) <span class="keyword">return</span> std::<span class="literal">nullopt</span>;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> Inequality&#123;*cmp, <span class="comment">/*target=*/</span>*target, *bound, <span class="comment">/*nullable=*/</span><span class="literal">false</span>&#125;;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">return</span> std::<span class="literal">nullopt</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>化简的代码，就是需要用这个 <code>Inequality</code> 去化简原本的表达式。</p>
+<p>这里用 <code>Inequality::Simplify</code> 在 <code>post_call</code> 里面优化每个子表达式:</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">for</span> (<span class="type">const</span> <span class="keyword">auto</span>&amp; guarantee : conjunction_members) &#123;</span><br><span class="line">  <span class="keyword">if</span> (!guarantee.<span class="built_in">call</span>()) <span class="keyword">continue</span>;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span> (<span class="keyword">auto</span> inequality = Inequality::<span class="built_in">ExtractOne</span>(guarantee)) &#123;</span><br><span class="line">    <span class="built_in">ARROW_ASSIGN_OR_RAISE</span>(<span class="keyword">auto</span> simplified,</span><br><span class="line">                          <span class="built_in">ModifyExpression</span>(</span><br><span class="line">                              std::<span class="built_in">move</span>(expr), [](Expression expr) &#123; <span class="keyword">return</span> expr; &#125;,</span><br><span class="line">                              [&amp;](Expression expr, ...) -&gt; Result&lt;Expression&gt; &#123;</span><br><span class="line">                                <span class="keyword">return</span> inequality-&gt;<span class="built_in">Simplify</span>(std::<span class="built_in">move</span>(expr));</span><br><span class="line">                              &#125;));</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (<span class="built_in">Identical</span>(simplified, expr)) <span class="keyword">continue</span>;</span><br><span class="line"></span><br><span class="line">    expr = std::<span class="built_in">move</span>(simplified);</span><br><span class="line">    <span class="built_in">RETURN_NOT_OK</span>(<span class="built_in">CanonicalizeAndFoldConstants</span>());</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="comment">/// .. 优化 guarantee 是 is_valid 的代码</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h4 id="Inequality-Simplify"><a href="#Inequality-Simplify" class="headerlink" title="Inequality::Simplify"></a>Inequality::Simplify</h4><p>这里会先尝试针对 <code>Inequality</code> 的 <code>nullable</code>，去尝试优化 <code>is_null</code> 和 <code>is_valid</code> 这样的 call。</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> (call-&gt;function_name == <span class="string">&quot;is_valid&quot;</span> || call-&gt;function_name == <span class="string">&quot;is_null&quot;</span>) &#123;</span><br><span class="line">  <span class="keyword">if</span> (guarantee.nullable) <span class="keyword">return</span> expr;</span><br><span class="line">  <span class="type">const</span> <span class="keyword">auto</span>&amp; lhs = Comparison::<span class="built_in">StripOrderPreservingCasts</span>(call-&gt;arguments[<span class="number">0</span>]);</span><br><span class="line">  <span class="keyword">if</span> (!lhs.<span class="built_in">field_ref</span>()) <span class="keyword">return</span> expr;</span><br><span class="line">  <span class="keyword">if</span> (*lhs.<span class="built_in">field_ref</span>() != guarantee.target) <span class="keyword">return</span> expr;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">return</span> call-&gt;function_name == <span class="string">&quot;is_valid&quot;</span> ? <span class="built_in">literal</span>(<span class="literal">true</span>) : <span class="built_in">literal</span>(<span class="literal">false</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>然后会有一个新实现的 <code>is_in</code> 优化，这个优化非常有意思，它会尽力改写表达式，比如 <code>a &gt; 10 &amp;&amp; is_valid(a)</code> 和 <code>a in [1 , 2, 11]</code> 会被优化成 <code>a in [11]</code>,  这个 pr ( <a target="_blank" rel="noopener" href="https://github.com/apache/arrow/commit/44b72d5c2518b7dc70b67b588432fb06ea3896c7">https://github.com/apache/arrow/commit/44b72d5c2518b7dc70b67b588432fb06ea3896c7</a> ) 有这段代码的完整实现</p>
+<p>最后这里会根据 <code>Comparison::StripOrderPreservingCast</code> 抽取出来的 Lit 来进行一些实现，这里具体来说还是比较朴素的。这里会再次根据 <code>is_null</code> 来尝试判断，如果包含 <code>nullable</code> 的话，这里其实会处理成比较奇怪的形式：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// The given expression simplifies to `value` if the inequality</span></span><br><span class="line"><span class="comment">/// target is not nullable. Otherwise, it simplifies to either a</span></span><br><span class="line"><span class="comment">/// call to true_unless_null or !true_unless_null.</span></span><br><span class="line"><span class="function">Result&lt;Expression&gt; <span class="title">simplified_to</span><span class="params">(<span class="type">const</span> Expression&amp; bound_target, <span class="type">bool</span> value)</span> <span class="type">const</span> </span>&#123;</span><br><span class="line">  <span class="keyword">if</span> (!nullable) <span class="keyword">return</span> <span class="built_in">literal</span>(value);</span><br><span class="line"></span><br><span class="line">  ExecContext exec_context;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// Data may be null, so comparison will yield `value` - or null IFF the data was null</span></span><br><span class="line">  <span class="comment">//</span></span><br><span class="line">  <span class="comment">// true_unless_null is cheap; it purely reuses the validity bitmap for the values</span></span><br><span class="line">  <span class="comment">// buffer. Inversion is less cheap but we expect that term never to be evaluated</span></span><br><span class="line">  <span class="comment">// since invert(true_unless_null(x)) is not satisfiable.</span></span><br><span class="line">  Expression::Call call;</span><br><span class="line">  call.function_name = <span class="string">&quot;true_unless_null&quot;</span>;</span><br><span class="line">  call.arguments = &#123;bound_target&#125;;</span><br><span class="line">  <span class="built_in">ARROW_ASSIGN_OR_RAISE</span>(</span><br><span class="line">      <span class="keyword">auto</span> true_unless_null,</span><br><span class="line">      <span class="built_in">BindNonRecursive</span>(std::<span class="built_in">move</span>(call),</span><br><span class="line">                       <span class="comment">/*insert_implicit_casts=*/</span><span class="literal">false</span>, &amp;exec_context));</span><br><span class="line">  <span class="keyword">if</span> (value) <span class="keyword">return</span> true_unless_null;</span><br><span class="line"></span><br><span class="line">  Expression::Call invert;</span><br><span class="line">  invert.function_name = <span class="string">&quot;invert&quot;</span>;</span><br><span class="line">  invert.arguments = &#123;std::<span class="built_in">move</span>(true_unless_null)&#125;;</span><br><span class="line">  <span class="keyword">return</span> <span class="built_in">BindNonRecursive</span>(std::<span class="built_in">move</span>(invert),</span><br><span class="line">                          <span class="comment">/*insert_implicit_casts=*/</span><span class="literal">false</span>, &amp;exec_context);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Gurantee-%E7%9A%84%E6%8A%BD%E5%8F%96"><span class="toc-number">1.</span> <span class="toc-text">Gurantee 的抽取</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#SimplifyWithGuarantee"><span class="toc-number">2.</span> <span class="toc-text">SimplifyWithGuarantee</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#KnowValues-guarantee-equal"><span class="toc-number">2.1.</span> <span class="toc-text">KnowValues: guarantee equal</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#ModifyExpression-%E7%9A%84%E5%AE%9E%E7%8E%B0"><span class="toc-number">2.1.1.</span> <span class="toc-text">ModifyExpression 的实现</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#is-valid-Nullablity"><span class="toc-number">2.2.</span> <span class="toc-text">is_valid: Nullablity</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Inequality-Bound-optimization"><span class="toc-number">2.3.</span> <span class="toc-text">Inequality: Bound optimization</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Inequality-Simplify"><span class="toc-number">2.3.1.</span> <span class="toc-text">Inequality::Simplify</span></a></li></ol></li></ol></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2024/11/10/Arrow-simplifies-expression-with-guarantee/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2024/11/10/Arrow-simplifies-expression-with-guarantee/&text=Arrow simplifies expression with guarantee"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2024/11/10/Arrow-simplifies-expression-with-guarantee/&title=Arrow simplifies expression with guarantee"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2024/11/10/Arrow-simplifies-expression-with-guarantee/&is_video=false&description=Arrow simplifies expression with guarantee"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Arrow simplifies expression with guarantee&body=Check out this article: http://blog.mwish.me/2024/11/10/Arrow-simplifies-expression-with-guarantee/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2024/11/10/Arrow-simplifies-expression-with-guarantee/&title=Arrow simplifies expression with guarantee"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2024/11/10/Arrow-simplifies-expression-with-guarantee/&title=Arrow simplifies expression with guarantee"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2024/11/10/Arrow-simplifies-expression-with-guarantee/&title=Arrow simplifies expression with guarantee"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2024/11/10/Arrow-simplifies-expression-with-guarantee/&title=Arrow simplifies expression with guarantee"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2024/11/10/Arrow-simplifies-expression-with-guarantee/&name=Arrow simplifies expression with guarantee&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2024/11/10/Arrow-simplifies-expression-with-guarantee/&t=Arrow simplifies expression with guarantee"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>
