@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="&lt; DSM vs. NSM: CPU Performance Tradeoffs in Block-Oriented Query Processing&gt; 是一篇 CWI 发表于 08 年的论文，介绍在 MonetDB&#x2F;X100 中实验并比较，对于不同性质的 operator，评估 row&#x2F;column 执行效率。本篇论文大概分成了两种负载：  Sequential data acces">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Column or row in database execution">
+<meta property="og:url" content="http://blog.mwish.me/2024/12/05/Column-or-row-in-database-execution/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="&lt; DSM vs. NSM: CPU Performance Tradeoffs in Block-Oriented Query Processing&gt; 是一篇 CWI 发表于 08 年的论文，介绍在 MonetDB&#x2F;X100 中实验并比较，对于不同性质的 operator，评估 row&#x2F;column 执行效率。本篇论文大概分成了两种负载：  Sequential data acces">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/1727770027045867387.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/3903264824635406858.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/7261074168223906048.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/8380017861965256652.png">
+<meta property="article:published_time" content="2024-12-04T16:10:38.000Z">
+<meta property="article:modified_time" content="2024-12-04T16:12:25.646Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/1727770027045867387.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>Column or row in database execution</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2024/11/20/Compile-Loader-Libraries-Part-1-Static-linking/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2024/12/05/Column-or-row-in-database-execution/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2024/12/05/Column-or-row-in-database-execution/&text=Column or row in database execution"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2024/12/05/Column-or-row-in-database-execution/&title=Column or row in database execution"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2024/12/05/Column-or-row-in-database-execution/&is_video=false&description=Column or row in database execution"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Column or row in database execution&body=Check out this article: http://blog.mwish.me/2024/12/05/Column-or-row-in-database-execution/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2024/12/05/Column-or-row-in-database-execution/&title=Column or row in database execution"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2024/12/05/Column-or-row-in-database-execution/&title=Column or row in database execution"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2024/12/05/Column-or-row-in-database-execution/&title=Column or row in database execution"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2024/12/05/Column-or-row-in-database-execution/&title=Column or row in database execution"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2024/12/05/Column-or-row-in-database-execution/&name=Column or row in database execution&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2024/12/05/Column-or-row-in-database-execution/&t=Column or row in database execution"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Abstract-Introduction"><span class="toc-number">1.</span> <span class="toc-text">Abstract &#x2F; Introduction</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#NSM"><span class="toc-number">1.1.</span> <span class="toc-text">NSM</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Extra-Buffer-Management"><span class="toc-number">1.1.1.</span> <span class="toc-text">Extra Buffer Management</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#NSM-tuple-block-representation"><span class="toc-number">2.</span> <span class="toc-text">NSM tuple-block representation</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Experiments"><span class="toc-number">3.</span> <span class="toc-text">Experiments</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Sequential-data-access"><span class="toc-number">3.1.</span> <span class="toc-text">Sequential data access</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Random-Data-Access"><span class="toc-number">3.2.</span> <span class="toc-text">Random Data Access</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Data-Conversion"><span class="toc-number">3.3.</span> <span class="toc-text">Data Conversion</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Reference"><span class="toc-number">4.</span> <span class="toc-text">Reference</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Column or row in database execution
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2024-12-04T16:10:38.000Z" itemprop="datePublished">2024-12-05</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>&lt; DSM vs. NSM: CPU Performance Tradeoffs in Block-Oriented Query Processing&gt; 是一篇 CWI 发表于 08 年的论文，介绍在 MonetDB/X100 中实验并比较，对于不同性质的 operator，评估 row/column 执行效率。本篇论文大概分成了两种负载：</p>
+<ul>
+<li>Sequential data access: 直接 scan 类的开销，比如 scan, add, sum 等</li>
+<li>Random data access: 这个地方论文举的例子比较有意思，用（Hash）Agg 来表示</li>
+</ul>
+<p>论文很短，是那种八页的小论文。作者评估了不同 Operator 的情况，包括也采用了 CPU Prefetch Intrinsics 来测试 prefetch，得到不同数据规模（fit in L1/L2）下的负载情况。此外，论文当时看起来是有点像想支持行列混合执行的框架，所以</p>
+<p>看本篇论文是看到 Datafusion 博客 [1] 中的「Optimized Multi-Column Grouping」一节，这个 Patch 把多列 Agg 从行格式改成列格式，优化了 ClickBench 下的性能。优化是 Arrow-&gt;Row-&gt;Arrow 到 Arrow-&gt;(Accumulated)Arrow format，通过（可能增大）compare 开销，降低 copying 开销。对这块内容感兴趣，所以翻出了这篇文章，发现对这个话题有比较大的启发。</p>
+<h2 id="Abstract-Introduction"><a href="#Abstract-Introduction" class="headerlink" title="Abstract / Introduction"></a>Abstract / Introduction</h2><p>列存优势（老生常谈）</p>
+<blockquote>
+<p>(i) CPU cache and TLB miss ratio, resulting from the data access patterns; (ii) the possibility of using SIMD operations (e.g. SSE) to process multiple data items with one instruction; (iii) the average amount of inﬂight instructions unbound by code- or data-dependencies, thus available to keep the instruction pipelines ﬁlled.</p>
+</blockquote>
+<p>作者提出的关键词：</p>
+<ul>
+<li>block-oriented query processing: 一组数据（不管行还是列）的处理</li>
+<li>horizontal tuple layout (NSM): 行存</li>
+<li>vertical layout (DSM): 列存</li>
+</ul>
+<blockquote>
+<p>Typically, performance increases with increasing block size, as long as the the cumulative size of tuple-blocks ﬂowing between the operators in a query plan ﬁts in the CPU cache. The main advantage of block-oriented processing is a reduction in the amount of method calls (i.e., query interpretation overhead). Additional beneﬁt comes from the fact that the lowest level primitive functions in the query engine now expose independent work on multiple tuples (arrays of tuples).</p>
+</blockquote>
+<h3 id="NSM"><a href="#NSM" class="headerlink" title="NSM"></a>NSM</h3><p>关于列存实现，有点意思，大致说了为啥 c-store 那种格式不被选中，而是现在的 null-buffer + data-buffer pattern:</p>
+<blockquote>
+<p>Traditionally, the Decomposed Storage Model [9] proposed for each attribute column to hold two columns: a surrogate (or object-id) column and a value column. Modern columnbased systems [5, 16] choose to avoid the former column, and use the natural order for the tuple reorganization purposes. As a result, the table representation is a set of binary ﬁles, each containing consecutive values from a diﬀerent attribute. This format is sometimes complicated e.g. by not storing NULL values and other forms of data compression [21, 1]. In this case, some systems keep the data compressed for some part of the execution [1], and some perform a fully-transparent decompression, providing a simple DSM structure for the query executor [21].</p>
+</blockquote>
+<p>在这种模式下，地址大概是这样的：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">value = attribute[position];</span><br></pre></td></tr></table></figure>
+<h4 id="Extra-Buffer-Management"><a href="#Extra-Buffer-Management" class="headerlink" title="Extra Buffer Management"></a>Extra Buffer Management</h4><blockquote>
+<p>Variable-width datatypes such as strings cannot be stored directly in arrays. A solution is to represent them as memory pointers into a heap. In MonetDB/X100, a tuple stream containing string values uses a list of heap buﬀers that contain concatenated, zero-separated strings. As soon as the last string in a buﬀer has left the query processing pipeline, the buﬀer can be reused.</p>
+</blockquote>
+<p>这里有点像 Arrow String 类型的编码，但是可以有多于一个 Buffer</p>
+<h2 id="NSM-tuple-block-representation"><a href="#NSM-tuple-block-representation" class="headerlink" title="NSM tuple-block representation"></a>NSM tuple-block representation</h2><blockquote>
+<p>Typically, database systems use some form of a slotted page for the NSM-stored tuples. The exact format of the tuples in this model can be highly complex, mostly due to storage considerations. For example, NULL values can be materialized or not, variable-width ﬁelds result in non-ﬁxed attribute oﬀsets, values can be stored explicitly or as references (e.g. dictionary compression or values from a hash table in a join result). Even ﬁxed-width attributes can be stored using variable-width encoding, e.g. length encoding [17] or Microsoft’s Vardecimal Storage Format [3].</p>
+<p>Most of the described techniques have a goal of reducing the size of a tuple, which is crucial for disk-based data storage. Unfortunately, in many cases, such tuples are carried through into the query executor, making the data access and manipulation complex and hence expensive. In traditional tuple-at-a-time processing, the cost of accessing a value can be an acceptable compared to other overheads, but with block processing handling complex tuple representations can consume the majority of time.</p>
+</blockquote>
+<p><img src="https://image.mwish.me/blog-image/1727770027045867387.png" alt="img"></p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">value = attribute[position * attributeMultiplier]</span><br></pre></td></tr></table></figure>
+<p>这里实现似乎没有考虑变长的字段的处理，不过参考 Arrow/Velox 之类的 Row 格式，其实我感觉区别应该不大。本质上是尽量快的访问，来做 benchmark 并避免一部分开销。</p>
+<h2 id="Experiments"><a href="#Experiments" class="headerlink" title="Experiments"></a>Experiments</h2><p>环境：</p>
+<blockquote>
+<p>Core2 Quad Q6600 2.4GHz with 8GB RAM running Linux with kernel 2.6.23-The per-core cache sizes are: 16KB L1 I-cache, 16KB L1 D-cache, 4MB L2 cache (shared among 2 cores). All experiments are single-core and in-memory. We used 2 compilers, GCC 4.1.2 2 and ICC 10.0 3 .</p>
+</blockquote>
+<p>很古早，感觉现代的自动向量化能做的好不少，这里他也用 icc 来代表自动向量化的 case</p>
+<h3 id="Sequential-data-access"><a href="#Sequential-data-access" class="headerlink" title="Sequential data access"></a>Sequential data access</h3><p><img src="https://image.mwish.me/blog-image/3903264824635406858.png" alt="img"></p>
+<p>这里测的是 <code>select sum(..) from ..</code> 的情况和 <code>select add(..) from</code> 的情况，前者只需要访问一列，后者读数列写一列。性能 benchmark 如上。这里向量化逻辑可以参考之前的博客：<a href="https://blog.mwish.me/2023/12/10/Compiler-Optimizations-Power-Limits-Auto-vetorize/">https://blog.mwish.me/2023/12/10/Compiler-Optimizations-Power-Limits-Auto-vetorize/</a></p>
+<p>这里注意到，对于 <code>SUM</code> 一列的场景</p>
+<ol>
+<li>DSM 的非向量化性能和一列 NSM 性能相似</li>
+<li>在向量化场景下，因为行存的代码更加复杂（猜测是因为没有 codegen，所以也不好推断类型），这里不是很好生成向量化的代码</li>
+<li>更宽的 (NSM-2 - NSM-8)，在 NSM-16 以下，因为在测试中能 fit-in-l1，所以性能相似。当表无法 fit in l1 的时候，性能开始下降，瓶颈会出现在 L2 Cache 出现的时候</li>
+<li>NSM-16 以下的，考虑到可能大于 cacheline，性能会进一步下降( 这里没完全看懂，感觉是跨了多 cache line，导致访存进一步下降？）</li>
+</ol>
+<p>Add 和 SUM 有一些区别：</p>
+<ol>
+<li>First, the higher number of parameters passed to the NSM routine (pointers + tuple widths VS only pointers) results in a higher interpretation overhead.</li>
+<li>multiple more complex value-access computations in NSM have a higher impact on the CPU performance</li>
+<li>With a higher memory demand, the impact of data locality on performance is signiﬁcantly bigger, making even the DSM implementation fully memory-bound and in par with the NSM-1 version.</li>
+</ol>
+<p>结论上，列存在 Sequential scan 的场景下优于行存可能性是：</p>
+<ol>
+<li>Allows simple value-access code. （ 访问的内存更小 )</li>
+<li>Second, individual primitive functions (e.g. SUM,ADD) use cache lines fully in DSM, and L2 bandwidth is enough to keep up. （ 内存吞吐为瓶颈的情况下，列存对 cache line 之类的利用比较友好 ）</li>
+<li>Finally, the diﬀerence in sequential processing between DSM and NSM can be huge if the operation is expressible in SIMD, especially when the blocks ﬁt in L1, and is still signiﬁcant when in L2. （ L1 下，列存计算带宽更好发挥）</li>
+</ol>
+<h3 id="Random-Data-Access"><a href="#Random-Data-Access" class="headerlink" title="Random Data Access"></a>Random Data Access</h3><p><img src="https://image.mwish.me/blog-image/7261074168223906048.png" alt="img"></p>
+<p>这里测的是下列的情况</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">SELECT <span class="title">SUM</span><span class="params">(data1)</span>, ..., <span class="title">SUM</span><span class="params">(dataN)</span> FROM TABLE GROUP BY key</span>;</span><br></pre></td></tr></table></figure>
+<p>Benchmark 的结果比较 sound:</p>
+<p>对单列来说：</p>
+<ol>
+<li>如果小于 L1 大小，列存会稍微快于行存，因为 Fit In L1 Cache</li>
+<li>如果大于 L1 大小，两边都是 Memory Limit 的了，因为两边大小差不多，所以性能差不多</li>
+</ol>
+<p>对多列来说：</p>
+<ol>
+<li>如果小于 L1 大小，列存仍然保持优势</li>
+<li>否则，行存占优势。这里和 cache miss 有关，如下文</li>
+</ol>
+<blockquote>
+<p>This is caused by the fact, that in DSM every memory access is expected to cause a cache-miss. In contrast, in NSM, it can be expected that a cache-line accessed during processing of one data column, will be accessed again with the next data column in the same block, as all the columns use the same key position. With the increasing number of computed aggregates, the same cache-line is accessed more often, beneﬁting NSM over DSM.</p>
+</blockquote>
+<p>开启 prefetch 指令后，行存的优势变得更加明显，猜测是因为 Pattern 可以预测，导致这块可以更快</p>
+<blockquote>
+<p>In general, our experience with prefetching is that it is highly sensitive to the platform, and prefetch distances are hard to get right in practice. The end result is that prefetching does improve NSM performance when the aggregate table exceeds the CPU caches, however in contrast to [8] we could not obtain a straight performance line (i.e. hide all memory latency).</p>
+</blockquote>
+<h3 id="Data-Conversion"><a href="#Data-Conversion" class="headerlink" title="Data Conversion"></a>Data Conversion</h3><p>这里 Conversion 被认为是比较快的，原论文做了个快速计算：</p>
+<p><img src="https://image.mwish.me/blog-image/8380017861965256652.png" alt="img"></p>
+<p>这里计算本身没啥问题，但是论文没有考虑变长列，导致这个场景过度简单了。实际上参考 Velox/Arrow/Arrow-rs 代码，这里可能会分成：</p>
+<ol>
+<li>列转行（可能是 Hash Agg 之类的算子输入）：需要 calc size ，计算出每行的 size -&gt; 然后分配空间 -&gt; 然后快速向量化的写入内容。这三种中间的 barrier 比较少，可能要进行一些 memcpy 的转化</li>
+<li>行转列（可能是 Hash Agg 之类的算子输出）：需要处理好 str，如果 str 生命周期处理的比较好的话（比如 Velox 的 StringView），这里也可以做到向量化的输出。</li>
+</ol>
+<h2 id="Reference"><a href="#Reference" class="headerlink" title="Reference"></a>Reference</h2><ol>
+<li><a target="_blank" rel="noopener" href="https://datafusion.apache.org/blog/2024/11/18/datafusion-fastest-single-node-parquet-clickbench/">https://datafusion.apache.org/blog/2024/11/18/datafusion-fastest-single-node-parquet-clickbench/</a></li>
+</ol>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Abstract-Introduction"><span class="toc-number">1.</span> <span class="toc-text">Abstract &#x2F; Introduction</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#NSM"><span class="toc-number">1.1.</span> <span class="toc-text">NSM</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Extra-Buffer-Management"><span class="toc-number">1.1.1.</span> <span class="toc-text">Extra Buffer Management</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#NSM-tuple-block-representation"><span class="toc-number">2.</span> <span class="toc-text">NSM tuple-block representation</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Experiments"><span class="toc-number">3.</span> <span class="toc-text">Experiments</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Sequential-data-access"><span class="toc-number">3.1.</span> <span class="toc-text">Sequential data access</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Random-Data-Access"><span class="toc-number">3.2.</span> <span class="toc-text">Random Data Access</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Data-Conversion"><span class="toc-number">3.3.</span> <span class="toc-text">Data Conversion</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Reference"><span class="toc-number">4.</span> <span class="toc-text">Reference</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2024/12/05/Column-or-row-in-database-execution/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2024/12/05/Column-or-row-in-database-execution/&text=Column or row in database execution"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2024/12/05/Column-or-row-in-database-execution/&title=Column or row in database execution"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2024/12/05/Column-or-row-in-database-execution/&is_video=false&description=Column or row in database execution"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Column or row in database execution&body=Check out this article: http://blog.mwish.me/2024/12/05/Column-or-row-in-database-execution/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2024/12/05/Column-or-row-in-database-execution/&title=Column or row in database execution"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2024/12/05/Column-or-row-in-database-execution/&title=Column or row in database execution"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2024/12/05/Column-or-row-in-database-execution/&title=Column or row in database execution"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2024/12/05/Column-or-row-in-database-execution/&title=Column or row in database execution"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2024/12/05/Column-or-row-in-database-execution/&name=Column or row in database execution&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2024/12/05/Column-or-row-in-database-execution/&t=Column or row in database execution"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>
