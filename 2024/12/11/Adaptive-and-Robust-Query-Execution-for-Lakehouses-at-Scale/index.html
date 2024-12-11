@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="本文发表在 vldb’22，介绍的是 Spark 的 AQE，这个功能22年左右就有了，论文提到在 DataBricks 这项功能已经 enable by default 了。对于 TP 查询而言，重要的是一个查询选中索引，同时，为了避免优化器不太准，也有一些 plan 能帮助用户选中对应的索引。对于分析而言，本身查询比较多样化，然后其实很多作业涉及的表会非常非常多，笔者在看到公司的一些查询的时候">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Adaptive and Robust Query Execution for Lakehouses at Scale">
+<meta property="og:url" content="http://blog.mwish.me/2024/12/11/Adaptive-and-Robust-Query-Execution-for-Lakehouses-at-Scale/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="本文发表在 vldb’22，介绍的是 Spark 的 AQE，这个功能22年左右就有了，论文提到在 DataBricks 这项功能已经 enable by default 了。对于 TP 查询而言，重要的是一个查询选中索引，同时，为了避免优化器不太准，也有一些 plan 能帮助用户选中对应的索引。对于分析而言，本身查询比较多样化，然后其实很多作业涉及的表会非常非常多，笔者在看到公司的一些查询的时候">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/7538480939254819182.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/8591394214416409417.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/8341845272055976210.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/7261458223999357690.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/3496636006763934179.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/4204586277046755199.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/8191092996150367907.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/7045867947066573243.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/5861322144675533399.png">
+<meta property="article:published_time" content="2024-12-11T15:28:03.000Z">
+<meta property="article:modified_time" content="2024-12-11T15:30:46.155Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/7538480939254819182.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>Adaptive and Robust Query Execution for Lakehouses at Scale</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2024/12/06/Compile-Loader-Libraries-Part-2-Dynamic-linking/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2024/12/11/Adaptive-and-Robust-Query-Execution-for-Lakehouses-at-Scale/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2024/12/11/Adaptive-and-Robust-Query-Execution-for-Lakehouses-at-Scale/&text=Adaptive and Robust Query Execution for Lakehouses at Scale"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2024/12/11/Adaptive-and-Robust-Query-Execution-for-Lakehouses-at-Scale/&title=Adaptive and Robust Query Execution for Lakehouses at Scale"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2024/12/11/Adaptive-and-Robust-Query-Execution-for-Lakehouses-at-Scale/&is_video=false&description=Adaptive and Robust Query Execution for Lakehouses at Scale"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Adaptive and Robust Query Execution for Lakehouses at Scale&body=Check out this article: http://blog.mwish.me/2024/12/11/Adaptive-and-Robust-Query-Execution-for-Lakehouses-at-Scale/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2024/12/11/Adaptive-and-Robust-Query-Execution-for-Lakehouses-at-Scale/&title=Adaptive and Robust Query Execution for Lakehouses at Scale"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2024/12/11/Adaptive-and-Robust-Query-Execution-for-Lakehouses-at-Scale/&title=Adaptive and Robust Query Execution for Lakehouses at Scale"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2024/12/11/Adaptive-and-Robust-Query-Execution-for-Lakehouses-at-Scale/&title=Adaptive and Robust Query Execution for Lakehouses at Scale"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2024/12/11/Adaptive-and-Robust-Query-Execution-for-Lakehouses-at-Scale/&title=Adaptive and Robust Query Execution for Lakehouses at Scale"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2024/12/11/Adaptive-and-Robust-Query-Execution-for-Lakehouses-at-Scale/&name=Adaptive and Robust Query Execution for Lakehouses at Scale&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2024/12/11/Adaptive-and-Robust-Query-Execution-for-Lakehouses-at-Scale/&t=Adaptive and Robust Query Execution for Lakehouses at Scale"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Why-AQE"><span class="toc-number">1.</span> <span class="toc-text">Why AQE</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Alternative-to-AQE"><span class="toc-number">1.1.</span> <span class="toc-text">Alternative to AQE</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#AQE-Architecture"><span class="toc-number">2.</span> <span class="toc-text">AQE Architecture</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#QueryStage-Cancellation"><span class="toc-number">2.1.</span> <span class="toc-text">QueryStage Cancellation</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Performance-Optimizations"><span class="toc-number">3.</span> <span class="toc-text">Performance Optimizations</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Logical-Rewrite-Dynamic-Join-Filters"><span class="toc-number">3.1.</span> <span class="toc-text">Logical Rewrite: Dynamic Join Filters</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Logical-Rewrite-Dynamic-Data-Properties"><span class="toc-number">3.2.</span> <span class="toc-text">Logical Rewrite: Dynamic Data Properties</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Planner-Rule-Join-Algorithm-Re-Selection"><span class="toc-number">3.3.</span> <span class="toc-text">Planner Rule: Join Algorithm Re-Selection</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Physical-Rewrite-Elastic-Shu%EF%AC%80le-Parallelism"><span class="toc-number">3.4.</span> <span class="toc-text">Physical Rewrite: Elastic Shuﬀle Parallelism</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Rubustness"><span class="toc-number">4.</span> <span class="toc-text">Rubustness</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Logical-Rewrites-Broadcast-Hash-Join-Fallback"><span class="toc-number">4.1.</span> <span class="toc-text">Logical Rewrites: Broadcast Hash Join Fallback</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Planner-Rule-Shu%EF%AC%80le-Elimination-Fallback"><span class="toc-number">4.2.</span> <span class="toc-text">Planner Rule: Shuﬀle Elimination Fallback</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Physical-Rewrite-Skew-Join-Handling"><span class="toc-number">4.3.</span> <span class="toc-text">Physical Rewrite: Skew Join Handling</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Evaluation"><span class="toc-number">5.</span> <span class="toc-text">Evaluation</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Reference"><span class="toc-number">6.</span> <span class="toc-text">Reference</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Adaptive and Robust Query Execution for Lakehouses at Scale
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2024-12-11T15:28:03.000Z" itemprop="datePublished">2024-12-11</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>本文发表在 vldb’22，介绍的是 Spark 的 AQE，这个功能22年左右就有了，论文提到在 DataBricks 这项功能已经 enable by default 了。对于 TP 查询而言，重要的是一个查询选中索引，同时，为了避免优化器不太准，也有一些 plan 能帮助用户选中对应的索引。对于分析而言，本身查询比较多样化，然后其实很多作业涉及的表会非常非常多，笔者在看到公司的一些查询的时候时常会感叹「诶我去这么复杂的查询也能跑出来」。在这种场景下，自动的调优就会比较有优势了——毕竟你不太可能真的在 2B 场景帮用户写 SQL。这其中更蛋疼的场景是，某些 SQL 是一些 BI 工具生成的，你想改？哼，没门。</p>
+<p>本文比较有意思的是介绍的比较工程，一个是和 Spark 本身的 Shuffle / Stage 特性结合的比较好，一些 MPP 引擎会在一开始编译好查询，并且 MPP 风格的启动所有 Stage，如 [1] 的介绍，不过 Presto 也利用 Shuffle 向 Spark 这样风格的查询做了一些过度 [2]。本文利用了 Spark 之类的 Stage 的特点，通过历史的查询和之前 Stage 的信息，来动态的规划后续查询的执行：毕竟你过 Stage 都得 Shuffle，那就好好利用这一步骤，多收集统计信息，来调整之后的查询了。另一个特点是优化的地方都有介绍，包括动态分配 DOP、调整 Join 算法、处理 Skew 等。这些说起来都不难，不过实际上要做到还是要花一些时间的。</p>
+<p>本文其实难度不大，不是那种很细节的文章，所以读起来比较快。笔者比较短的时间就读完了。</p>
+<h2 id="Why-AQE"><a href="#Why-AQE" class="headerlink" title="Why AQE"></a>Why AQE</h2><blockquote>
+<ul>
+<li>Firstly, in large-scale, open Lakehouses with uncurated data, high ingestion rates, external tables, or deeply nested schemas, it is often costly or wasteful to maintain perfect and up-to-date table and column statistics. </li>
+<li>Secondly, inherently imperfect cardinality estimates with conjunctive predicates, joins and user-deﬁned functions can lead to bad query plans. </li>
+<li>Thirdly, for the sheer magnitude of data involved, strictly relying on static query plan decisions can result in performance and stability issues such as excessive data movement, substantial disk spillage, or high memory pressure.</li>
+</ul>
+</blockquote>
+<p>本质上是在说：</p>
+<p>在信息收集端</p>
+<ol>
+<li>本身新来的数据没有好好的 analyze，对新插入的数据处理不及时，导致统计不及时。因为统计的不及时，所以收集的统计信息也不够及时</li>
+<li>可能是外表之类的表，这种场景也比较常见，拿不到外部的 Catalog（或者拿到的也不是特别准）</li>
+<li>对 (deep) nested schema 之类的东西，内部深嵌套的内容很难估计对应的统计信息</li>
+<li>对于 UDF, Join 之类的东西（甚至一些稍稍复杂的 Filter）都不是很好估计大概对应的 output ratio</li>
+<li>Table 的 size 大小也不一样，实际上因为各种大小不一样，执行层各种东西（参数）也不一样，所以需要调整对应的信息，e.g. 估大了跑的慢但一定能跑得出来，内存估小了给你疯狂 Spill）。</li>
+</ol>
+<p>因为信息收集端的上述内容，同时也有执行的时候不同的 workload，；导致执行段遇到了问题：</p>
+<ol>
+<li>Broadcast Join vs Shuffled Join? 怎么选择哪个表大哪个表小，如何处理？（怎么没比较 Sort Merge Join）<ol>
+<li>Broadcast 只是广播小表，Shuffled Join 会需要两个 Shuffle 然后 co-locate 处理</li>
+</ol>
+</li>
+<li>Degrees of parallelism: 怎么决定下游 stage （或者甚至前面 scan stage 的并发度）</li>
+<li>根据 data volume size 决定另一些东西，比如<ol>
+<li>是否需要 Join order</li>
+<li>根据 filter creation cost，决定是否要 dynamic partition pruning/dynamic file pruning/bloom filter..</li>
+</ol>
+</li>
+<li>找到一些动态信息，比如 partitioning properties, and interesting orders ( 话说回来，感觉有的地方执行的时候也会处理这些）</li>
+<li>Graceful degradation strategies: 处理 skew 之类的场景，这些 qo 可能还不方便处理</li>
+</ol>
+<p>这里给出对应的 sample query，schema 参考 TPC-H 的 schema [3]</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">SELECT</span>    c.c_name</span><br><span class="line">          o.o_orderdata,</span><br><span class="line">          <span class="built_in">SUM</span>(o.o_totalprice) <span class="keyword">AS</span> revenue</span><br><span class="line"><span class="keyword">FROM</span> customer <span class="keyword">AS</span> c, orders <span class="keyword">AS</span> o</span><br><span class="line"><span class="keyword">WHERE</span> c.c_mktsegment <span class="operator">=</span> <span class="string">&#x27;BUILDING&#x27;</span></span><br><span class="line">      <span class="keyword">AND</span> c.c_acctbal <span class="operator">&gt;</span> <span class="number">8000.0</span></span><br><span class="line">      <span class="keyword">AND</span> c.c_custkey <span class="operator">=</span> o.o_custkey <span class="comment">-- join key</span></span><br><span class="line">      <span class="keyword">AND</span> o.o_orderdate <span class="keyword">BETWEEN</span> <span class="type">date</span>(<span class="string">&#x27;2024-03-15&#x27;</span>) <span class="keyword">AND</span> <span class="type">date</span>(<span class="string">&#x27;2024-04-15&#x27;</span>)</span><br><span class="line"><span class="keyword">GROUP</span> <span class="keyword">BY</span> c.c_name, o.o_orderdate</span><br><span class="line"><span class="keyword">ORDER</span> <span class="keyword">BY</span> revenue <span class="keyword">DESC</span></span><br><span class="line">LIMIT <span class="number">10</span>;</span><br></pre></td></tr></table></figure>
+<p>给定问题：</p>
+<ol>
+<li>在过完 where 之后，怎么估计两边的行数和 size-in-bytes</li>
+<li>是否应该用 dynamic filter</li>
+<li>怎么利用 dynamic data properties 来给后续的查询提供优化</li>
+<li>使用什么 join algorithm</li>
+<li>怎么定义查询各部分的并发度（DOP）</li>
+<li>怎么处理非预期的 Skew, Memory Pressure？</li>
+</ol>
+<h3 id="Alternative-to-AQE"><a href="#Alternative-to-AQE" class="headerlink" title="Alternative to AQE"></a>Alternative to AQE</h3><ol>
+<li>Cardinality estimation: 对于 UDF, Join, Conjunctive predicates 可能不准确；对 un-index data 可能准确度只有 10%。Catalyst optimizer 通常只给出 worst-case cardinality</li>
+<li>Physical plan cost models: 利用更细的 CPU 执行信息。这里本身还是说，physical 估计的信息更准，不过 TUM 的论文 [4] 又觉得不太是，反正我不太懂优化器，你们打一架吧，我就负责贴信息。但他们认为这玩意也只是提高了准确性而已</li>
+<li>Sampling: There has been a ﬂurry of research literature [1, 17, 18] attempting to leverage sampling, including random samples, online samples, block samples, materialized samples, and stratiﬁed samples to make cardinality estimation better. In practice, they could be eﬀective for speciﬁc scenarios, e.g., random samples for uniformly distributed data, and stratiﬁed samples [1] for predicates over strata columns. Nevertheless, there is an inherent trade-oﬀ between the expense of sample collection and its eﬀectiveness.</li>
+<li>History-based cardinality estimation: 本身 Spark 运行的很多也是大 ETL Job，这种 History 信息本身也是有用的。但是拿到旧的版本信息对 catalog 之类的也提供了更多的要求</li>
+<li>Machine Learning: 需要更多的可解释性、调试性</li>
+</ol>
+<p>文章觉得 AQE 本身也就是一个框架，和这些内容并不冲突：</p>
+<blockquote>
+<p>In our Photon engine, the Shuﬄe implementation has such a breaker, originally for the simplicity of task scheduling and fault-tolerance. Thus, AQE is a natural ﬁt. At a high level, AQE and advancements in its alternatives are largely complementary in their evolutions. Better static query plans may eventually relax constraints on the query execution substrate, while AQE provides the ultimate safeguard to experiment with its alternatives.</p>
+</blockquote>
+<h2 id="AQE-Architecture"><a href="#AQE-Architecture" class="headerlink" title="AQE Architecture"></a>AQE Architecture</h2><p><img src="https://image.mwish.me/blog-image/7538480939254819182.png" alt="img"></p>
+<p>下面给出 sample query 的 plan 和 AQE 框架中的一些概念：</p>
+<ol>
+<li>QueryStage: 一种特殊的「动态」Operator，包含了提交的 Plan Fragments，这保证了「plan 本身的稳定性」，因为修改都是改 QeuryStage 内的东西。在目前视线中，Shuffle Boundary 会切 Query Stage. 这里可以参考 [5] 中的查询。如下图，所有 operator 都包在</li>
+<li>LocalLink: Physical Plan 只想 LogicalPlan 的链接，便于 Re-Optimize 的时候使用</li>
+<li>Runtime Statistics: Each QueryStage can either estimate statistics from <strong>running tasks</strong>’ metrics or collect statistics from <strong>completed tasks</strong>’ metrics. 同时通过 LogicalLinks 来汇报给 LogicalPlan</li>
+</ol>
+<p><img src="https://image.mwish.me/blog-image/8591394214416409417.png" alt="img"></p>
+<p>论文 Listing 2也给出了 AQE 的核心的 Event Loop，注意下 16行用了 PhysicalPlan replan. Event 通常来自：</p>
+<ol>
+<li>(dependent) QueryStage completion -&gt; actual statistics observed from completed QueryStages</li>
+<li>QueryStage failure(or timeout) -&gt; actual statistics observed from completed QueryStages</li>
+<li>Heuristics with task(on-going) metrics -&gt; estimated statistics from running QueryStages’ metrics</li>
+</ol>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// Kick off initial QueryStages.</span></span><br><span class="line"><span class="type">LogicalPlan</span> <span class="variable">currentPlan</span> <span class="operator">=</span> initialPhysicalPlan.logicalLink; </span><br><span class="line">List&lt;QueryStage&gt; initialRunnableStages = breakDown(initialPhysicalPlan); </span><br><span class="line">initialRunnableStages.foreach(stage =&gt; Scheduler.submit(stage)); </span><br><span class="line">runningStages.addAll(initialRunnableStages); </span><br><span class="line"><span class="keyword">do</span> &#123; </span><br><span class="line">    <span class="comment">// Blocking wait until new re-optimization event </span></span><br><span class="line">    <span class="comment">// being added into `reOptEventQueue` by producer </span></span><br><span class="line">    <span class="comment">// threads.</span></span><br><span class="line">    <span class="type">Event</span> <span class="variable">reOptEvent</span> <span class="operator">=</span> reOptEventQueue.take(); </span><br><span class="line">    <span class="comment">// Update `runningStages` and `currentPlan`.</span></span><br><span class="line">    currentPlan = update(reOptEvent, runningStages, currentPlan); </span><br><span class="line">    <span class="comment">// Call logical rewrite rules to optimize `currentPlan`. </span></span><br><span class="line">    <span class="type">LogicalPlan</span> <span class="variable">reOptPlan</span> <span class="operator">=</span> reOptimize(currentPlan); </span><br><span class="line">    <span class="comment">// Convert `reOptPlan` to a physical plan.</span></span><br><span class="line">    <span class="type">PhyiscalPlan</span> <span class="variable">currentPhysicalPlan</span> <span class="operator">=</span> plan(reOptPlan); </span><br><span class="line">    <span class="comment">// Break down `currentPhysicalPlan` into runnable </span></span><br><span class="line">    <span class="comment">// QueryStages.</span></span><br><span class="line">    List&lt;QueryStage&gt; runnableStages = breakDown(currentPhysicalPlan); </span><br><span class="line">    <span class="comment">// Cancel running QueryStages that are no longer needed. </span></span><br><span class="line">    runningStages.diff(runnableStages).foreach(stage =&gt; Scheduler.cancel(stage)) </span><br><span class="line">    <span class="comment">// Submit new runnable QueryStages to the scheduler.</span></span><br><span class="line">    List&lt;QueryStage&gt; runnableNewStages = runnableStages.diff(runningStages) </span><br><span class="line">    newStagesToRun.foreach(stage =&gt; Scheduler.submit(stage)); </span><br><span class="line">    runningStages.addAll(newStagesToRun); </span><br><span class="line">&#125; <span class="keyword">while</span> (hasUncompletedStages()); </span><br></pre></td></tr></table></figure>
+<h3 id="QueryStage-Cancellation"><a href="#QueryStage-Cancellation" class="headerlink" title="QueryStage Cancellation"></a>QueryStage Cancellation</h3><p>这里我觉得是比较有意思的地方，避免 rerun task，利用已经 scan 的部分。不过没做过这块的细节，可能能避免一些旧的 Stage 被再次调度：虽然他们很慢，但终究跑完了。（不太清楚正在 running 的去 cancel 有什么考量，和 Spark 是怎么处理 Splits / Stage 的，看后面在统计的时候也会知道别的 job 的完成度，见 Figure 3）。</p>
+<p>Line21 中， <code>Scheduler.cancel(stage)</code> 会尝试停止 Large Scan / Shuffles / Disk Spills。这里逻辑大概是：</p>
+<ol>
+<li>stop ongoing large scans, shuﬄes, or disk spills</li>
+<li>For idempotence, a completed QueryStage would not be rerun <strong>because it becomes a leaf node in the new logical and physical plans from lines</strong> 13 to 16</li>
+</ol>
+<p>这里要求：</p>
+<ol>
+<li><strong>cancel 需要做到幂等性</strong>：完成的 task 不会被 rerun，task 只需要 cancel 一次</li>
+<li>已经完成的QueryStage会成为新逻辑和物理计划中的叶子节点，这意味着它们的中间结果可以被直接利用，而无需重新计算。</li>
+</ol>
+<p>（重新思考一下，只考虑 Scan 的话，其实等价于在 Join 之类的地方（也不只是 Join）新增或者变化 Filter 规则，然后需要处理预读的数据，最浪费的方法肯定是打开重跑，好的方法是利用之前数据，当然 Spark 考虑的还有Stage产出数据的一致性什么的. 不知道为啥没有 split 或者什么级别的完成结果利用）</p>
+<h2 id="Performance-Optimizations"><a href="#Performance-Optimizations" class="headerlink" title="Performance Optimizations"></a>Performance Optimizations</h2><p>这里元素包含：</p>
+<ol>
+<li>Logical Rewrite: inject Semi-Join reduction ﬁlter variants such like <strong>dynamic partition/ﬁle pruning ﬁlters (DPPs, DFPs)</strong> [23] and <strong>Bloom ﬁlters</strong> [14] (Section 5.1), and <strong>optimize away plan fragments</strong> that are no longer needed (Section 5.2) -&gt; 感觉像是根据完成的 Join Stage 插入裁剪</li>
+<li>Planner Rule: that revisits and changes the static planning decision on which join algorithm to use for a logical Join operator (Section 5.3);</li>
+<li>Physical Rewrite: dynamically adjusts the <strong>Shuﬄe parallelism</strong> (Section 5.4).</li>
+</ol>
+<h3 id="Logical-Rewrite-Dynamic-Join-Filters"><a href="#Logical-Rewrite-Dynamic-Join-Filters" class="headerlink" title="Logical Rewrite: Dynamic Join Filters"></a>Logical Rewrite: Dynamic Join Filters</h3><p>如下图，执行层没啥意思，plan 层代价评估要重要一些吧。</p>
+<p><img src="https://image.mwish.me/blog-image/8341845272055976210.png" alt="img"></p>
+<h3 id="Logical-Rewrite-Dynamic-Data-Properties"><a href="#Logical-Rewrite-Dynamic-Data-Properties" class="headerlink" title="Logical Rewrite: Dynamic Data Properties"></a>Logical Rewrite: Dynamic Data Properties</h3><p><img src="https://image.mwish.me/blog-image/7261458223999357690.png" alt="img"></p>
+<ul>
+<li>如果某个地方是 Empty 的 / 只产出一行的，可以根据这个结果来消除或者优化 plan，比如空表 Join 或者别的做处理。然后如果是只有一行，可以干掉 Sort 之类的</li>
+<li>别的还是 DPP 之类的</li>
+</ul>
+<p>感觉也没啥好说的，但是在工程上还是有意义的。不过这么无聊也写这么长啊哥</p>
+<h3 id="Planner-Rule-Join-Algorithm-Re-Selection"><a href="#Planner-Rule-Join-Algorithm-Re-Selection" class="headerlink" title="Planner Rule: Join Algorithm Re-Selection"></a>Planner Rule: Join Algorithm Re-Selection</h3><p>Photon 有两种 HashJoin: </p>
+<ul>
+<li>Broadcast Hash Join<ul>
+<li>One side of a Join is small enough to ﬁt into the memory of an individual executor, the <strong>smaller side</strong> (known as the <strong>build side</strong>) is <strong>broadcast</strong> to all participating executor nodes, eliminating the need for repartitioning of the other side (the probe side).</li>
+<li>It is important to note that diﬀerent joiner threads on the same executor node <strong>share the same build side hash table and data, residing in memory</strong>. &lt;— 不是你估计的这么准保证不 spill 吗</li>
+</ul>
+</li>
+<li>Shuﬄed Hash Join.<ul>
+<li>Both sides undergo shuﬄing before being joined. On an individual executor, the local join algorithm is a vectorized implementation of Hybrid Hash Join [11, 39], which can gracefully spill to disk if necessary.</li>
+</ul>
+</li>
+</ul>
+<p>下面的 plan 中：</p>
+<ol>
+<li>Plan  被初始化为 Shuffled Hash Join</li>
+<li>左侧数据 size 只有 50M, Rows 也很小，可以被切成 Broadcast Hash Join</li>
+</ol>
+<p><img src="https://image.mwish.me/blog-image/3496636006763934179.png" alt="img"></p>
+<p>当然，相反的，这里也可能是 Broadcast Hash Join 因为判断出来内存压力过大，改成 Shuffled Hash Join。</p>
+<h3 id="Physical-Rewrite-Elastic-Shuﬀle-Parallelism"><a href="#Physical-Rewrite-Elastic-Shuﬀle-Parallelism" class="headerlink" title="Physical Rewrite: Elastic Shuﬀle Parallelism"></a>Physical Rewrite: Elastic Shuﬀle Parallelism</h3><p>起因是定并发度本身就比较难（某种意义上参考 F1 Napa 的并发 Paper），很多系统也是限定并发。这部分过多过少都不好：</p>
+<ul>
+<li>Under-parallelism. In this scenario, each Shuﬄe consumer task handles a <strong>large volume of data</strong>, which can result in <strong>unnecessary C**</strong>PU cache misses<strong> or </strong>disk spillages** (e.g., for operators like Join, Aggregation, and Sort), consequently slowing down queries. ( 说实话我没想清楚，为什么上层的并发会影响下层的 CPU Cache miss，是不是因为是那种 HashTable 有关的 Random Access 负载）</li>
+<li>Over-parallelism. Conversely, in this case, there may be numerous small network data fetches, leading to <strong>ineﬃcient network I/O patterns</strong>. On top of that, over parallelism also causes <strong>excessive scheduling overhead</strong>, which can be another signiﬁcant contributor to performance slowdowns.</li>
+</ul>
+<p><img src="https://image.mwish.me/blog-image/4204586277046755199.png" alt="img"></p>
+<p>对应的实现是：</p>
+<ol>
+<li>在 ShuffleWrite 记录准确的分区写，每个分区的大小</li>
+<li>AQE 承担调度器的作用，合并过小分区，减少过大的。然后修改 ShuffleRead 的 Partition Specification。 这部分只需要改对应的描述（Shuﬄe partitions are physically contiguous in partition numbers, allowing the “merge” operation to be logical without additional reads or writes of the Shuﬄe data.）</li>
+</ol>
+<h2 id="Rubustness"><a href="#Rubustness" class="headerlink" title="Rubustness"></a>Rubustness</h2><p>让已经在跑的 SQL 跑的更稳，让 spill 之类的多的能减少对应的状态。</p>
+<h3 id="Logical-Rewrites-Broadcast-Hash-Join-Fallback"><a href="#Logical-Rewrites-Broadcast-Hash-Join-Fallback" class="headerlink" title="Logical Rewrites: Broadcast Hash Join Fallback"></a>Logical Rewrites: Broadcast Hash Join Fallback</h3><p>下图为 Listing 3。</p>
+<p>由于下列两种原因，可能最初 plan 会成为 broadcast hash join:</p>
+<ol>
+<li>The query attempts to enforce a Broadcast Hash Join implementation through a SQL hint. (尤其是 BI 生成的 SQL）</li>
+<li>The logical Join is a <strong>Null-aware Anti Join</strong>. This can be implemented using a Broadcast Hash Join but not by a Shuﬄed Hash Join, because the latter does not always produce correct results as per standard SQL semantics. In addition, the build side and probe side <strong>cannot be switched</strong>. </li>
+</ol>
+<p>对上面两种：</p>
+<ol>
+<li>AQE 能检测到 Broadcast Join 过大，可能生成 re-optimization</li>
+<li>对 case1，可以 drops the join hint，尝试生成 Shuffled Hash Join</li>
+<li>对 case2，可以尝试修改成 Listing3，成为另一种等价的稍复杂点的 Shuffled Hash Join</li>
+</ol>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">-- Input query:</span></span><br><span class="line"><span class="keyword">SELECT</span> <span class="operator">*</span> </span><br><span class="line"><span class="keyword">FROM</span> customer </span><br><span class="line"><span class="keyword">AS</span> c <span class="keyword">WHERE</span> c.c _ custkey <span class="keyword">NOT</span> <span class="keyword">IN</span> (<span class="keyword">SELECT</span> o _ custkey <span class="keyword">FROM</span> orders)</span><br><span class="line"></span><br><span class="line"><span class="comment">-- Rewritten query when orders is not empty:</span></span><br><span class="line"><span class="comment">-- If orders has a NULL o_custkey:</span></span><br><span class="line"><span class="comment">-- no customer row qualifies the NOT IN predicate;</span></span><br><span class="line"><span class="comment">-- otherwise:</span></span><br><span class="line"><span class="comment">-- a normal LEFT ANTI JOIN can work, except that</span></span><br><span class="line"><span class="comment">-- customer rows with c_custkey being NULL do not</span></span><br><span class="line"><span class="comment">-- qualify the NOT IN predicate.</span></span><br><span class="line"><span class="keyword">SELECT</span> <span class="operator">*</span> <span class="keyword">FROM</span> (</span><br><span class="line">    <span class="keyword">SELECT</span> <span class="operator">*</span> <span class="keyword">FROM</span> customer <span class="keyword">AS</span> c </span><br><span class="line">    <span class="keyword">WHERE</span> <span class="keyword">NOT</span> <span class="keyword">EXISTS</span> ( </span><br><span class="line">        <span class="keyword">SELECT</span> <span class="operator">*</span> <span class="keyword">FROM</span> orders <span class="keyword">WHERE</span> o_custkey <span class="keyword">IS</span> <span class="keyword">NULL</span>) </span><br><span class="line">      <span class="keyword">AND</span> c.c _ custkey <span class="keyword">IS</span> <span class="keyword">NOT</span> <span class="keyword">NULL</span></span><br><span class="line">    ) <span class="keyword">AS</span> c </span><br><span class="line"> <span class="keyword">LEFT</span> ANTI <span class="keyword">JOIN</span> orders <span class="keyword">AS</span> o <span class="keyword">ON</span> c.c_custkey <span class="operator">=</span> o.o_custkey;</span><br></pre></td></tr></table></figure>
+<h3 id="Planner-Rule-Shuﬀle-Elimination-Fallback"><a href="#Planner-Rule-Shuﬀle-Elimination-Fallback" class="headerlink" title="Planner Rule: Shuﬀle Elimination Fallback"></a>Planner Rule: Shuﬀle Elimination Fallback</h3><p>这里可能会有 Partition 之类的策略，来消除 Shuffle，因为原则上 Shuffle 还是会让 Query 更慢一些（也能够更稳一些）。但是如果 Partition Column 估计小了，那么处理的并发度就不够，同时也会有更大的概率 Spill （因为 skew 和数据量变大）</p>
+<p>下面是代码的 Listing 4，plan 如图（Figure 7）</p>
+<p><img src="https://image.mwish.me/blog-image/8191092996150367907.png" alt="img"></p>
+<blockquote>
+<p>During execution, it turns out that there are only 2 distinct values of R.a, and thus the Hash Aggregation after Join only has two eﬀective, parallel tasks across all executors, regardless of the number of Shuﬄe partitions. This can cause over spillage when the number of groups by <R.a, R.h, S.c> is excessively large, especially if the join predicate leads to a many-to-many join.</p>
+</blockquote>
+<p>按照 Fig7 插入 Shuffle 尝试拆散数据。本质上是 Fig7.a 的 Join DOP 用的是 <code>R.a</code> 的 DOP，不适配 <code>(R.a, R.h, S.c)</code> 的。需要改大并发度。</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">SELECT</span> R.a, R.h, S.c, <span class="built_in">SUM</span>(R.d <span class="operator">*</span> S.e) <span class="keyword">AS</span> v</span><br><span class="line"><span class="keyword">FROM</span> R, S </span><br><span class="line"><span class="keyword">WHERE</span> R.a <span class="operator">=</span> S.a <span class="keyword">AND</span> R.b<span class="operator">=</span>S.b <span class="keyword">AND</span> p(R.g)</span><br><span class="line"><span class="keyword">GROUP</span> <span class="keyword">BY</span> R.a, R.h, S.c </span><br><span class="line"><span class="keyword">ORDER</span> <span class="keyword">BY</span> v <span class="keyword">DESC</span> LIMIT <span class="number">10</span></span><br></pre></td></tr></table></figure>
+<h3 id="Physical-Rewrite-Skew-Join-Handling"><a href="#Physical-Rewrite-Skew-Join-Handling" class="headerlink" title="Physical Rewrite: Skew Join Handling"></a>Physical Rewrite: Skew Join Handling</h3><blockquote>
+<p>We have also implemented a physical rule to handle skewed join keys. The rule is able to discover data skew on a set of join keys in a Shuﬄed Hashed Join, which manifests as <strong>a few partitions containing signiﬁcantly more data than others.</strong> </p>
+<p>The rule can eliminate the skewness by logically splitting those large, consumer-side partitions into smaller, more balanced partitions,</p>
+</blockquote>
+<p><img src="https://image.mwish.me/blog-image/7045867947066573243.png" alt="img"></p>
+<h2 id="Evaluation"><a href="#Evaluation" class="headerlink" title="Evaluation"></a>Evaluation</h2><blockquote>
+<p>We evaluate AQE performance improvements on a 16-node AWS cluster with one driver node. Each node is an i3.2xlarge instance with 64GB of memory and 8 vCPUs (Intel Xeon E5 2686 v4). We ran benchmarks of TPC-H and TPC-DS, stored with the Delta format in Amazon S3, on diﬀerent scale factors (1000 and 3000), with and without pre-collected table and column statistics via the Analyze Table command.</p>
+</blockquote>
+<ol>
+<li>Re-optimized overhead 占用比例较低</li>
+<li>数据越多，优化越高</li>
+<li>对没有 Stats 的查询，优化效果显著</li>
+<li>（可能对比较简单的查询不太好？然后不知道会不会有优化事件过多的情况）</li>
+</ol>
+<p><img src="https://image.mwish.me/blog-image/5861322144675533399.png" alt="img"></p>
+<h2 id="Reference"><a href="#Reference" class="headerlink" title="Reference"></a>Reference</h2><ol>
+<li><a target="_blank" rel="noopener" href="https://blog.bcmeng.com/post/mpp-grouped-excution-stage.html#what-is-in-mpp-pipeline">https://blog.bcmeng.com/post/mpp-grouped-excution-stage.html#what-is-in-mpp-pipeline</a></li>
+<li><a target="_blank" rel="noopener" href="https://research.facebook.com/publications/presto-a-decade-of-sql-analytics-at-meta/">https://research.facebook.com/publications/presto-a-decade-of-sql-analytics-at-meta/</a></li>
+<li><a target="_blank" rel="noopener" href="https://docs.snowflake.com/en/user-guide/sample-data-tpch">https://docs.snowflake.com/en/user-guide/sample-data-tpch</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.vldb.org/pvldb/vol9/p204-leis.pdf">https://www.vldb.org/pvldb/vol9/p204-leis.pdf</a></li>
+<li><a target="_blank" rel="noopener" href="https://stackoverflow.com/questions/74811159/what-is-shufflequerystage-in-spark-dag">https://stackoverflow.com/questions/74811159/what-is-shufflequerystage-in-spark-dag</a></li>
+</ol>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Why-AQE"><span class="toc-number">1.</span> <span class="toc-text">Why AQE</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Alternative-to-AQE"><span class="toc-number">1.1.</span> <span class="toc-text">Alternative to AQE</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#AQE-Architecture"><span class="toc-number">2.</span> <span class="toc-text">AQE Architecture</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#QueryStage-Cancellation"><span class="toc-number">2.1.</span> <span class="toc-text">QueryStage Cancellation</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Performance-Optimizations"><span class="toc-number">3.</span> <span class="toc-text">Performance Optimizations</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Logical-Rewrite-Dynamic-Join-Filters"><span class="toc-number">3.1.</span> <span class="toc-text">Logical Rewrite: Dynamic Join Filters</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Logical-Rewrite-Dynamic-Data-Properties"><span class="toc-number">3.2.</span> <span class="toc-text">Logical Rewrite: Dynamic Data Properties</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Planner-Rule-Join-Algorithm-Re-Selection"><span class="toc-number">3.3.</span> <span class="toc-text">Planner Rule: Join Algorithm Re-Selection</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Physical-Rewrite-Elastic-Shu%EF%AC%80le-Parallelism"><span class="toc-number">3.4.</span> <span class="toc-text">Physical Rewrite: Elastic Shuﬀle Parallelism</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Rubustness"><span class="toc-number">4.</span> <span class="toc-text">Rubustness</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Logical-Rewrites-Broadcast-Hash-Join-Fallback"><span class="toc-number">4.1.</span> <span class="toc-text">Logical Rewrites: Broadcast Hash Join Fallback</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Planner-Rule-Shu%EF%AC%80le-Elimination-Fallback"><span class="toc-number">4.2.</span> <span class="toc-text">Planner Rule: Shuﬀle Elimination Fallback</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Physical-Rewrite-Skew-Join-Handling"><span class="toc-number">4.3.</span> <span class="toc-text">Physical Rewrite: Skew Join Handling</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Evaluation"><span class="toc-number">5.</span> <span class="toc-text">Evaluation</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Reference"><span class="toc-number">6.</span> <span class="toc-text">Reference</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2024/12/11/Adaptive-and-Robust-Query-Execution-for-Lakehouses-at-Scale/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2024/12/11/Adaptive-and-Robust-Query-Execution-for-Lakehouses-at-Scale/&text=Adaptive and Robust Query Execution for Lakehouses at Scale"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2024/12/11/Adaptive-and-Robust-Query-Execution-for-Lakehouses-at-Scale/&title=Adaptive and Robust Query Execution for Lakehouses at Scale"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2024/12/11/Adaptive-and-Robust-Query-Execution-for-Lakehouses-at-Scale/&is_video=false&description=Adaptive and Robust Query Execution for Lakehouses at Scale"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Adaptive and Robust Query Execution for Lakehouses at Scale&body=Check out this article: http://blog.mwish.me/2024/12/11/Adaptive-and-Robust-Query-Execution-for-Lakehouses-at-Scale/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2024/12/11/Adaptive-and-Robust-Query-Execution-for-Lakehouses-at-Scale/&title=Adaptive and Robust Query Execution for Lakehouses at Scale"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2024/12/11/Adaptive-and-Robust-Query-Execution-for-Lakehouses-at-Scale/&title=Adaptive and Robust Query Execution for Lakehouses at Scale"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2024/12/11/Adaptive-and-Robust-Query-Execution-for-Lakehouses-at-Scale/&title=Adaptive and Robust Query Execution for Lakehouses at Scale"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2024/12/11/Adaptive-and-Robust-Query-Execution-for-Lakehouses-at-Scale/&title=Adaptive and Robust Query Execution for Lakehouses at Scale"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2024/12/11/Adaptive-and-Robust-Query-Execution-for-Lakehouses-at-Scale/&name=Adaptive and Robust Query Execution for Lakehouses at Scale&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2024/12/11/Adaptive-and-Robust-Query-Execution-for-Lakehouses-at-Scale/&t=Adaptive and Robust Query Execution for Lakehouses at Scale"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2024
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>
