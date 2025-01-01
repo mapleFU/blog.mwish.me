@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="前文链接: https:&#x2F;&#x2F;blog.mwish.me&#x2F;2024&#x2F;09&#x2F;27&#x2F;Sorting-in-Database-System-Part1&#x2F; 对于 Internal Sort 来说，如果排序的数据量过大，那么就需要走 External Sort。其实大部分教科书上都介绍过 External Merge Sort，所以它基本工作方式和怎么和 Loser Tree 结合都很好想象了。对于 Exte">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Sorting in Database System: Part2 External Sort">
+<meta property="og:url" content="http://blog.mwish.me/2025/01/02/Sorting-in-Database-System-Part2-External-Sort/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="前文链接: https:&#x2F;&#x2F;blog.mwish.me&#x2F;2024&#x2F;09&#x2F;27&#x2F;Sorting-in-Database-System-Part1&#x2F; 对于 Internal Sort 来说，如果排序的数据量过大，那么就需要走 External Sort。其实大部分教科书上都介绍过 External Merge Sort，所以它基本工作方式和怎么和 Loser Tree 结合都很好想象了。对于 Exte">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/7917922136584135600.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/9078187154083817838.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/1278838634193054934.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/632188905747658588.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/648221197927453055.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/4030241091917777572.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/760712948666814231.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/423854819472931997.png">
+<meta property="article:published_time" content="2025-01-01T16:06:43.000Z">
+<meta property="article:modified_time" content="2025-01-01T16:09:01.660Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/7917922136584135600.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>Sorting in Database System: Part2 External Sort</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2024/12/25/Hash-joins-and-hash-teams-in-Microsoft-SQL-Server/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2025/01/02/Sorting-in-Database-System-Part2-External-Sort/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2025/01/02/Sorting-in-Database-System-Part2-External-Sort/&text=Sorting in Database System: Part2 External Sort"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2025/01/02/Sorting-in-Database-System-Part2-External-Sort/&title=Sorting in Database System: Part2 External Sort"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2025/01/02/Sorting-in-Database-System-Part2-External-Sort/&is_video=false&description=Sorting in Database System: Part2 External Sort"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Sorting in Database System: Part2 External Sort&body=Check out this article: http://blog.mwish.me/2025/01/02/Sorting-in-Database-System-Part2-External-Sort/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2025/01/02/Sorting-in-Database-System-Part2-External-Sort/&title=Sorting in Database System: Part2 External Sort"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2025/01/02/Sorting-in-Database-System-Part2-External-Sort/&title=Sorting in Database System: Part2 External Sort"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2025/01/02/Sorting-in-Database-System-Part2-External-Sort/&title=Sorting in Database System: Part2 External Sort"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2025/01/02/Sorting-in-Database-System-Part2-External-Sort/&title=Sorting in Database System: Part2 External Sort"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2025/01/02/Sorting-in-Database-System-Part2-External-Sort/&name=Sorting in Database System: Part2 External Sort&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2025/01/02/Sorting-in-Database-System-Part2-External-Sort/&t=Sorting in Database System: Part2 External Sort"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Partitioning-Versus-Merging"><span class="toc-number">1.</span> <span class="toc-text">Partitioning Versus Merging</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Run-Generation"><span class="toc-number">2.</span> <span class="toc-text">Run Generation</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Replacement-Selection"><span class="toc-number">2.1.</span> <span class="toc-text">Replacement Selection</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Graceful-Degradation"><span class="toc-number">3.</span> <span class="toc-text">Graceful Degradation</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Merge-Patterns-and-Merge-Optimizations"><span class="toc-number">4.</span> <span class="toc-text">Merge Patterns and Merge Optimizations</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#I-O-Optimizations"><span class="toc-number">5.</span> <span class="toc-text">I&#x2F;O Optimizations</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Sorting in Database System: Part2 External Sort
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2025-01-01T16:06:43.000Z" itemprop="datePublished">2025-01-02</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>前文链接: <a href="https://blog.mwish.me/2024/09/27/Sorting-in-Database-System-Part1/">https://blog.mwish.me/2024/09/27/Sorting-in-Database-System-Part1/</a></p>
+<p>对于 Internal Sort 来说，如果排序的数据量过大，那么就需要走 External Sort。其实大部分教科书上都介绍过 External Merge Sort，所以它基本工作方式和怎么和 Loser Tree 结合都很好想象了。对于 External Sorting，我们可能还要考虑：</p>
+<ol>
+<li>比如经典的教材中，io 优化（写入 - 读取的时候做相关的优化）</li>
+<li>现代设备的影响，导致存储设备有着充足的吞吐带宽，在预读之类能有用的情况下，保持 CPU fast 也很有必要了</li>
+</ol>
+<p>这里也讨论了：</p>
+<ol>
+<li>如何生成 Run （ Run Generation）</li>
+<li>在要处理的输入大于内存但多的也不是很多的时候，如何优雅的从内存降级到部分写入盘上</li>
+</ol>
+<p>比较新的论文是  CWI 发表在 icde 上的文章 「These Rows Are Made for Sorting and That’s Just What We’ll Do」。不过本文也是接在上一篇文章 Part1 上的。</p>
+<h2 id="Partitioning-Versus-Merging"><a href="#Partitioning-Versus-Merging" class="headerlink" title="Partitioning Versus Merging"></a>Partitioning Versus Merging</h2><p>基于 Partition 的 merge sort 其实类似于 Hash Agg 的那种方式，不同的是，这里分片的方式是根据 order-preserving 的 distribute function 来做，然后最后在内存的部分也需要被 Sort (像 Datafusion 和 Velox 的 Hash Aggregation 实现）。在这种情况下，本质上给 Hash 用的策略也能用到 Sort 上，比如 Spark 可能会从 Hash Join 降级到 Merge Join，很多 hash 的优化，比如 Spill 或者拆分 bucket 的策略也可以用在 Partition based sorting 上</p>
+<p>下图是一个 Merging and Partition 的比较。这里核心其实在用一种 Range-Based Shuffle 的方式切分内存的数据到排序的 Partition 上。这里也说到，之前 Hybrid Hash 的一些降级优化、Histogram 优化可以用到 Partition 策略上。可以参考上一篇 <a href="https://blog.mwish.me/2024/12/25/Hash-joins-and-hash-teams-in-Microsoft-SQL-Server/">https://blog.mwish.me/2024/12/25/Hash-joins-and-hash-teams-in-Microsoft-SQL-Server/</a> 。不过 Bail-out 这里策略似乎不太会出现，因为排序本身能够处理这种 skew 的场景了（ If a partition cannot be split further, this partition must contain only one key, and all records can be produced immediately as sorted output. ）</p>
+<p><img src="https://image.mwish.me/blog-image/7917922136584135600.png" alt="img"></p>
+<p>作者说，本质上 Merge Join 如果用 Partition，也能采取 Hash Join 的很多策略：</p>
+<ul>
+<li>Spill 之类的策略</li>
+<li>Team</li>
+<li>Bloom Filter （但我觉得对于 Range 来说应该是 Histogram？）</li>
+</ul>
+<p>但很少有人这么做，因为之前没有人这么做过（ Nonetheless, partition-based sorting hasn’t been extensively explored for external sorts in database systems, partially because this adaptation hasn’t been used before. However, in light of all the techniques that have been developed for hash operations, it might well be worth a new, thorough analysis and experimental evaluation ），这块的研究就一直没啥人搞。我个人感觉现在一些 Range-Based Shuffle 之类的可能和这套东西思路比较相似。</p>
+<h2 id="Run-Generation"><a href="#Run-Generation" class="headerlink" title="Run Generation"></a>Run Generation</h2><p>首要的任务是从数据输入的 Operator 生成 Sort-of-runs。我们有快速排序、归并排序、堆排序三种基于对比的排序算法。快速排序本身是就地的，而归并排序在 Merge 阶段有的实现可能需要额外空间（也可以不要）。平均而言，对内存大小为 M 的 Sort Buffer，它们能生成大小大概为 M 大小的 Sorted Run。</p>
+<h3 id="Replacement-Selection"><a href="#Replacement-Selection" class="headerlink" title="Replacement Selection"></a>Replacement Selection</h3><p>有一种方式是 Replacement Selection，在教科书上也找得到这种方式的实现。见：</p>
+<ol>
+<li><a target="_blank" rel="noopener" href="https://opendsa-server.cs.vt.edu/ODSA/Books/Everything/html/ExternalSort.html">https://opendsa-server.cs.vt.edu/ODSA/Books/Everything/html/ExternalSort.html</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.cs.bilkent.edu.tr/~canf/CS351Fall2010/cs351lecturenotes/week4/index.html">https://www.cs.bilkent.edu.tr/~canf/CS351Fall2010/cs351lecturenotes/week4/index.html</a></li>
+</ol>
+<p>需要阅读下去，我们需要援引上面的材料 (1) 介绍一下 Replacement Selection</p>
+<ul>
+<li>假设系统中有 Input Buffer，用于 Sort 的 Memory Buffer，Output Buffer</li>
+<li>在 Memory Buffer 构建一个最小堆</li>
+<li>输出最小的元素到 Output Buffer，然后查看 Input Buffer 的下一个元素</li>
+<li>如果下一个元素大于刚输出的元素，那么可以加入堆</li>
+<li>否则，需要输出堆中所有元素，然后准备生成下一组 Run</li>
+</ul>
+<p>按照  <strong><a target="_blank" rel="noopener" href="https://opendsa-server.cs.vt.edu/ODSA/Books/Everything/html/Glossary.html#term-snowplow-argument">snowplow argument</a></strong> 证明，这个算法能输出平均长度为 2M 的选择元素。这里还讨论了一个性质，在这个算法开始的时候，可能生成的 Run 会比较小，后续就会慢慢变大。</p>
+<p>上面是 Replacement Selection 的正常算法，本文虽然没有介绍，但描述了一些别的性质和优化：</p>
+<ul>
+<li>QuickSort 和 MergeSort 本身内存管理相对简单，Run Generation 的时候，相当于构造 sorted run page 的时候，先去 build indexes (ties?)，然后排序这些 indexes，最后 build run，仅需一次内存拷贝。这比较直接，感觉写一遍本身都没啥开销</li>
+<li>Replacement Selection 输出的记录本身可能含空洞，所以需要对记录本身做管理，如下图，可能某些情况空洞会很多。这里内存结构可能是一个 Loser-Tree 作为 Priority Queue，使用 Normalized Key 或者 Poolmans key 之类的技术。这里没有画 Free space management，然后用 Indirection vector 来做一层映射，在右图的空间做空闲空间管理。这里还需要 free space management 来管理内存中的这些记录，因为 replacement selection 会延迟输出这些记录<ul>
+<li>[Larson and Graefe 1998] 提到了空间利用率占到 90% 的一些方式</li>
+<li>另外，如果这块比较难处理，可以先构成一些 Mini Run，比如在 replacement selection 之前先对 input page 做局部排序 [Larson 2003]. 这里也提到本身可以通过 load-sort-write 或者 replacement selection 构成 一些 cache-sized runs，然后通过 poor mans normalized key 提供 CPU Cache 访问的优化。</li>
+<li>这里还提到 batch 输入来减少 cache miss，但也提到，在 priority queue 的结构上，batch 不一定是个特别好的 idea，因为这里排序本质上还是个基于行的操作。</li>
+</ul>
+</li>
+</ul>
+<p><img src="https://image.mwish.me/blog-image/9078187154083817838.png" alt="img"></p>
+<p>本质上，和内存排序类似，这里相当于对长度 = 1 的 sorted runs 构建新的 run，如果有一些局部有序的输入，可以把他们当成更长的 Sorted run，这里类似前面在上一节介绍的。</p>
+<p>然后这里还提到了 Replacement Selection 的一个比较好的性质，因为 Run Generation 是连续的输出，而不需要 read-sort-write 循环，这里可以引入一下性质：</p>
+<ul>
+<li>permits concurrently running the input query plan and the disks for temporary run ﬁles</li>
+<li>Has desirable effects on both parallel query plans and parallel sorting</li>
+</ul>
+<p>这里我还有些困惑，直到看了下图，大概是这样比较好分离读写，而单个 Merge 的 read-sort-write 总有盘是 idle 的（但 merge 之类的也可以并行啊，其实没完全懂）。</p>
+<p><img src="https://image.mwish.me/blog-image/1278838634193054934.png" alt="img"></p>
+<h2 id="Graceful-Degradation"><a href="#Graceful-Degradation" class="headerlink" title="Graceful Degradation"></a>Graceful Degradation</h2><p>这里需要最小化内存不够，但又不是那么不够的的时候的开销。</p>
+<p>这里讲到了优化器侧非常有意思的一段话，我看了两遍才看懂</p>
+<blockquote>
+<ul>
+<li>如果排序操作的成本函数存在显著的不连续性（例如，当输入数据略大于内存时，成本突然增加），内存管理策略中需要设计大量的特殊代码来避免这些高成本的排序操作。</li>
+<li>在查询优化阶段，基数估计（cardinality estimation）的误差会加剧这个问题，因为优化器可能无法准确预测排序操作的成本。</li>
+<li>如果排序操作的成本函数是平滑的（即 CPU 和 I/O 负载随着输入数据的增加而连续增长），实现有效的内存分配策略会变得更加简单。</li>
+<li>处理特殊情况（如输入数据略大于内存时的高成本排序）不仅需要额外的开发时间，还需要大量的测试工作。数据库用户可能会观察到某些查询或排序操作异常昂贵，这需要开发人员提供解释和解决方案。</li>
+</ul>
+</blockquote>
+<p>上面这段话也阐述了 Graceful Degradation 对于整个数据库系统的重要性。</p>
+<blockquote>
+<ul>
+<li><strong>最后两个运行的特殊处理</strong>：<ul>
+<li>最后一个 Run 保留在内存中，不会写入磁盘。</li>
+<li>倒数第二个 Run 在为第一次合并步骤腾出足够内存时被截断。</li>
+</ul>
+</li>
+<li><strong>交错读写</strong>：<ul>
+<li>如果使用 <strong>read-sort-write</strong> 循环，读写阶段实际上是一个交错的过程。写入 Run File 的操作可以在读取输入结束时立即停止。</li>
+</ul>
+</li>
+</ul>
+</blockquote>
+<p>这里我其实觉得 Truncate 是个好路子，但是「倒数第二个」这个说法我一直想不清楚为啥，我觉得可以理解为申请内存的时候可以 spill 一部分（不是正在 build 的？） sorted run 到盘上。</p>
+<p><img src="https://image.mwish.me/blog-image/632188905747658588.png" alt="img"></p>
+<h2 id="Merge-Patterns-and-Merge-Optimizations"><a href="#Merge-Patterns-and-Merge-Optimizations" class="headerlink" title="Merge Patterns and Merge Optimizations"></a>Merge Patterns and Merge Optimizations</h2><p>论文发表在 06年，这节开头就是句很有意思的话：</p>
+<blockquote>
+<p>It is widely believed that given today’s memory sizes, all external sort operations use only a single merge step.</p>
+</blockquote>
+<p>天啊，难道不是吗!!! （我最近还真遇到了 MergeReader 内存占用高的问题）</p>
+<blockquote>
+<p>If a sort operation is used to create an index, the belief might be justiﬁed, except for very large tables in a data warehouse. However, if the sort operation is part of a complex query plan that pipes data among multiple sort or hash operations, all of them competing for memory, and in particular, if nested queries employ sorting, for example, for grouping or duplicate removal, multilevel merging is not uncommon.</p>
+</blockquote>
+<p>大概意思是那种 spill 多的 multi level merging 内存管理也是比较复杂的。论文吧这里输入拆成了几个部分：</p>
+<ol>
+<li>Input phase with run generation</li>
+<li>Merge phase with all intermediate merge steps</li>
+<li>Output phase with the ﬁnal merge step</li>
+</ol>
+<p>下面也有不同 sort key 的 Sort + Merge Join 流程（有的地方会把部分排序输入抽象成一个算子 Partial Sort，这个感觉与论文不完全有关，知道就行）。</p>
+<p>这里也预测了对应的内存分配模式：</p>
+<p>每个排序操作的内存分配模式可能类似于图 15 右侧所示的模式：</p>
+<ol>
+<li><strong>Input phase</strong><ol>
+<li>适中的内存分配（取决于输入数据的来源）。</li>
+</ol>
+</li>
+<li>Merge phase<ol>
+<li>完全的内存分配（使用所有可用内存）。</li>
+</ol>
+</li>
+<li>Output phase<ol>
+<li>相对较小的内存分配</li>
+</ol>
+</li>
+</ol>
+<p><img src="https://image.mwish.me/blog-image/648221197927453055.png" alt="img"></p>
+<p>论文这里还提到了 semieager merging 和 eager merging，我看都看不懂，翻了一下：<a target="_blank" rel="noopener" href="https://courses.cs.washington.edu/courses/cse544/04sp/papers/graefe93.pdf">https://courses.cs.washington.edu/courses/cse544/04sp/papers/graefe93.pdf</a> / <a target="_blank" rel="noopener" href="https://cs.uwaterloo.ca/~david/cs848s13/graefe.pdf">https://cs.uwaterloo.ca/~david/cs848s13/graefe.pdf</a> . 这里是针对 multi-level merging 的优化。</p>
+<p>Merge 最终还是希望整个 operator 只有一个 Sorted Run 输出。这里本质上也有 trade-off，如果有所有的输入</p>
+<ol>
+<li>启发式的方法是总是合并最小的 existing runs</li>
+<li>使用最大的 fan-in</li>
+</ol>
+<p>否则可以：</p>
+<ul>
+<li>一种替代策略是合并大小最相似的 Run，而不考虑它们的绝对大小。这种策略试图减少最终的比较次数</li>
+</ul>
+<p><img src="https://image.mwish.me/blog-image/4030241091917777572.png" alt="img"></p>
+<p>这里还提到了 sorted run sort-key range 和 virtual sub range 的概念：</p>
+<ol>
+<li>比如对于 Sorted Run，merge 的时候不应该去 merge min-max 无 overlap 的，它们原则逻辑上甚至可以被视作是同一个 sorted run</li>
+<li>这种合并的 Run 可以被称为 “virtual” run，拼凑它们的操作被称为 virtual concatenation。这里需要记录 Run 的 Low-sorted key 和 High-sorted key. 这里也可以用纯 Poor man’s key 的形式记录</li>
+<li>这种方式对 random inputs 来说没有太多的优化，但是对有一些顺序的输入来说有一定的优化</li>
+<li>这里对于 sorted run，按照值域也可以切分出内部的 sub-range，通过这个 range，来增加调度的单元，减少合并的粒度</li>
+<li>G.G. 还举了个脑洞，把这个内部的 merging 和 range partition 结合起来。下面有个例子，这个例子中，稀疏的流可以去合并到稠密的流里（ recall 上一节的，有序的流大小不同，所以合并的策略可以不同）。</li>
+</ol>
+<blockquote>
+<p>consider an external merge-sort with memory for a fan-in of 10, and 18 runs remaining to be merged with 1,000 records each.</p>
+</blockquote>
+<p><img src="https://image.mwish.me/blog-image/760712948666814231.png" alt="img"></p>
+<h2 id="I-O-Optimizations"><a href="#I-O-Optimizations" class="headerlink" title="I/O Optimizations"></a>I/O Optimizations</h2><p>这节聊的有点 hack，介绍了一下 io-size、预读和效率的关系，通过这个选出最好的预读 size。然后介绍了怎么用 btree 的代码来规划 Run File 的 io-prefetch。看得比较晕。</p>
+<p><img src="https://image.mwish.me/blog-image/423854819472931997.png" alt="img"></p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Partitioning-Versus-Merging"><span class="toc-number">1.</span> <span class="toc-text">Partitioning Versus Merging</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Run-Generation"><span class="toc-number">2.</span> <span class="toc-text">Run Generation</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Replacement-Selection"><span class="toc-number">2.1.</span> <span class="toc-text">Replacement Selection</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Graceful-Degradation"><span class="toc-number">3.</span> <span class="toc-text">Graceful Degradation</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Merge-Patterns-and-Merge-Optimizations"><span class="toc-number">4.</span> <span class="toc-text">Merge Patterns and Merge Optimizations</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#I-O-Optimizations"><span class="toc-number">5.</span> <span class="toc-text">I&#x2F;O Optimizations</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2025/01/02/Sorting-in-Database-System-Part2-External-Sort/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2025/01/02/Sorting-in-Database-System-Part2-External-Sort/&text=Sorting in Database System: Part2 External Sort"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2025/01/02/Sorting-in-Database-System-Part2-External-Sort/&title=Sorting in Database System: Part2 External Sort"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2025/01/02/Sorting-in-Database-System-Part2-External-Sort/&is_video=false&description=Sorting in Database System: Part2 External Sort"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Sorting in Database System: Part2 External Sort&body=Check out this article: http://blog.mwish.me/2025/01/02/Sorting-in-Database-System-Part2-External-Sort/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2025/01/02/Sorting-in-Database-System-Part2-External-Sort/&title=Sorting in Database System: Part2 External Sort"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2025/01/02/Sorting-in-Database-System-Part2-External-Sort/&title=Sorting in Database System: Part2 External Sort"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2025/01/02/Sorting-in-Database-System-Part2-External-Sort/&title=Sorting in Database System: Part2 External Sort"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2025/01/02/Sorting-in-Database-System-Part2-External-Sort/&title=Sorting in Database System: Part2 External Sort"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2025/01/02/Sorting-in-Database-System-Part2-External-Sort/&name=Sorting in Database System: Part2 External Sort&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2025/01/02/Sorting-in-Database-System-Part2-External-Sort/&t=Sorting in Database System: Part2 External Sort"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2025
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>
