@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang=zh>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+    <meta name="description" content="最近因为一个奇怪的性能问题看了一下 Roaring Bitmap 的代码，发现里面有一些逻辑和我预想的还不太一样。Roaring Bitmap 在数据系统里面是一个非常常被用到的东西。从 Apache Iceberg V3 &#x2F; Delta Lake 到 ElasticSearch 都有 Roaring Bitmap 的身影，同时 ClickHosue 的 Bitmap 类型在实现上甚至就有 Roa">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Roaring Bitmap Basics">
+<meta property="og:url" content="http://blog.mwish.me/2025/01/29/Roaring-Bitmap-Basics/index.html">
+<meta property="og:site_name" content="风空之岛">
+<meta property="og:description" content="最近因为一个奇怪的性能问题看了一下 Roaring Bitmap 的代码，发现里面有一些逻辑和我预想的还不太一样。Roaring Bitmap 在数据系统里面是一个非常常被用到的东西。从 Apache Iceberg V3 &#x2F; Delta Lake 到 ElasticSearch 都有 Roaring Bitmap 的身影，同时 ClickHosue 的 Bitmap 类型在实现上甚至就有 Roa">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.mwish.me/blog-image/5159218183839943713.png">
+<meta property="og:image" content="https://image.mwish.me/blog-image/whiteboard_exported_image.png">
+<meta property="article:published_time" content="2025-01-28T16:34:58.000Z">
+<meta property="article:modified_time" content="2025-01-28T16:36:51.490Z">
+<meta property="article:author" content="mwish">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.mwish.me/blog-image/5159218183839943713.png">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/logo.ico">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/logo.ico" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/logo.ico">
+        
+      
+    
+    <!-- title -->
+    <title>Roaring Bitmap Basics</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+    <!-- rss -->
+    
+    
+	<!-- mathjax -->
+	
+<meta name="generator" content="Hexo 6.2.0"></head>
+
+<body class="max-width mx-auto px3 ltr">    
+      <div id="header-post">
+  <a id="menu-icon" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#" aria-label="目录"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" aria-label="顶部" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        
+        <li><a class="icon" aria-label="下一篇" href="/2025/01/20/Arrow-Compute-Vector-Function-Framework/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" aria-label="返回顶部" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" aria-label="分享文章" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">上一篇</span>
+      <span id="i-next" class="info" style="display:none;">下一篇</span>
+      <span id="i-top" class="info" style="display:none;">返回顶部</span>
+      <span id="i-share" class="info" style="display:none;">分享文章</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2025/01/29/Roaring-Bitmap-Basics/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2025/01/29/Roaring-Bitmap-Basics/&text=Roaring Bitmap Basics"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2025/01/29/Roaring-Bitmap-Basics/&title=Roaring Bitmap Basics"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2025/01/29/Roaring-Bitmap-Basics/&is_video=false&description=Roaring Bitmap Basics"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Roaring Bitmap Basics&body=Check out this article: http://blog.mwish.me/2025/01/29/Roaring-Bitmap-Basics/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2025/01/29/Roaring-Bitmap-Basics/&title=Roaring Bitmap Basics"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2025/01/29/Roaring-Bitmap-Basics/&title=Roaring Bitmap Basics"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2025/01/29/Roaring-Bitmap-Basics/&title=Roaring Bitmap Basics"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2025/01/29/Roaring-Bitmap-Basics/&title=Roaring Bitmap Basics"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2025/01/29/Roaring-Bitmap-Basics/&name=Roaring Bitmap Basics&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2025/01/29/Roaring-Bitmap-Basics/&t=Roaring Bitmap Basics"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Basic-Operations"><span class="toc-number">1.</span> <span class="toc-text">Basic Operations</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Containers"><span class="toc-number">1.1.</span> <span class="toc-text">Containers</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Bulk"><span class="toc-number">1.2.</span> <span class="toc-text">Bulk</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%B0%8F%E5%B0%8F%E7%9A%84%E7%96%91%E9%97%AE-add-contains-%E5%88%B0%E5%BA%95%E6%9C%89%E5%A4%9A%E9%87%8D%EF%BC%9F"><span class="toc-number">1.3.</span> <span class="toc-text">小小的疑问: add &#x2F; contains 到底有多重？</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Iterator"><span class="toc-number">2.</span> <span class="toc-text">Iterator</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Lazy-Operations"><span class="toc-number">3.</span> <span class="toc-text">Lazy Operations</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Roaring Bitmap Basics
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">mwish</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2025-01-28T16:34:58.000Z" itemprop="datePublished">2025-01-29</time>
+        
+      
+    </div>
+
+
+      
+
+      
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>最近因为一个奇怪的性能问题看了一下 Roaring Bitmap 的代码，发现里面有一些逻辑和我预想的还不太一样。Roaring Bitmap 在数据系统里面是一个非常常被用到的东西。从 Apache Iceberg V3 / Delta Lake 到 ElasticSearch 都有 Roaring Bitmap 的身影，同时 ClickHosue 的 Bitmap 类型在实现上甚至就有 Roaring Bitmap。</p>
+<p>Roaring 的抽象是一个 uint32 范围的 bitmap，在官方实现中，也有 Roaring64 ( 64 位的 Roaring Bitmap），但最近实现刚刚被用 adaptive radix trie 重构过，不知道是否稳定。在 Delta Lake 中，它也用32 bit 和自己一些编码的方式来实现 64位 roaring bitmap 的抽象。我们暂时只看 32 位的 Roaring Bitmap</p>
+<p>RoaringBitmap 把内容切分成高16位和低16位，在内存中有下列的表示：</p>
+<ol>
+<li>RoaringBitmap: RoaringBitmap 是一个 array 的<strong>有序数组</strong>，array 的成员是 container，每个 container 包含自身的 flag ( 是否 cow），type ( 自己是什么类型的 container )，和 high 16bit key。这块的 Container 是有序的，所以 container 定位依赖一个 binary search。</li>
+<li>Array container: 少于 4096 （ 代码见 <code>DEFAULT_MAX_SIZE</code> 的）size 的容器，最，以有序的 uint16 存储，capacity 未定义的<strong>变长</strong>容器（等价于 vector）。在里面查询做二分搜索 <strong>+ 线形查找（在 search 的时候如果 left range 在 16以内切换成线性查找）</strong>。</li>
+<li>Bitmap container: 大于等于 4096B，或者在执行位操作的时候临时使用的<strong>固定长度</strong>容器（lazy 操作实现的时候，会把别的容器转化为 bitmap container，然后用 bitmap 做快速操作）。这里会有一个摘要信息 <code>cardinarity</code> 表示元素数量（在 lazy 操作的情况下允许不存在）。这里实际存储大小是 <code>2**16/8 = 2^13 = 8192</code> ，实际上</li>
+</ol>
+<p><img src="https://image.mwish.me/blog-image/5159218183839943713.png" alt="img"></p>
+<p>我先自己强行讲 Roaring Bitmap 的 api 分为下列类型（不考虑初始化）</p>
+<ol>
+<li>简单的单个元素的查询存在性、插入、删除、某个值的 rank、按照 rank 来选择值<ol>
+<li>有一类 api 是 <code>Bulk</code> api，即插入/查找的时候，如果多次插入或者查找的信息是临近的话，那么几个查询或者大概率在同一个 container 内，<code>Bulk</code> api 会在上下文中记录</li>
+</ol>
+</li>
+<li>多个元素的范围查找、插入、删除、范围（或者全 bitmap）的 cardinality 估计</li>
+<li>集合 api 和 bitmap api，包含：父子集关系判断、并集(bit or)、交集(bit and)、差集、bit or、andnot、取反（flip） 、shifting 等 api，这些支持生成一个新的 Roaring Bitmap，也支持 inplace 的操作（在 C++ binding 里为 <code>&amp;</code> 和 <code>&amp;=</code> 之类的区别，也比较好区分）。这里也支持多组操作，即同 api 处理多个集合<ol>
+<li>这里支持一类「Lazy」api，本质上是在一些耗时操作（比如大 array 和大 array 的 container 做 union 之类的位操作的时候），转 bitmap 之类的临时对象来操作，来高效处理。这种 api 在多 bitmap 的操作中更高效。</li>
+</ol>
+</li>
+<li>内存占用的估算，统计 roaring 信息的 api</li>
+<li>序列化、反序列化到标准的（各个格式相同的 fmt）和非标准的（一些快速操作的格式）</li>
+<li>转 bitmap （23 年新加的）和 uint32_t* 数组的 api</li>
+<li>Iterator api</li>
+<li>尝试切换为 run container 的 api 和尝试取消所有 run container 的 api ( 其实 run container 默认你插入一般是不会启用的）</li>
+</ol>
+<p>哈哈，好一篇罗列 api 的烂博客…</p>
+<p>值得一提的是，Roaring 有个地方比较神秘，就是它在库上会有一些 namespace，检测你是 C 语言还是 C++ 语言，然后如果是 C++ 加上对应的 namespace…我觉得还是挺神秘的，见 <a target="_blank" rel="noopener" href="https://github.com/RoaringBitmap/CRoaring/blob/master/src/bitset.c#L11">https://github.com/RoaringBitmap/CRoaring/blob/master/src/bitset.c#L11</a> . 最终这里会由脚本 <a target="_blank" rel="noopener" href="https://github.com/RoaringBitmap/CRoaring/blob/master/amalgamation.sh">https://github.com/RoaringBitmap/CRoaring/blob/master/amalgamation.sh</a> 生成一组 header only 的文件作为库.</p>
+<p>本节咱不介绍 SIMD 相关的内容。</p>
+<h2 id="Basic-Operations"><a href="#Basic-Operations" class="headerlink" title="Basic Operations"></a>Basic Operations</h2><p>首先介绍一下 add 相关的接口和 contains 相关的接口，来了解一下基础的内容</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">roaring_bitmap_add_bulk</span><span class="params">(<span class="type">roaring_bitmap_t</span> *r,</span></span></span><br><span class="line"><span class="params"><span class="function">                             <span class="type">roaring_bulk_context_t</span> *context, <span class="type">uint32_t</span> val)</span></span>;</span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">roaring_bitmap_add_many</span><span class="params">(<span class="type">roaring_bitmap_t</span> *r, <span class="type">size_t</span> n_args,</span></span></span><br><span class="line"><span class="params"><span class="function">                             <span class="type">const</span> <span class="type">uint32_t</span> *vals)</span></span>;</span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">roaring_bitmap_add</span><span class="params">(<span class="type">roaring_bitmap_t</span> *r, <span class="type">uint32_t</span> x)</span></span>;</span><br></pre></td></tr></table></figure>
+<p>Container 是 Roaring 里面最重要的元素之一，这里有几个 container type( 你可以看到我还截图了一个 <code>PAIR_CONTAINER_TYPES</code>, 这个单纯是我觉得代码有点意思，值得看看）。</p>
+<p>代码最上层是 <code>roaring_bitmap_t</code> 和 <code>roaring_array_t</code> 一层，代码非常直接，贴了就能看懂，search 全是二分查找。</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="keyword">struct</span> <span class="title class_">roaring_array_s</span> &#123;</span><br><span class="line">    <span class="comment">// container 的数量</span></span><br><span class="line">    <span class="type">int32_t</span> size;</span><br><span class="line">    <span class="comment">// container 申请的数量</span></span><br><span class="line">    <span class="type">int32_t</span> allocation_size;</span><br><span class="line">    ROARING_CONTAINER_T **containers;  <span class="comment">// Use container_t in non-API files!</span></span><br><span class="line">    <span class="comment">// 每个容器的 key, 保留高 16b</span></span><br><span class="line">    <span class="type">uint16_t</span> *keys;</span><br><span class="line">    <span class="comment">// 每个对应的 typecode, 包含 shared 容器, 搜 `_CONTAINER_TYPE`</span></span><br><span class="line">    <span class="type">uint8_t</span> *typecodes;</span><br><span class="line">    <span class="comment">// cow and frozen flags</span></span><br><span class="line">    <span class="comment">// `ROARING_FLAG_` 常数</span></span><br><span class="line">    <span class="type">uint8_t</span> flags;</span><br><span class="line">&#125; <span class="type">roaring_array_t</span>;</span><br><span class="line"></span><br><span class="line"><span class="keyword">typedef</span> <span class="keyword">struct</span> <span class="title class_">roaring_bitmap_s</span> &#123;</span><br><span class="line">    <span class="type">roaring_array_t</span> high_low_container;</span><br><span class="line">&#125; <span class="type">roaring_bitmap_t</span>;</span><br></pre></td></tr></table></figure>
+<p>这里面 <code>containers</code>, <code>keys</code>, <code>typecodes</code> 的内存都是指针，但它们的分配是<strong>连续</strong>的，类似下图，空框代表分配了但是没有使用的内存。</p>
+<p><img src="https://image.mwish.me/blog-image/whiteboard_exported_image.png" alt="whiteboard_exported_image"></p>
+<p>在 roaring array 层插入的代码如下：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">static</span> <span class="keyword">inline</span> <span class="type">void</span> <span class="title">ra_unshare_container_at_index</span><span class="params">(<span class="type">roaring_array_t</span> *ra,</span></span></span><br><span class="line"><span class="params"><span class="function">                                                 <span class="type">uint16_t</span> i)</span> </span>&#123;</span><br><span class="line">    <span class="built_in">assert</span>(i &lt; ra-&gt;size);</span><br><span class="line">    ra-&gt;containers[i] =</span><br><span class="line">        <span class="built_in">get_writable_copy_if_shared</span>(ra-&gt;containers[i], &amp;ra-&gt;typecodes[i]);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">roaring_bitmap_add</span><span class="params">(<span class="type">roaring_bitmap_t</span> *r, <span class="type">uint32_t</span> val)</span> </span>&#123;</span><br><span class="line">    <span class="type">roaring_array_t</span> *ra = &amp;r-&gt;high_low_container;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 拿到 high 16 bits</span></span><br><span class="line">    <span class="type">const</span> <span class="type">uint16_t</span> hb = val &gt;&gt; <span class="number">16</span>;</span><br><span class="line">    <span class="comment">// 通过二分查找(和先尝试 peek 最右侧插入) 找到对应的 container</span></span><br><span class="line">    <span class="type">const</span> <span class="type">int</span> i = <span class="built_in">ra_get_index</span>(ra, hb);</span><br><span class="line">    <span class="type">uint8_t</span> typecode;</span><br><span class="line">    <span class="keyword">if</span> (i &gt;= <span class="number">0</span>) &#123;</span><br><span class="line">        <span class="comment">// 对 cow 容器拿到 write-only copy for write</span></span><br><span class="line">        <span class="comment">// 内存管理: 这套如果 cow 发生了，这里内部维护了一套引用计数来回收内部</span></span><br><span class="line">        <span class="comment">// 的 shared 内存.</span></span><br><span class="line">        <span class="built_in">ra_unshare_container_at_index</span>(ra, (<span class="type">uint16_t</span>)i);</span><br><span class="line">        <span class="comment">// 拿到容器的指针和 typecode</span></span><br><span class="line">        <span class="type">container_t</span> *container =</span><br><span class="line">            <span class="built_in">ra_get_container_at_index</span>(ra, (<span class="type">uint16_t</span>)i, &amp;typecode);</span><br><span class="line">        <span class="type">uint8_t</span> newtypecode = typecode;</span><br><span class="line">        <span class="type">container_t</span> *container2 =</span><br><span class="line">            <span class="built_in">container_add</span>(container, val &amp; <span class="number">0xFFFF</span>, typecode, &amp;newtypecode);</span><br><span class="line">        <span class="keyword">if</span> (container2 != container) &#123;</span><br><span class="line">            <span class="comment">// roaring 常见 pattern: 内部 add 的时候, 可能返回一个新容器,</span></span><br><span class="line">            <span class="comment">// 这个时候要把老得 free 掉</span></span><br><span class="line">            <span class="built_in">container_free</span>(container, typecode);</span><br><span class="line">            <span class="built_in">ra_set_container_at_index</span>(&amp;r-&gt;high_low_container, i, container2,</span><br><span class="line">                                      newtypecode);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        <span class="comment">// 创建并且插入一个新 container, 然后新 container 默认是 arary container</span></span><br><span class="line">        <span class="comment">// 直接插入就行.</span></span><br><span class="line">        <span class="type">array_container_t</span> *newac = <span class="built_in">array_container_create</span>();</span><br><span class="line">        <span class="type">container_t</span> *container =</span><br><span class="line">            <span class="built_in">container_add</span>(newac, val &amp; <span class="number">0xFFFF</span>, ARRAY_CONTAINER_TYPE, &amp;typecode);</span><br><span class="line">        <span class="comment">// we could just assume that it stays an array container</span></span><br><span class="line">        <span class="comment">// 插入 roaring array</span></span><br><span class="line">        <span class="built_in">ra_insert_new_key_value_at</span>(&amp;r-&gt;high_low_container, -i - <span class="number">1</span>, hb,</span><br><span class="line">                                   container, typecode);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>Bitset, array, run 我们都介绍过，这里可以关注 <code>SHARED_CONTAINER_TYPE</code>, 这里如果是 cow 而且复制的话，就会把 type 设置成 container type.</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * The switch case statements follow</span></span><br><span class="line"><span class="comment"> * BITSET_CONTAINER_TYPE -- ARRAY_CONTAINER_TYPE -- RUN_CONTAINER_TYPE</span></span><br><span class="line"><span class="comment"> * so it makes more sense to number them 1, 2, 3 (in the vague hope that the</span></span><br><span class="line"><span class="comment"> * compiler might exploit this ordering).</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> BITSET_CONTAINER_TYPE 1</span></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> ARRAY_CONTAINER_TYPE 2</span></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> RUN_CONTAINER_TYPE 3</span></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> SHARED_CONTAINER_TYPE 4</span></span><br><span class="line"></span><br><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * Macros for pairing container type codes, suitable for switch statements.</span></span><br><span class="line"><span class="comment"> * Use PAIR_CONTAINER_TYPES() for the switch, CONTAINER_PAIR() for the cases:</span></span><br><span class="line"><span class="comment"> *</span></span><br><span class="line"><span class="comment"> *     switch (PAIR_CONTAINER_TYPES(type1, type2)) &#123;</span></span><br><span class="line"><span class="comment"> *        case CONTAINER_PAIR(BITSET,ARRAY):</span></span><br><span class="line"><span class="comment"> *        ...</span></span><br><span class="line"><span class="comment"> *     &#125;</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> PAIR_CONTAINER_TYPES(type1, type2) (4 * (type1) + (type2))</span></span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> CONTAINER_PAIR(name1, name2) \</span></span><br><span class="line"><span class="meta">    (4 * (name1##_CONTAINER_TYPE) + (name2##_CONTAINER_TYPE))</span></span><br></pre></td></tr></table></figure>
+<p>于是，我们下面就应该了解 container 的逻辑了</p>
+<h3 id="Containers"><a href="#Containers" class="headerlink" title="Containers"></a>Containers</h3><p>我们会发现，这里有个 SHARED_CONTAINER_TYPE。我们先再来介绍一下 Cow 这一套。<code>container_t*</code>相当于一个 <code>void*</code>或多态的对象。贴一下几种容器的代码：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/* struct array_container - sparse representation of a bitmap</span></span><br><span class="line"><span class="comment"> *</span></span><br><span class="line"><span class="comment"> * @cardinality: number of indices in `array` (and the bitmap)</span></span><br><span class="line"><span class="comment"> * @capacity:    allocated size of `array`</span></span><br><span class="line"><span class="comment"> * @array:       sorted list of integers</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="built_in">STRUCT_CONTAINER</span>(array_container_s) &#123;</span><br><span class="line">    <span class="type">int32_t</span> cardinality;</span><br><span class="line">    <span class="type">int32_t</span> capacity;</span><br><span class="line">    <span class="type">uint16_t</span> *array;</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="keyword">typedef</span> <span class="keyword">struct</span> <span class="title class_">array_container_s</span> <span class="type">array_container_t</span>;</span><br><span class="line"></span><br><span class="line"><span class="built_in">STRUCT_CONTAINER</span>(bitset_container_s) &#123;</span><br><span class="line">    <span class="comment">// 注意设置成 BITSET_UNKNOWN_CARDINALITY 的时候</span></span><br><span class="line">    <span class="comment">// 这个 card 只是成员数量, 这个 words 内容大小是固定的.</span></span><br><span class="line">    <span class="type">int32_t</span> cardinality;</span><br><span class="line">    <span class="type">uint64_t</span> *words;</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="keyword">typedef</span> <span class="keyword">struct</span> <span class="title class_">bitset_container_s</span> <span class="type">bitset_container_t</span>;</span><br><span class="line"></span><br><span class="line"><span class="comment">/* struct rle16_s - run length pair</span></span><br><span class="line"><span class="comment"> *</span></span><br><span class="line"><span class="comment"> * @value:  start position of the run</span></span><br><span class="line"><span class="comment"> * @length: length of the run is `length + 1`</span></span><br><span class="line"><span class="comment"> *</span></span><br><span class="line"><span class="comment"> * An RLE pair &#123;v, l&#125; would represent the integers between the interval</span></span><br><span class="line"><span class="comment"> * [v, v+l+1], e.g. &#123;3, 2&#125; = [3, 4, 5].</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">rle16_s</span> &#123;</span><br><span class="line">    <span class="type">uint16_t</span> value;</span><br><span class="line">    <span class="type">uint16_t</span> length;</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="keyword">typedef</span> <span class="keyword">struct</span> <span class="title class_">rle16_s</span> <span class="type">rle16_t</span>;</span><br><span class="line"></span><br><span class="line"><span class="comment">/* struct run_container_s - run container bitmap</span></span><br><span class="line"><span class="comment"> *</span></span><br><span class="line"><span class="comment"> * @n_runs:   number of rle_t pairs in `runs`.</span></span><br><span class="line"><span class="comment"> * @capacity: capacity in rle_t pairs `runs` can hold.</span></span><br><span class="line"><span class="comment"> * @runs:     pairs of rle_t.</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="built_in">STRUCT_CONTAINER</span>(run_container_s) &#123;</span><br><span class="line">    <span class="type">int32_t</span> n_runs;</span><br><span class="line">    <span class="type">int32_t</span> capacity;</span><br><span class="line">    <span class="type">rle16_t</span> *runs;</span><br><span class="line">&#125;; </span><br><span class="line"></span><br><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * A shared container is a wrapper around a container</span></span><br><span class="line"><span class="comment"> * with reference counting.</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="built_in">STRUCT_CONTAINER</span>(shared_container_s) &#123;</span><br><span class="line">    <span class="type">container_t</span> *container;</span><br><span class="line">    <span class="type">uint8_t</span> typecode;</span><br><span class="line">    <span class="type">croaring_refcount_t</span> counter;  <span class="comment">// to be managed atomically</span></span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="keyword">typedef</span> <span class="keyword">struct</span> <span class="title class_">shared_container_s</span> <span class="type">shared_container_t</span>;</span><br></pre></td></tr></table></figure>
+<p>Array 和 Bitmap 很基础，我们就先不介绍了。</p>
+<p>我们之前没有聊 shared, shared container 这里内部是个 atomic shared counter 组成的 COW 容器。本质上也是靠 fencing 来 gc 的：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">shared_container_free</span><span class="params">(<span class="type">shared_container_t</span> *container)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">if</span> (<span class="built_in">croaring_refcount_dec</span>(&amp;container-&gt;counter)) &#123;</span><br><span class="line">        <span class="built_in">assert</span>(container-&gt;typecode != SHARED_CONTAINER_TYPE);</span><br><span class="line">        <span class="built_in">container_free</span>(container-&gt;container, container-&gt;typecode);</span><br><span class="line">        container-&gt;container = <span class="literal">NULL</span>;  <span class="comment">// paranoid</span></span><br><span class="line">        <span class="built_in">roaring_free</span>(container);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>为什么需要 cow 呢？在 or 之类的操作的时候，如果两个 roaring 长度对不齐，哪很多地方就会被 lazy 的共享出来。</p>
+<p>正常插入的时候是不会有 run container 的，<code>runOptimize</code> 可能会产生这样的东西，这套逻辑大概是：</p>
+<ol>
+<li>比较本 container 的 serialize size</li>
+<li>比较 run container 的 serialize size</li>
+<li>权衡是否 serialize 成 run container</li>
+</ol>
+<p>我们最后看 container_add:</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">static</span> <span class="keyword">inline</span> <span class="type">container_t</span> *<span class="title">container_add</span><span class="params">(</span></span></span><br><span class="line"><span class="params"><span class="function">    <span class="type">container_t</span> *c, <span class="type">uint16_t</span> val,</span></span></span><br><span class="line"><span class="params"><span class="function">    <span class="type">uint8_t</span> typecode,  <span class="comment">// !!! should be second argument?</span></span></span></span><br><span class="line"><span class="params"><span class="function">    <span class="type">uint8_t</span> *new_typecode)</span> </span>&#123;</span><br><span class="line">    c = <span class="built_in">get_writable_copy_if_shared</span>(c, &amp;typecode);</span><br><span class="line">    <span class="keyword">switch</span> (typecode) &#123;</span><br><span class="line">        <span class="keyword">case</span> BITSET_CONTAINER_TYPE:</span><br><span class="line">            <span class="built_in">bitset_container_set</span>(<span class="built_in">CAST_bitset</span>(c), val);</span><br><span class="line">            *new_typecode = BITSET_CONTAINER_TYPE;</span><br><span class="line">            <span class="keyword">return</span> c;</span><br><span class="line">        <span class="keyword">case</span> ARRAY_CONTAINER_TYPE: &#123;</span><br><span class="line">            <span class="type">array_container_t</span> *ac = <span class="built_in">CAST_array</span>(c);</span><br><span class="line">            <span class="keyword">if</span> (<span class="built_in">array_container_try_add</span>(ac, val, DEFAULT_MAX_SIZE) != <span class="number">-1</span>) &#123;</span><br><span class="line">                *new_typecode = ARRAY_CONTAINER_TYPE;</span><br><span class="line">                <span class="keyword">return</span> ac;</span><br><span class="line">            &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                <span class="type">bitset_container_t</span> *bitset = <span class="built_in">bitset_container_from_array</span>(ac);</span><br><span class="line">                <span class="built_in">bitset_container_add</span>(bitset, val);</span><br><span class="line">                *new_typecode = BITSET_CONTAINER_TYPE;</span><br><span class="line">                <span class="keyword">return</span> bitset;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125; <span class="keyword">break</span>;</span><br><span class="line">        <span class="keyword">case</span> RUN_CONTAINER_TYPE:</span><br><span class="line">            <span class="comment">// per Java, no container type adjustments are done (revisit?)</span></span><br><span class="line">            <span class="built_in">run_container_add</span>(<span class="built_in">CAST_run</span>(c), val);</span><br><span class="line">            *new_typecode = RUN_CONTAINER_TYPE;</span><br><span class="line">            <span class="keyword">return</span> c;</span><br><span class="line">        <span class="keyword">default</span>:</span><br><span class="line">            <span class="built_in">assert</span>(<span class="literal">false</span>);</span><br><span class="line">            roaring_unreachable;</span><br><span class="line">            <span class="keyword">return</span> <span class="literal">NULL</span>;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="Bulk"><a href="#Bulk" class="headerlink" title="Bulk"></a>Bulk</h3><p>我们再回头看一下 Bulk API</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="keyword">struct</span> <span class="title class_">roaring_bulk_context_s</span> &#123;</span><br><span class="line">    ROARING_CONTAINER_T *container;</span><br><span class="line">    <span class="type">int</span> idx;</span><br><span class="line">    <span class="type">uint16_t</span> key;</span><br><span class="line">    <span class="type">uint8_t</span> typecode;</span><br><span class="line">&#125; <span class="type">roaring_bulk_context_t</span>;</span><br></pre></td></tr></table></figure>
+<p>这么看 Bulk API 就非常简单，这里实际上就是缓存了 container 处理的逻辑。</p>
+<h3 id="小小的疑问-add-contains-到底有多重？"><a href="#小小的疑问-add-contains-到底有多重？" class="headerlink" title="小小的疑问: add / contains 到底有多重？"></a>小小的疑问: add / contains 到底有多重？</h3><ul>
+<li>Run: 使用 <code>interleavedBinarySearch</code>，纯二分查找定位到 lower_bound，然后看看有没有对应的 Run</li>
+<li>Bitmap: 直接定位，O(1)</li>
+<li>Array: 这里代码比较奇怪，算是一个拙劣的优化查询。这里导致其实在稀疏的容器中调用 contains 可能比想象的还重呢!</li>
+</ul>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/* Check whether x is present.  */</span></span><br><span class="line"><span class="function"><span class="keyword">inline</span> <span class="type">bool</span> <span class="title">array_container_contains</span><span class="params">(<span class="type">const</span> <span class="type">array_container_t</span> *arr,</span></span></span><br><span class="line"><span class="params"><span class="function">                                     <span class="type">uint16_t</span> pos)</span> </span>&#123;</span><br><span class="line">    <span class="comment">//    return binarySearch(arr-&gt;array, arr-&gt;cardinality, pos) &gt;= 0;</span></span><br><span class="line">    <span class="comment">// binary search with fallback to linear search for short ranges</span></span><br><span class="line">    <span class="type">int32_t</span> low = <span class="number">0</span>;</span><br><span class="line">    <span class="type">const</span> <span class="type">uint16_t</span> *carr = (<span class="type">const</span> <span class="type">uint16_t</span> *)arr-&gt;array;</span><br><span class="line">    <span class="type">int32_t</span> high = arr-&gt;cardinality - <span class="number">1</span>;</span><br><span class="line">    <span class="comment">//    while (high - low &gt;= 0) &#123;</span></span><br><span class="line">    <span class="keyword">while</span> (high &gt;= low + <span class="number">16</span>) &#123;</span><br><span class="line">        <span class="type">int32_t</span> middleIndex = (low + high) &gt;&gt; <span class="number">1</span>;</span><br><span class="line">        <span class="type">uint16_t</span> middleValue = carr[middleIndex];</span><br><span class="line">        <span class="keyword">if</span> (middleValue &lt; pos) &#123;</span><br><span class="line">            low = middleIndex + <span class="number">1</span>;</span><br><span class="line">        &#125; <span class="keyword">else</span> <span class="keyword">if</span> (middleValue &gt; pos) &#123;</span><br><span class="line">            high = middleIndex - <span class="number">1</span>;</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            <span class="keyword">return</span> <span class="literal">true</span>;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">for</span> (<span class="type">int</span> i = low; i &lt;= high; i++) &#123;</span><br><span class="line">        <span class="type">uint16_t</span> v = carr[i];</span><br><span class="line">        <span class="keyword">if</span> (v == pos) &#123;</span><br><span class="line">            <span class="keyword">return</span> <span class="literal">true</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">if</span> (v &gt; pos) <span class="keyword">return</span> <span class="literal">false</span>;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> <span class="literal">false</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>而 add 的时候又是纯 binary search，屋檐了. 我在想这玩意改掉成统一的 binary search 会不会好些。</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * Add value to the set if final cardinality doesn&#x27;t exceed max_cardinality.</span></span><br><span class="line"><span class="comment"> * Return code:</span></span><br><span class="line"><span class="comment"> * 1  -- value was added</span></span><br><span class="line"><span class="comment"> * 0  -- value was already present</span></span><br><span class="line"><span class="comment"> * -1 -- value was not added because cardinality would exceed max_cardinality</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="function"><span class="type">static</span> <span class="keyword">inline</span> <span class="type">int</span> <span class="title">array_container_try_add</span><span class="params">(<span class="type">array_container_t</span> *arr,</span></span></span><br><span class="line"><span class="params"><span class="function">                                          <span class="type">uint16_t</span> value,</span></span></span><br><span class="line"><span class="params"><span class="function">                                          <span class="type">int32_t</span> max_cardinality)</span> </span>&#123;</span><br><span class="line">    <span class="type">const</span> <span class="type">int32_t</span> cardinality = arr-&gt;cardinality;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// best case, we can append.</span></span><br><span class="line">    <span class="keyword">if</span> ((<span class="built_in">array_container_empty</span>(arr) || arr-&gt;array[cardinality - <span class="number">1</span>] &lt; value) &amp;&amp;</span><br><span class="line">        cardinality &lt; max_cardinality) &#123;</span><br><span class="line">        <span class="built_in">array_container_append</span>(arr, value);</span><br><span class="line">        <span class="keyword">return</span> <span class="number">1</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="type">const</span> <span class="type">int32_t</span> loc = <span class="built_in">binarySearch</span>(arr-&gt;array, cardinality, value);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (loc &gt;= <span class="number">0</span>) &#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">    &#125; <span class="keyword">else</span> <span class="keyword">if</span> (cardinality &lt; max_cardinality) &#123;</span><br><span class="line">        <span class="keyword">if</span> (<span class="built_in">array_container_full</span>(arr)) &#123;</span><br><span class="line">            <span class="built_in">array_container_grow</span>(arr, arr-&gt;capacity + <span class="number">1</span>, <span class="literal">true</span>);</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="type">const</span> <span class="type">int32_t</span> insert_idx = -loc - <span class="number">1</span>;</span><br><span class="line">        <span class="built_in">memmove</span>(arr-&gt;array + insert_idx + <span class="number">1</span>, arr-&gt;array + insert_idx,</span><br><span class="line">                (cardinality - insert_idx) * <span class="built_in">sizeof</span>(<span class="type">uint16_t</span>));</span><br><span class="line">        arr-&gt;array[insert_idx] = value;</span><br><span class="line">        arr-&gt;cardinality++;</span><br><span class="line">        <span class="keyword">return</span> <span class="number">1</span>;</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="number">-1</span>;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h2 id="Iterator"><a href="#Iterator" class="headerlink" title="Iterator"></a>Iterator</h2><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * Roaring-internal type used to iterate within a roaring container.</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="keyword">typedef</span> <span class="keyword">struct</span> <span class="title class_">roaring_container_iterator_s</span> &#123;</span><br><span class="line">    <span class="comment">// For bitset and array containers this is the index of the bit / entry.</span></span><br><span class="line">    <span class="comment">// For run containers this points at the run.</span></span><br><span class="line">    <span class="type">int32_t</span> index;</span><br><span class="line">&#125; <span class="type">roaring_container_iterator_t</span>;</span><br><span class="line"></span><br><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * A struct used to keep iterator state. Users should only access</span></span><br><span class="line"><span class="comment"> * `current_value` and `has_value`, the rest of the type should be treated as</span></span><br><span class="line"><span class="comment"> * opaque.</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="keyword">typedef</span> <span class="keyword">struct</span> <span class="title class_">roaring_uint32_iterator_s</span> &#123;</span><br><span class="line">    <span class="type">const</span> <span class="type">roaring_bitmap_t</span> *parent;        <span class="comment">// Owner</span></span><br><span class="line">    <span class="type">const</span> ROARING_CONTAINER_T *container;  <span class="comment">// Current container</span></span><br><span class="line">    <span class="type">uint8_t</span> typecode;                      <span class="comment">// Typecode of current container</span></span><br><span class="line">    <span class="type">int32_t</span> container_index;               <span class="comment">// Current container index</span></span><br><span class="line">    <span class="type">uint32_t</span> highbits;                     <span class="comment">// High 16 bits of the current value</span></span><br><span class="line">    <span class="type">roaring_container_iterator_t</span> container_it;</span><br><span class="line"></span><br><span class="line">    <span class="type">uint32_t</span> current_value;</span><br><span class="line">    <span class="type">bool</span> has_value;</span><br><span class="line">&#125; <span class="type">roaring_uint32_iterator_t</span>;</span><br></pre></td></tr></table></figure>
+<p>这里注意，container 上只有 index。这里推断一下，我们可以得出结论：</p>
+<ol>
+<li>对于 array 来说，contains 可能执行的很慢，但是 iterator 开销比较低</li>
+<li>对于 bitmap 来说，可能反过来，bulk-contains 可能比较快，iterator 反而要看一下后面的 bit 是否都 set 了</li>
+</ol>
+<p>我们看到，实际上性能也会跟容器（或者甚至内容是否稀疏）相关，开销，很神奇吧！</p>
+<h2 id="Lazy-Operations"><a href="#Lazy-Operations" class="headerlink" title="Lazy Operations"></a>Lazy Operations</h2><figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">roaring_bitmap_t</span> *<span class="title">roaring_bitmap_lazy_or</span><span class="params">(<span class="type">const</span> <span class="type">roaring_bitmap_t</span> *r1,</span></span></span><br><span class="line"><span class="params"><span class="function">                                         <span class="type">const</span> <span class="type">roaring_bitmap_t</span> *r2,</span></span></span><br><span class="line"><span class="params"><span class="function">                                         <span class="type">const</span> <span class="type">bool</span> bitsetconversion)</span></span>;</span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">roaring_bitmap_lazy_or_inplace</span><span class="params">(<span class="type">roaring_bitmap_t</span> *r1,</span></span></span><br><span class="line"><span class="params"><span class="function">                                    <span class="type">const</span> <span class="type">roaring_bitmap_t</span> *r2,</span></span></span><br><span class="line"><span class="params"><span class="function">                                    <span class="type">const</span> <span class="type">bool</span> bitsetconversion)</span></span>;</span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">roaring_bitmap_repair_after_lazy</span><span class="params">(<span class="type">roaring_bitmap_t</span> *r1)</span></span>;</span><br><span class="line"><span class="function"><span class="type">roaring_bitmap_t</span> *<span class="title">roaring_bitmap_lazy_xor</span><span class="params">(<span class="type">const</span> <span class="type">roaring_bitmap_t</span> *r1,</span></span></span><br><span class="line"><span class="params"><span class="function">                                          <span class="type">const</span> <span class="type">roaring_bitmap_t</span> *r2)</span></span>;</span><br></pre></td></tr></table></figure>
+<p>Lazy 本质上是：</p>
+<ol>
+<li>在一些操作的时候，如果是 array-array，就构造出一些 bitmap 来，也不设置 cardinality</li>
+<li>最后通过 <code>roaring_bitmap_repair_after_lazy</code> 修复 bitmap 和实现</li>
+</ol>
+<p>比如观看这个实现，这里把一个非 lazy 操作封装成了好几步 lazy 操作。</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">roaring_bitmap_t</span> *<span class="title">roaring_bitmap_xor_many</span><span class="params">(<span class="type">size_t</span> number,</span></span></span><br><span class="line"><span class="params"><span class="function">                                          <span class="type">const</span> <span class="type">roaring_bitmap_t</span> **x)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">if</span> (number == <span class="number">0</span>) &#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="built_in">roaring_bitmap_create</span>();</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">if</span> (number == <span class="number">1</span>) &#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="built_in">roaring_bitmap_copy</span>(x[<span class="number">0</span>]);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="type">roaring_bitmap_t</span> *answer = <span class="built_in">roaring_bitmap_lazy_xor</span>(x[<span class="number">0</span>], x[<span class="number">1</span>]);</span><br><span class="line">    <span class="keyword">for</span> (<span class="type">size_t</span> i = <span class="number">2</span>; i &lt; number; i++) &#123;</span><br><span class="line">        <span class="built_in">roaring_bitmap_lazy_xor_inplace</span>(answer, x[i]);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="built_in">roaring_bitmap_repair_after_lazy</span>(answer);</span><br><span class="line">    <span class="keyword">return</span> answer;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">首页</a></li>
+         
+          <li><a href="/about/">关于</a></li>
+         
+          <li><a href="/archives/">归档</a></li>
+         
+          <li><a href="/search/">搜索</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Basic-Operations"><span class="toc-number">1.</span> <span class="toc-text">Basic Operations</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Containers"><span class="toc-number">1.1.</span> <span class="toc-text">Containers</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Bulk"><span class="toc-number">1.2.</span> <span class="toc-text">Bulk</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%B0%8F%E5%B0%8F%E7%9A%84%E7%96%91%E9%97%AE-add-contains-%E5%88%B0%E5%BA%95%E6%9C%89%E5%A4%9A%E9%87%8D%EF%BC%9F"><span class="toc-number">1.3.</span> <span class="toc-text">小小的疑问: add &#x2F; contains 到底有多重？</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Iterator"><span class="toc-number">2.</span> <span class="toc-text">Iterator</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Lazy-Operations"><span class="toc-number">3.</span> <span class="toc-text">Lazy Operations</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=http://blog.mwish.me/2025/01/29/Roaring-Bitmap-Basics/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=http://blog.mwish.me/2025/01/29/Roaring-Bitmap-Basics/&text=Roaring Bitmap Basics"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=http://blog.mwish.me/2025/01/29/Roaring-Bitmap-Basics/&title=Roaring Bitmap Basics"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=http://blog.mwish.me/2025/01/29/Roaring-Bitmap-Basics/&is_video=false&description=Roaring Bitmap Basics"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Roaring Bitmap Basics&body=Check out this article: http://blog.mwish.me/2025/01/29/Roaring-Bitmap-Basics/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=http://blog.mwish.me/2025/01/29/Roaring-Bitmap-Basics/&title=Roaring Bitmap Basics"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=http://blog.mwish.me/2025/01/29/Roaring-Bitmap-Basics/&title=Roaring Bitmap Basics"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=http://blog.mwish.me/2025/01/29/Roaring-Bitmap-Basics/&title=Roaring Bitmap Basics"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=http://blog.mwish.me/2025/01/29/Roaring-Bitmap-Basics/&title=Roaring Bitmap Basics"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=http://blog.mwish.me/2025/01/29/Roaring-Bitmap-Basics/&name=Roaring Bitmap Basics&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=http://blog.mwish.me/2025/01/29/Roaring-Bitmap-Basics/&t=Roaring Bitmap Basics"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> 菜单</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> 目录</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> 分享</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> 返回顶部</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2022-2025
+    mwish
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+        <!--
+       --><li><a href="/">首页</a></li><!--
+     --><!--
+       --><li><a href="/about/">关于</a></li><!--
+     --><!--
+       --><li><a href="/archives/">归档</a></li><!--
+     --><!--
+       --><li><a href="/search/">搜索</a></li><!--
+     -->
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+
+
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" crossorigin="anonymous" onload="this.onload=null;this.rel='stylesheet'"/>
+
+
+    <!-- jquery -->
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" crossorigin="anonymous"></script> 
+
+
+
+
+<!-- clipboard -->
+
+  
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.7/clipboard.min.js" crossorigin="anonymous"></script> 
+  
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"复制到粘贴板！\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "复制成功！");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FL51GBW6JT"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-FL51GBW6JT');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+<!-- utterances Comments -->
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</body>
+</html>
